@@ -45,7 +45,7 @@ def find_vasp_output_file(calc_dir):
 
 def find_file(calc_dir, allow_all_out_files=False, list_of_filenames=[]):
     """ Searches directory for output files """
-    allfiles = [f for f in os.path.listdir(calc_dir) if os.path.isfile(join(calc_dir, f))]
+    allfiles = [f for f in os.listdir(calc_dir) if os.path.isfile(join(calc_dir, f))]
     filename = []
     for f in allfiles:
         if f.lower() in list_of_filenames:
