@@ -29,7 +29,7 @@ def find_all_aims_output_files(directory, include_restart=True, allow_all_out_fi
     return aims_fnames
 
 
-def find_aims_output_file(calc_dir, allow_all_out_files = False):
+def find_aims_output_file(calc_dir, allow_all_out_files=False):
     """ Searches directory for output files """
     return find_file(calc_dir,
                     allow_all_out_files=allow_all_out_files,
