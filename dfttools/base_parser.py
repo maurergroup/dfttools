@@ -2,6 +2,17 @@ import os.path
 
 
 class BaseParser:
+    """Generic routines for all parsers.
+
+    ...
+
+    Attributes
+    ----------
+    file_paths : dict
+        The paths to the parsed files.
+    file_contents : dict
+        The contents of parsed files.
+    """
 
     def __init__(self, supported_files, **kwargs):
         self.file_paths = {}
