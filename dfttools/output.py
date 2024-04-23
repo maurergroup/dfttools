@@ -99,9 +99,9 @@ class AimsOutput(Output):
 
         # Setup dictionary to store convergence parameters
         self.convergence_params = {
-            "charge_density": float,
-            "sum_eigenvalues": float,
-            "total_energy": float,
+            "charge_density": 0.0,
+            "sum_eigenvalues": 0.0,
+            "total_energy": 0.0,
             "total_force": None,
         }
 
