@@ -1,10 +1,11 @@
+import matplotlib.figure as figure
 import matplotlib.pyplot as plt
 import numpy as np
 
 from dfttools.output import AimsOutput
 
 
-class AimsVisualisation(AimsOutput):
+class VisualiseAims(AimsOutput):
     """FHI-aims visualisation tools.
 
     ...
@@ -24,7 +25,7 @@ class AimsVisualisation(AimsOutput):
         fig_size=(18, 6),
         p2_y_scale="log",
         p3_ylim=(-500, 500),
-    ) -> plt.figure.Figure:
+    ) -> figure.Figure:
         """Plot the SCF convergence accuracy parameters.
 
         Parameters
