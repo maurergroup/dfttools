@@ -16,9 +16,9 @@ def no_repeat(func):
     """
 
     @wraps(func)
-    def wrapper_no_repeat(calc_dir, *args, **kwargs):
+    def wrapper_no_repeat(*args, **kwargs):
         if "calc_dir" in kwargs and "force" in kwargs:
-            if not os.path.isdir(calc_dir):
+            if not os.path.isdir(kwargs["calc_dir"]):
                 raise ValueError(f"{kwargs.get('calc_dir')} is not a directory.")
 
             if kwargs["force"]:
