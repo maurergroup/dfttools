@@ -4,7 +4,8 @@ from functools import wraps
 
 
 def no_repeat(func):
-    """Don't repeat the calculation if aims.out exists in the calculation directory.
+    """
+    Don't repeat the calculation if aims.out exists in the calculation directory.
 
     A kwarg must be given to the decorated function called `calc_dir` which is the
     directory where the calculation is to be performed.
@@ -12,7 +13,7 @@ def no_repeat(func):
     Raises
     -------
     ValueError
-        If the `calc_dir` kwarg is not a directory
+        if the `calc_dir` kwarg is not a directory
     """
 
     @wraps(func)
@@ -40,16 +41,22 @@ def no_repeat(func):
 
 
 def check_required_files(files: list, *args: str, any=False) -> None:
-    """Raise an error if a necessary file was not given.
+    """
+    Raise an error if a necessary file was not given.
 
     Parameters
     ----------
     files : list
-        Supported files to reference provided files against.
+        supported files to reference provided files against
     *args : str
-        The files that are required to be provided.
+        the files that are required to be provided
     any : bool
-        Whether at least one of the files is required or all of them.
+        whether at least one of the files is required or all of them
+
+    Raises
+    -------
+    ValueError
+        if a necessary file was not given
     """
 
     if any:
