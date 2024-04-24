@@ -7,18 +7,19 @@ from dfttools.base_parser import BaseParser
 
 
 class Output(BaseParser):
-    """Base class for parsing output files from electronic structure calculations.
+    """
+    Base class for parsing output files from electronic structure calculations.
 
     ...
 
     Attributes
     ----------
     _supported_files : list
-        The supported file types that can be parsed.
+        the supported file types that can be parsed
     file_paths : dict
-        The paths to the files to be parsed.
+        the paths to the files to be parsed
     file_contents : dict
-        The contents of the files to be parsed.
+        the contents of the files to be parsed
     """
 
     # FHI-aims, ...
@@ -40,7 +41,7 @@ class AimsOutput(Output):
     Attributes
     ----------
     aims_out : str
-        The path to the aims.out file.
+        the path to the aims.out file
     """
 
     def __init__(self, aims_out="aims.out"):
@@ -70,7 +71,7 @@ class AimsOutput(Output):
         Returns
         -------
         bool
-            Whether the calculation was spin polarised or not.
+            whether the calculation was spin polarised or not
         """
 
         spin_polarised = False
@@ -94,7 +95,7 @@ class AimsOutput(Output):
         Returns
         -------
         dict
-            The convergence parameters from the aims.out file.
+            the convergence parameters from the aims.out file
         """
 
         # Setup dictionary to store convergence parameters
@@ -108,13 +109,13 @@ class AimsOutput(Output):
         for line in self.file_contents["aims_out"]:
             spl = line.split()
             if len(spl) > 1:
-                if "accuracy" in spl and "charge density" in spl:
+                if "accuracy" in spl and "charge density" in line:
                     self.convergence_params["charge_density"] = float(spl[-1])
-                if "accuracy" in spl and "sum of eigenvalues" in spl:
+                if "accuracy" in spl and "sum of eigenvalues" in line:
                     self.convergence_params["sum_eigenvalues"] = float(spl[-1])
-                if "accuracy" in spl and "total energy" in spl:
+                if "accuracy" in spl and "total energy" in line:
                     self.convergence_params["total_energy"] = float(spl[-1])
-                if "accuracy" in spl and "total force" in spl:
+                if "accuracy" in spl and "forces" in line:
                     self.convergence_params["total_force"] = float(spl[-1])
                 if "Defaulting to 'sc_accuracy_forces not checked'." in line:
                     self.convergence_params["total_force"] = None
@@ -131,7 +132,7 @@ class AimsOutput(Output):
         Returns
         -------
         Union[float, None]
-            The final energy of the calculation.
+            the final energy of the calculation
         """
 
         for line in self.file_contents["aims_out"]:
@@ -145,12 +146,17 @@ class AimsOutput(Output):
         -------
         Union[dict, Tuple[dict, dict]]
             dict
-                The Kohn-Sham eigenvalues
+                the kohn-sham eigenvalues
             Tuple[dict, dict]
                 dict
-                    The spin-up Kohn-Sham eigenvalues
+                    the spin-up kohn-sham eigenvalues
                 dict
-                    The spin-down Kohn-Sham eigenvalues
+                    the spin-down kohn-sham eigenvalues
+
+        Raises
+        ------
+        ValueError
+            the calculation was not spin polarised
         """
 
         aims_out = self.file_contents["aims_out"]
@@ -257,12 +263,17 @@ class AimsOutput(Output):
         -------
         Union[dict, Tuple[dict, dict]]
             dict
-                The final Kohn-Sham eigenvalues
+                the final kohn-sham eigenvalues
             Tuple[dict, dict]
                 dict
-                    The spin-up Kohn-Sham eigenvalues
+                    the spin-up kohn-sham eigenvalues
                 dict
-                    The spin-down Kohn-Sham eigenvalues
+                    the spin-down kohn-sham eigenvalues
+
+        Raises
+        ------
+        ValueError
+            the calculation was not spin polarised
         """
 
         aims_out = self.file_contents["aims_out"]
@@ -341,11 +352,12 @@ class AimsOutput(Output):
         Returns
         -------
         dict
-            The SCF convergence accuracy values from the aims.out file.
+            the scf convergence accuracy values from the aims.out file
         """
 
         # Read the total number of SCF iterations
         n_scf_iters = self.get_n_scf_iters()
+        n_relax_steps = self.get_n_relaxation_steps() + 1
 
         # Check that the calculation finished normally otherwise number of SCF
         # iterations is not known
@@ -355,16 +367,18 @@ class AimsOutput(Output):
             "change_of_charge_spin_density": np.zeros(n_scf_iters),
             "change_of_sum_eigenvalues": np.zeros(n_scf_iters),
             "change_of_total_energy": np.zeros(n_scf_iters),
-            "change_of_forces": np.zeros(n_scf_iters),
-            "forces_on_atoms": np.zeros(n_scf_iters),
+            # "change_of_forces": np.zeros(n_relax_steps),
+            "forces_on_atoms": np.zeros(n_relax_steps),
         }
 
         current_scf_iter = 0
+        current_relax_step = 0
+        # new_scf_iter = True
 
-        for line in self.file_contents["aims_out"]:
+        for i, line in enumerate(self.file_contents["aims_out"]):
             spl = line.split()
             if len(spl) > 1:
-                if "begin self-consistency iteration #" in line:
+                if "Begin self-consistency iteration #" in line:
                     # save the scf iteration number
                     self.scf_conv_acc_params["scf_iter"][current_scf_iter] = int(
                         spl[-1]
@@ -394,20 +408,44 @@ class AimsOutput(Output):
                         current_scf_iter - 1
                     ] = float(spl[-2])
 
-                if "change of total energy" in line:
+                if "Change of total energy" in line:
                     self.scf_conv_acc_params["change_of_total_energy"][
                         current_scf_iter - 1
                     ] = float(spl[-2])
 
-                if "Change of forces" in line:
-                    self.scf_conv_acc_params["change_of_forces"][
-                        current_scf_iter - 1
-                    ] = float(spl[-2])
+                # NOTE
+                # In the current aims compilation I'm using to test this, there is
+                # something wrong with printing the change of forces. It happens
+                # multiple times per relaxation and is clearly wrong so I am removing
+                # this functionality for now
+
+                # if "Change of forces" in line:
+                #     # Only save the smallest change of forces for each geometry
+                #     # relaxation step. I have no idea why it prints multiple times but
+                #     # I assume it's a data race of some sort
+                #     if new_scf_iter:
+                #         self.scf_conv_acc_params["change_of_forces"][
+                #             current_relax_step - 1
+                #         ] = float(spl[-2])
+
+                #         new_scf_iter = False
+
+                #     elif (
+                #         float(spl[-2])
+                #         < self.scf_conv_acc_params["change_of_forces"][-1]
+                #     ):
+                #         self.scf_conv_acc_params["change_of_forces"][
+                #             current_relax_step - 1
+                #         ] = float(spl[-2])
 
                 if "Forces on atoms" in line:
                     self.scf_conv_acc_params["forces_on_atoms"][
-                        current_scf_iter - 1
+                        current_relax_step - 1
                     ] = float(spl[-2])
+
+                if line.strip() == "Self-consistency cycle converged.":
+                    # new_scf_iter = True
+                    current_relax_step += 1
 
         return self.scf_conv_acc_params
 
@@ -417,7 +455,7 @@ class AimsOutput(Output):
         Returns
         -------
         int
-            The number of Kohn-Sham states.
+            the number of kohn-sham states
         """
 
         target_line = "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
@@ -437,13 +475,37 @@ class AimsOutput(Output):
 
         return n_ks_states
 
-    def get_n_scf_iters(self) -> int:
-        """Get the number of SCF iterations from the aims.out file.
+    def get_n_relaxation_steps(self) -> int:
+        """
+        Get the number of relaxation steps from the aims.out file.
 
         Returns
         -------
         int
-            The number of SCF iterations.
+            the number of relaxation steps
+        """
+
+        n_relax_steps = 0
+        for line in reversed(self.file_contents["aims_out"]):
+            if "Number of relaxation steps" in line:
+                return int(line.split()[-1])
+
+            # If the calculation did not finish normally, the number of relaxation steps
+            # will not be printed. In this case, count each relaxation step as they were
+            # calculated by checking when the SCF cycle converged.
+            if "Self-consistency cycle converged." == line.strip():
+                n_relax_steps += 1
+
+        return n_relax_steps
+
+    def get_n_scf_iters(self) -> int:
+        """
+        Get the number of SCF iterations from the aims.out file.
+
+        Returns
+        -------
+        int
+            the number of scf iterations
         """
 
         n_scf_iters = 0
@@ -453,7 +515,7 @@ class AimsOutput(Output):
 
             # If the calculation did not finish normally, the number of SCF iterations
             # will not be printed. In this case, count each SCF iteration as they were
-            # calulated
+            # calculated
             if "Begin self-consistency iteration #" in line:
                 n_scf_iters += 1
 
