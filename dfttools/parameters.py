@@ -1,5 +1,5 @@
-import utils.utils
-from base_parser import BaseParser
+import dfttools.utils.utils as utils
+from dfttools.base_parser import BaseParser
 
 
 class Parameters(BaseParser):
