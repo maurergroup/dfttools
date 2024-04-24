@@ -7,26 +7,27 @@ from typing import Union
 import copy
 import warnings
 import ast
+import re
 
 import numpy as np
 import scipy.linalg
 import scipy.spatial
 import scipy.spatial.distance
 import networkx as nx
-#import spglib # import in corresponding functions instead as spglib can cause trouble sometimes
 
 import os.path
 
-from aimstools.GaussianInput import GaussianInput
-
 from aimstools.Utilities import PERIODIC_TABLE, \
-        getFractionalCoords, SLATER_EFFECTIVE_CHARGES, ATOMIC_MASSES, \
+        SLATER_EFFECTIVE_CHARGES, ATOMIC_MASSES, \
         COVALENT_RADII, getSpeciesColor, C6_COEFFICIENTS, R0_COEFFICIENTS, \
         getCovalentRadius, getAtomicNumber
 from aimstools import Units
 from aimstools import Utilities as ut
 from aimstools.ControlFile import CubeFileSettings
 import aimstools.ZMatrixUtils as ZMatrixUtils
+
+
+import dfttools.utils.math_utils as utils
 
 
 
@@ -273,22 +274,23 @@ class Geometry:
     def read_from_file(self, filename):
         """
         Parses a geometry file
+        
         """
-        #if file_format is None:
-        #    file_format = getFileFormatFromEnding(filename)
-            
         with open(filename) as f:
             text = f.read()
             
-        self.parse_geometry(text)
+        self.parse(text)
             
             
-    def parse_geometry(self, text):
+    def parse(self, text):
         raise NotImplementedError
 
 
     def add_top_comment(self, comment_string):
-        """Adds comments that are saved at the top of the geometry file."""
+        """
+        Adds comments that are saved at the top of the geometry file.
+        
+        """
         lines = comment_string.split('\n')
         for l in lines:
             if not l.startswith('#'):
@@ -326,6 +328,7 @@ class Geometry:
             
         dimensions : float-array
             dimensions (x, y, z) where the mapping should be done
+            
         """
         if lattice_vectors is None:
             lattice_vectors = self.lattice_vectors
@@ -333,7 +336,7 @@ class Geometry:
         assert not np.allclose(lattice_vectors, np.zeros([3,3])), \
             'Lattice vector must be defined in Geometry or given as function parameter'
         
-        frac_coords = ut.getFractionalCoords(self.coords, lattice_vectors)
+        frac_coords = utils.get_fractional_coords(self.coords, lattice_vectors)
         frac_coords[:,dimensions] = frac_coords[:,dimensions] % 1 # modulo 1 maps all coordinates to first unit cell
         new_coords = ut.getCartesianCoords(frac_coords, lattice_vectors)
         self.coords = new_coords
@@ -347,7 +350,7 @@ class Geometry:
             'Lattice vector must be defined in Geometry or given as function parameter'
         
         offset = self.getGeometricCenter()
-        frac_offset = getFractionalCoords(offset, lattice_vectors)
+        frac_offset = utils.get_fractional_coords(offset, lattice_vectors)
         frac_offset = np.floor(frac_offset)
         self.moveByFractionalCoords(-frac_offset, lattice_vectors)
     
@@ -364,7 +367,9 @@ class Geometry:
     
 
     def move_all_atoms(self, shift):
-        """ Translates the whole geometry by vector 'shift'"""
+        """
+        Translates the whole geometry by vector 'shift'
+        """
         self.coords += shift
         
 
@@ -389,7 +394,18 @@ class Geometry:
         
     
     def rotate_lattice_around_Z_axis(self, angle_in_degree):
-        """Rotates Lattice around z axis"""
+        """
+        Rotates lattice around z axis
+
+        Parameters
+        ----------
+        angle_in_degree : float
+            angle of rotation
+
+        Returns
+        -------
+        None.
+        """
         R = ut.getCartesianRotationMatrix(angle_in_degree * np.pi / 180, get_3x3_matrix=True)
         self.lattice_vectors = np.dot(self.lattice_vectors, R)
 
@@ -415,7 +431,7 @@ class Geometry:
         self.coords[indices] = temp_coords
 
 
-    def mirror_through_plane(self,normal_vector):
+    def mirror_through_plane(self, normal_vector: np.array) -> None:
         """
         Mirrors the geometry through the plane defined by the normal vector.
         """
@@ -440,12 +456,362 @@ class Geometry:
 
         U = np.linalg.inv(X)
         self.transform(U)
+    
+    
+    def align_with_Z_vector(self, new_z_vec: np.array) -> None:
+        """
+        Transforms the coordinate system of the geometry file to a new z-vector
+        calculates rotation martrix for coordinate transformation to new z-vector
+        and uses it to transform coordinates of geometry object 
+        
+        Parameters
+        ----------
+        new_z_vec : np.array
+            The vector to align with the z-axis.
+
+        Returns
+        -------
+        None
+
+        """
+        #get old_positions
+        old_positions= self.coords
+        
+        # normalize new_z_vec
+        new_z_vec= new_z_vec/np.linalg.norm(new_z_vec)
+        
+        
+        # Check if the desired vector is antiparallel to the z-axis
+        if np.allclose(new_z_vec, -np.array([0, 0, 1])):
+            rotation_matrix = np.diag([-1, -1, 1])  # Antiparallel case
+        else:
+            # Calculate the rotation matrix
+            z_axis = np.array([0, 0, 1])
+            cross_product = np.cross(new_z_vec, z_axis)
+            dot_product = np.dot(new_z_vec, z_axis)
+            skew_symmetric_matrix = np.array([[0, -cross_product[2], cross_product[1]],
+                                            [cross_product[2], 0, -cross_product[0]],
+                                            [-cross_product[1], cross_product[0], 0]])
+            rotation_matrix = np.eye(3) + skew_symmetric_matrix + np.dot(skew_symmetric_matrix, skew_symmetric_matrix) * (1 - dot_product) / (np.linalg.norm(cross_product) ** 2)
+
+        # Apply the rotation to all positions
+        rotated_positions = np.dot(old_positions, rotation_matrix.T)
+        
+        self.coords= rotated_positions
+        
+        
+    def align_lattice_vector_to_vector(self, vector, lattice_vector_index):
+        """
+        Align a lattice vector to a given axis
+        
+        vector : array
+            vector for alignment
+        
+        lattice_vector_index : int
+            index of the lattice vector that should be aligned
+        """
+
+        lattice_vector_normed = \
+            self.lattice_vectors[lattice_vector_index] / \
+                np.linalg.norm(self.lattice_vectors[lattice_vector_index])
+
+        vector_normed = vector / np.linalg.norm(vector)
+                
+        R = utils.get_rotation_matrix(vector_normed, lattice_vector_normed)
+
+        self.lattice_vectors = np.dot(self.lattice_vectors, R)
+        self.coords = np.dot(self.coords, R)
+        
+    
+    def align_main_axis_along_XYZ(self) -> None:
+        """
+        Align coordinates of rodlike molecules along specified axis
+        
+        """
+        vals, vecs = self.get_main_axes()
+        R = np.linalg.inv(vecs.T)
+        self.coords = np.dot(self.coords,R)
+
+
+    def transform(self,
+                  R: np.array,
+                  t: np.array=np.array([0,0,0]),
+                  rotation_center:np.array | None=None,
+                  atom_indices:np.array | None=None) -> None:
+        """
+        Performs a symmetry transformation of the coordinates by rotation and
+        translation. The transformation is applied as
+        x_new[3x1] = x_old[3x1] x R[3x3] + t[3x1]
+
+        Parameters
+        ----------
+        R : np.array
+            Rotation matrix in Catesian coordinates.
+        t : np.array, optional
+            Translation vector in Catesian coordinates. The default is np.array([0,0,0]).
+        rotation_center : np.array | None, optional
+            Centre of rotation. The default is None.
+        atom_indices : np.array | None, optional
+            List of indexes of atoms that should be transformed. The default is
+            None.
+
+        Returns
+        -------
+        None
+
+        """
+        if atom_indices is None:
+            atom_indices = np.arange(self.n_atoms)
+        if rotation_center is None:
+            temp_coords = np.dot(self.coords[atom_indices,:], R) + t
+            self.coords[atom_indices, :] = temp_coords
+        else:
+            temp_coords = copy.deepcopy(self.coords[atom_indices,:])
+            temp_coords -= rotation_center
+            temp_coords = np.dot(temp_coords,R) + t
+            temp_coords += rotation_center
+            self.coords[atom_indices,:] = temp_coords
+
+
+    def transform_lattice(self, R: np.array, t: np.array=np.array([0,0,0])) -> None:
+        """
+        Transforms the lattice vectors by rotation and translation.
+        The transformation is applied as x_new[3x1] = x_old[3x1] x R[3x3] + t[3x1]
+        Notice that this works in cartesian coordinates.
+        Use transformFractional if you got your R and t from getSymmetries
+
+        Parameters
+        ----------
+        R : np.array
+            Rotation matrix in Catesian coordinates.
+        t : np.array, optional
+            Translation vector in Catesian coordinates. The default is np.array([0,0,0]).
+
+        Returns
+        -------
+        None
+
+        """
+        new_lattice_vectors = np.dot(self.lattice_vectors, R) + t
+        self.lattice_vectors = new_lattice_vectors
+
+
+    def transform_lattice_fractional(self,R,t,lattice):
+        """Transforms the lattice vectors by rotation and translation.
+        The transformation is applied as x_new[3x1] = x_old[3x1] x R[3x3] + t[3x1]"""
+        coords_frac = utils.get_fractional_coords(self.lattice_vectors, lattice)
+        coords_frac = np.dot(coords_frac, R.T) + t.reshape([1,3])
+        self.lattice_vectors = ut.getCartesianCoords(coords_frac, lattice)
+
+
+    def swap_lattice_vectors(self, axis_1=0, axis_2=1):
+        """
+            Can be used to interchange two lattice vectors
+            Attention! Other values - for instance k_grid - will stay unchanged!!
+        :param axis_1 integer [0,1,2]
+        :param axis_2 integer [0,1,2]     axis_1 !=axis_2
+        :return:
+        """
+        self.lattice_vectors[[axis_1, axis_2], :] = self.lattice_vectors[[axis_2, axis_1], :]
+        self.coords[[axis_1, axis_2], :] = self.coords[[axis_2, axis_1], :]
+
+
+    def transform_fractional(self, R, t, lattice=None):
+        """Transforms the coordinates by rotation and translation, where R,t are
+        given in fractional coordinates
+        The transformation is applied as c_new[3x1] = R[3x3] * c_old[3x1] + t[3x1]"""
+        if lattice is None:
+            lattice=self.lattice_vectors
+        coords_frac = utils.get_fractional_coords(self.coords, lattice)
+        coords_frac = np.dot(coords_frac, R.T) + t.reshape([1,3])
+        self.coords = ut.getCartesianCoords(coords_frac, lattice)
+    
+    
+    def symmetrize(self, symmetry_operations, center=None):
+        """
+        Symmetrizes Geometry with given list of symmetry operation matrices
+        after transferring it to the origin.
+        Do not include the unity matrix for symmetrizing, as it is already the first geometry!
+        ATTENTION: use symmetrize_periodic to reliably symmetrize periodic structures
+        
+        """
+        if center is not None:
+            offset = center
+            self.coords -= center
+        else:
+            offset = np.mean(self.coords, axis=0)
+            self.centerCoordinates()
+        temp_coords = copy.deepcopy(self.coords) # this corresponds to the unity matrix symmetry operation
+        for R in symmetry_operations:
+            new_geom = copy.deepcopy(self)
+            new_geom.transform(R)
+            new_geom.reorder_atoms(self.getTransformationIndices(new_geom))
+            temp_coords += new_geom.coords
+        self.coords = temp_coords / (len(symmetry_operations) + 1) + offset
+        
+
+    def symmetrize_periodic(self, symmetries):
+        """
+        Reliably symmetrizes a periodic structure on a set of symmetries, as received from getSymmetries()
+        Differently from symmetrize(), symmetries MUST include the identity too
+        NOTE: I have not tested this function thoroughly; use it with caution. (fc 13.05.2020)
+        
+        """
+        Rs = symmetries['rotations']
+        ts = symmetries['translations']
+        transformed_geoms = []
+
+        # bring all atoms to first UC. Provides a univocal distribution of the atoms in the UCs.
+        self.moveToFirstUnitCell(coords=np.array([0,1])) # only move to 1UC on XY
+
+        for i,R in enumerate(Rs):
+            t = ts[i]
+            new_geom = copy.deepcopy(self)
+            # store centered reference which will be used to reorder atoms later
+            centered = copy.deepcopy(new_geom)
+            centered.centerXYCoordinates()
+            # rotate
+            new_geom.transformFractional(R,np.array([0,0,0]),self.lattice_vectors)
+            # translate
+            new_geom.moveByFractionalCoords(t)
+            # bring all atoms to first UC. Provides a univocal distribution of the atoms in the UCs.
+            new_geom.moveToFirstUnitCell(lattice=self.lattice_vectors,coords=np.array([0,1]))
+            # store offset and center
+            offset2 = np.mean(new_geom.coords, axis=0)
+            new_geom.centerXYCoordinates()
+            # reoreder atoms with the centered reference
+            indices = centered.getTransformationIndices(new_geom,periodic_2D=True)
+            new_geom.reorder_atoms(indices)
+            # move back to pre-centered position
+            new_geom.move(offset2)
+            transformed_geoms.append(new_geom)
+        # we have all the structures, including the original, in transformed geoms. It can be nice for visualization.
+        # average the coordinates
+        transformed_coords = np.stack([g.coords for g in transformed_geoms])
+        symm_coords = np.mean(transformed_coords,axis=0)
+        self.coords = symm_coords
+        
+
+    def average_with(self, other_geometries) -> None:
+        """
+        Average self.coords with those of other_geometries and apply on self
+        ATTENTION: this can change bond lengths etc.!Ok n
+            
+        Parameters
+        ----------
+        other_geometries: List of Geometrys ... might be nice to accept list of coords too
+
+        Returns
+        -------
+        None
+        
+        """
+        if len(other_geometries) > 0:
+            offset = self.getGeometricCenter() # Attribute center should be used if it exists
+            self.coords -= offset
+
+            for other_geom in other_geometries:
+                geom = copy.deepcopy(other_geom)
+                # center all other geometries to remove offset
+                geom.centerCoordinates()
+                # all geometries have to be ordered like first geometry in order to sum them
+                geom.reorder_atoms(self.getTransformationIndices(geom))
+                self.coords += geom.coords
+            self.coords /= (len(other_geometries) + 1)    # +1 for this geometry itself
+            self.coords += offset
+
+
+    def reorder_atoms(self, inds: np.array) -> None:
+        """
+        eorders Atoms with index list
+
+        Parameters
+        ----------
+        inds : np.array
+            Array of indices with new order of atoms. 
+
+        Returns
+        -------
+        None
+
+        """
+        self.coords = self.coords[inds, :]
+        self.species = [self.species[i] for i in inds]
+        self.constrain_relax = self.constrain_relax[inds, :]
+        self.initial_charge = [self.initial_charge[i] for i in inds]
+        self.initial_moment = [self.initial_moment[i] for i in inds]
+        
+    
+    def shift_to_bottom(self):
+        """
+        Shifts the coordiantes such that the coordinate with the samllest
+        z-value ists at (x, y, 0).
+
+        Returns
+        -------
+        None.
+
+        """
+        min_z = np.min(self.coords[:, -1])
+        self.coords[:, -1] -= min_z
 
 
 ###############################################################################
-#                             Getter Functions                                #
+#                      Set Properties of the Geometry                         #
 ###############################################################################
-    def get_reassembled_molecule(self, threshold=2.0):
+    def set_vacuum_height(self, vac_height, bool_shift_to_bottom=False) -> None:
+        if bool_shift_to_bottom:
+            self.shift_to_bottom()
+        min_z = np.min(self.coords[:, -1])
+        max_z = np.max(self.coords[:, -1])
+        self.lattice_vectors[-1, -1] = max_z + vac_height - min_z
+
+        if vac_height < min_z:
+            raise Exception(
+                """set_vacuum_height: the defined vacuum height is smaller than 
+                height of the lowest atom. Shift unit cell either manually or by
+                the keyword bool_shift_to_bottom towards the bottom
+                of the unit cell."""
+            )
+        self.lattice_vectors[-1, -1] = max_z + vac_height - min_z
+
+
+    def set_vacuum_level(self, vacuum_level: float) -> None:
+        """
+        Sets vacuum level of geometry calculation
+
+        Parameters
+        ----------
+        vacuum_level : float
+            Height of the vacuum level.
+
+        Returns
+        -------
+        None
+
+        """
+        self.vacuum_level = vacuum_level
+
+
+    def setMultipolesCharge(self,charge):
+        """
+        Sets the charge of all multipoles
+        :param charge: list or float or int
+        :return:
+        """
+        if isinstance(charge,list):
+            assert len(charge) == len(self.multipoles)
+            for i, m in enumerate(self.multipoles):
+                m[4] = charge[i]
+        else:
+            for i, m in enumerate(self.multipoles):
+                m[4] = charge
+
+
+###############################################################################
+#                      Get Properties of the Geometry                         #
+###############################################################################
+    def get_reassembled_molecule(self, threshold: float=2.0):
         
         geom_replica = self.getPeriodicReplica((1,1,1), explicit_replications=([-1,0,1],[-1,0,1],[-1,0,1]))
         
@@ -511,7 +877,7 @@ class Geometry:
         lattice_vectors[1]*=scaling_factors[1]
         lattice_vectors[2]*=scaling_factors[2]
 
-        new_coords = ut.getCartesianCoords(self.getFractionalCoords(),lattice_vectors)
+        new_coords = ut.getCartesianCoords(self.get_fractional_coords(), lattice_vectors)
         scaled_geom.lattice_vectors = lattice_vectors
         scaled_geom.coords = new_coords
 
@@ -539,58 +905,52 @@ class Geometry:
         return fractional_coords.T
     
     
-    def transform_coord_sys_to_new_z_vec(self, new_z_vec, inplace=False):
+    def get_reciprocal_lattice(self) -> np.array:
         """
-        transforms the coordinate system of the geometry file to a new z-vector
-        calculates rotation martrix for coordinate transformation to new z-vector
-        and uses it to transform coordinates of geometry object 
-        
-        Parameters:
-        new_z_vec (numpy.ndarray): The vector to align with the z-axis.
-        inplace: BOOLEAN: if TRUE, the geometry file is transformed in place, if FALSE, only the new coords are returned
-
-        Returns:
-        new positions (numpy.ndarray): The positions in the new coordinate system.
+        Calculate the reciprocal lattice of the Geometry lattice_vectors in standard form
+        For convention see en.wikipedia.org/wiki/Reciprocal_lattice
+        Returns: 
+            recip_lattice: np.array(3x3)
+                rowwise reciprocal lattice vectors
         """
-        
-        #get old_positions
-        old_positions= self.coords
-        
-        # normalize new_z_vec
-        new_z_vec= new_z_vec/np.linalg.norm(new_z_vec)
-        
-        
-        # Check if the desired vector is antiparallel to the z-axis
-        if np.allclose(new_z_vec, -np.array([0, 0, 1])):
-            rotation_matrix = np.diag([-1, -1, 1])  # Antiparallel case
-        else:
-            # Calculate the rotation matrix
-            z_axis = np.array([0, 0, 1])
-            cross_product = np.cross(new_z_vec, z_axis)
-            dot_product = np.dot(new_z_vec, z_axis)
-            skew_symmetric_matrix = np.array([[0, -cross_product[2], cross_product[1]],
-                                            [cross_product[2], 0, -cross_product[0]],
-                                            [-cross_product[1], cross_product[0], 0]])
-            rotation_matrix = np.eye(3) + skew_symmetric_matrix + np.dot(skew_symmetric_matrix, skew_symmetric_matrix) * (1 - dot_product) / (np.linalg.norm(cross_product) ** 2)
 
-        # Apply the rotation to all positions
-        rotated_positions = np.dot(old_positions, rotation_matrix.T)
-        
-        if inplace == True:
-            self.coords= rotated_positions
+        a1 = self.lattice_vectors[0]
+        a2 = self.lattice_vectors[1]
+        a3 = self.lattice_vectors[2]
 
-        return rotated_positions
-        
+        volume = np.cross(a1, a2).dot(a3)
 
-    def getMainAxes(self, weights='unity'):
+        b1 = np.cross(a2, a3)
+        b2 = np.cross(a3, a1)
+        b3 = np.cross(a1, a2)
+
+        recip_lattice = np.array([b1, b2, b3])*2*np.pi/volume
+        return recip_lattice
+    
+
+    def get_main_axes(self, weights: str='unity') -> (np.array, np.array):
         """
         Get main axes and eigenvalues of a molecule
         https://de.wikipedia.org/wiki/Tr%C3%A4gheitstensor
 
 
-        weights: Specifies how the atoms are weighted
+        weights: 
+
+        Parameters
+        ----------
+        weights : str, optional
+            Specifies how the atoms are weighted.
             "unity": all same weight
-            "Z": weighted by atomic number
+            "Z": weighted by atomic number.
+            The default is 'unity'.
+
+        Returns
+        -------
+        vals : np.array
+            DESCRIPTION.
+        vecs : np.array
+            DESCRIPTION.
+
         """
         if weights == 'unity':
             weights = np.ones(self.n_atoms)
@@ -606,174 +966,32 @@ class Geometry:
         vals,vecs = scipy.linalg.eigh(I)
         sort_ind = np.argsort(vals)
         
-        return vals[sort_ind],vecs[:,sort_ind]
-    
-    @ut.deprecated #<jc: there is a duplicate function in aimstools.utilities. Also this has nothing to do with GeomtryFile.
-    def getRotationMatrix(self, ax_vec, initial_vec):
-        """ Calculates rotation matrix from initial_vec to ax_vec
-        """
-        initial_vec_normed = initial_vec / scipy.linalg.norm(initial_vec)
-        ax_vec_normed = ax_vec / scipy.linalg.norm(ax_vec)
-        # v = np.outer(ax_vec, initial_vec_normed)
-        v = np.cross(ax_vec_normed, initial_vec_normed)
-        c = np.dot(ax_vec_normed, initial_vec_normed)
-        vx = np.array([[0,       -v[2],  v[1]],
-                      [v[2],    0,      -v[0]],
-                      [-v[1],   v[0],      0]])
-        
-        if (c == -1) or (np.abs((c+1)) < 1e-6):
-            R = np.diag([-1, -1, 1])
-        elif ( c== 1) or (np.abs(c-1) < 1e-6):
-            R = np.eye(3)
-        else:
-            R = np.eye(3) + vx + vx.dot(vx) /(1+c)
-            # If c == -1 (divide by 0 error ) the coordinate system simply has 
-            # to be flipped totally, resulting in R == np.diag([-1,-1,-1])  
-            
-        return R
-
-    @ut.deprecated #<LH: there is a duplicate function in aimstools.utilities. Also this has nothing to do with GeomtryFile.
-    def getRotationMatrixAroundAxis(self, axis, phi):
-        """
-
-        Parameters
-        ----------
-        axis 3D-axis
-        phi     angle of rotation around axis
-        """
-
-        axis_vec = np.array(axis, dtype=np.float64)
-        axis_vec /= np.linalg.norm(axis_vec)
-
-        eye = np.eye(3, dtype=np.float64)
-        ddt = np.outer(axis_vec, axis_vec)
-        skew = np.array([[0,            axis_vec[2],    -axis_vec[1]],
-                         [-axis_vec[2], 0,              axis_vec[0]],
-                         [axis_vec[1],  -axis_vec[0],   0]],
-                        dtype=np.float64)
-
-        R = ddt + np.cos(phi) * (eye - ddt) + np.sin(phi) * skew
-        return R
-    
-    def alignLatticeVectorToVector(self, vector, lattice_vector_index):
-        """
-        Align a lattice vector to a given axis
-        
-        vector : array
-            vector for alignment
-        
-        lattice_vector_index : int
-            index of the lattice vector that should be aligned
-        """
-
-        lattice_vector_normed = \
-            self.lattice_vectors[lattice_vector_index] / \
-                np.linalg.norm(self.lattice_vectors[lattice_vector_index])
-
-        vector_normed = vector / np.linalg.norm(vector)
-                
-        R = ut.getRotationMatrix(
-            vector_normed,
-            lattice_vector_normed
-        )
-
-        self.lattice_vectors = np.dot(self.lattice_vectors, R)
-        self.coords = np.dot(self.coords, R)
-    
-    def alignMainAxisAlongXYZ(self):
-        """
-        align coordinates of rodlike molecules along specified axis
-        """
-        vals, vecs = self.getMainAxes()
-        R = np.linalg.inv(vecs.T)
-        # print("align")
-        # print(np.dot(R, vecs.T))
-        self.coords = np.dot(self.coords,R)
+        return vals[sort_ind], vecs[:,sort_ind]
 
 
-    def transform(self, R, t=np.array([0,0,0]),rotation_center = None, atom_indices=None):
-        """Transforms the coordinates by rotation and translation.
-        The transformation is applied as x_new[3x1] = x_old[3x1] x R[3x3] + t[3x1]"""
-        if atom_indices is None:
-            atom_indices = np.arange(self.n_atoms)
-        if rotation_center is None:
-            temp_coords = np.dot(self.coords[atom_indices,:], R) + t
-            self.coords[atom_indices, :] = temp_coords
-        else:
-            temp_coords = copy.deepcopy(self.coords[atom_indices,:])
-            temp_coords -= rotation_center
-            temp_coords = np.dot(temp_coords,R) + t
-            temp_coords += rotation_center
-            self.coords[atom_indices,:] = temp_coords
-        return self
-
-    def transformLattice(self,R,t=np.array([0,0,0])):
-        """Transforms the lattice vectors by rotation and translation.
-        The transformation is applied as x_new[3x1] = x_old[3x1] x R[3x3] + t[3x1]
-        Notice that this works in cartesian coordinates.
-        Use transformFractional if you got your R and t from getSymmetries"""
-        new_lattice_vectors = np.dot(self.lattice_vectors, R) + t
-        self.lattice_vectors = new_lattice_vectors
-        return self
-
-    def transformLatticeFractional(self,R,t,lattice):
-        """Transforms the lattice vectors by rotation and translation.
-        The transformation is applied as x_new[3x1] = x_old[3x1] x R[3x3] + t[3x1]"""
-        coords_frac = getFractionalCoords(self.lattice_vectors, lattice)
-        coords_frac = np.dot(coords_frac, R.T) + t.reshape([1,3])
-        self.lattice_vectors = ut.getCartesianCoords(coords_frac, lattice)
-        return self
-
-    def swapLatticeVectors(self, axis_1=0, axis_2=1):
-        """
-            Can be used to interchange two lattice vectors
-            Attention! Other values - for instance k_grid - will stay unchanged!!
-        :param axis_1 integer [0,1,2]
-        :param axis_2 integer [0,1,2]     axis_1 !=axis_2
-        :return:
-        """
-        self.lattice_vectors[[axis_1, axis_2], :] = self.lattice_vectors[[axis_2, axis_1], :]
-        self.coords[[axis_1, axis_2], :] = self.coords[[axis_2, axis_1], :]
-        return self
-
-    def transformFractional(self, R, t, lattice=None):
-        """Transforms the coordinates by rotation and translation, where R,t are
-        given in fractional coordinates
-        The transformation is applied as c_new[3x1] = R[3x3] * c_old[3x1] + t[3x1]"""
-        if lattice is None:
-            lattice=self.lattice_vectors
-        coords_frac = getFractionalCoords(self.coords, lattice)
-        coords_frac = np.dot(coords_frac, R.T) + t.reshape([1,3])
-        self.coords = ut.getCartesianCoords(coords_frac, lattice)
-        return self
-    
-    def getDistanceToEquivalentAtoms(self, geom):
-        """Calculate the maximum distance that atoms of geom would have to be moved,
-           to coincide with the atoms of self.
-        """
-        trans,dist = self.getTransformationIndices(geom, get_distances=True)
-        return np.max(dist)
-
-    def getDistanceBetweenAllAtoms(self):
+    def get_distance_between_all_atoms(self) -> np.array:
         """
         Get the distance between all atoms in the current Geometry
         object. Gives an symmetric array where distances between atom i and j
         are denoted in the array elements (ij) and (ji).
+        
         """
-
         distances = scipy.spatial.distance.cdist(self.coords, self.coords)
         return distances
+    
 
-    def getClosestAtoms(self, indices, species=None, n_closest=1):
+    def get_closest_atoms(self, indices, species=None, n_closest=1):
         """
-        get the indices of the closest atom(s) for the given index or list of indices
+        Get the indices of the closest atom(s) for the given index or list of
+        indices
 
         Parameters
         ----------
         index: int or iterable
             atoms for which the closest indices are  to be found
         species: None or list of species identifiers
-            species to consider for closest atoms. This allows to get only the closest atoms of the same or another species
+            species to consider for closest atoms. This allows to get only the
+            closest atoms of the same or another species
         n_closest: int
             number of closest atoms to return
 
@@ -783,7 +1001,7 @@ class Geometry:
             closest atoms for each entry in index
         """
 
-        all_distances = self.getDistanceBetweenAllAtoms()
+        all_distances = self.get_distance_between_all_atoms()
 
         if species is None:
             species_to_consider = list(set(self.species))
@@ -818,7 +1036,7 @@ class Geometry:
             return closest_atoms_list
 
 
-    def getDistanceBetweenTwoAtoms(self, atom_indices):
+    def get_distance_between_two_atoms(self, atom_indices: list) -> float:
         """Get the distance between two atoms in the current Geometry
         object."""
         atom1 = self.coords[atom_indices[0],:]
@@ -828,6 +1046,21 @@ class Geometry:
 
         return dist
 
+
+###############################################################################
+#               Get Properties in comparison to other Geometry                #
+###############################################################################
+    def get_distance_to_equivalent_atoms(self, other_geometry) -> float:
+        """
+        Calculate the maximum distance that atoms of geom would have to be moved,
+        to coincide with the atoms of self.
+        
+        """
+        trans,dist = self.getTransformationIndices(other_geometry,
+                                                   get_distances=True)
+        return np.max(dist)
+    
+    
     def getTransformationIndices(self, other_geometry, norm_threshold=0.5, get_distances=False, periodic_2D=False):
         """Associates every atom in self to the closest atom of the same specie in other_geometry,
         :returns transformation_indices : np.array. The positions on the array correspond to the atoms in self;
@@ -869,92 +1102,11 @@ class Geometry:
         else:
             return transformation_indices
 
-    def symmetrize(self, symmetry_operations, center=None):
-        """symmetrizes Geometry with given list of symmetry operation matrices
-         after transferring it to the origin.
-         Do not include the unity matrix for symmetrizing, as it is already the first geometry!
-         ATTENTION: use symmetrize_periodic to reliably symmetrize periodic structures"""
-        if center is not None:
-            offset = center
-            self.coords -= center
-        else:
-            offset = np.mean(self.coords, axis=0)
-            self.centerCoordinates()
-        temp_coords = copy.deepcopy(self.coords) # this corresponds to the unity matrix symmetry operation
-        for R in symmetry_operations:
-            new_geom = copy.deepcopy(self)
-            new_geom.transform(R)
-            new_geom.reorderAtoms(self.getTransformationIndices(new_geom))
-            temp_coords += new_geom.coords
-        self.coords = temp_coords / (len(symmetry_operations) + 1) + offset
 
-    def symmetrize_periodic(self,symmetries):
-        """reliably symmetrizes a periodic structure on a set of symmetries, as received from getSymmetries()
-        Differently from symmetrize(), symmetries MUST include the identity too
-        NOTE: I have not tested this function thoroughly; use it with caution. (fc 13.05.2020)"""
-
-        Rs = symmetries['rotations']
-        ts = symmetries['translations']
-        transformed_geoms = []
-
-        # bring all atoms to first UC. Provides a univocal distribution of the atoms in the UCs.
-        self.moveToFirstUnitCell(coords=np.array([0,1])) # only move to 1UC on XY
-
-        for i,R in enumerate(Rs):
-            t = ts[i]
-            new_geom = copy.deepcopy(self)
-            # store centered reference which will be used to reorder atoms later
-            centered = copy.deepcopy(new_geom)
-            centered.centerXYCoordinates()
-            # rotate
-            new_geom.transformFractional(R,np.array([0,0,0]),self.lattice_vectors)
-            # translate
-            new_geom.moveByFractionalCoords(t)
-            # bring all atoms to first UC. Provides a univocal distribution of the atoms in the UCs.
-            new_geom.moveToFirstUnitCell(lattice=self.lattice_vectors,coords=np.array([0,1]))
-            # store offset and center
-            offset2 = np.mean(new_geom.coords, axis=0)
-            new_geom.centerXYCoordinates()
-            # reoreder atoms with the centered reference
-            indices = centered.getTransformationIndices(new_geom,periodic_2D=True)
-            new_geom.reorderAtoms(indices)
-            # move back to pre-centered position
-            new_geom.move(offset2)
-            transformed_geoms.append(new_geom)
-        # we have all the structures, including the original, in transformed geoms. It can be nice for visualization.
-        # average the coordinates
-        transformed_coords = np.stack([g.coords for g in transformed_geoms])
-        symm_coords = np.mean(transformed_coords,axis=0)
-        self.coords = symm_coords
-
-    def average_with(self, other_geometries):
-        """
-            average self.coords with those of other_geometries and apply on self
-            ATTENTION: this can change bond lengths etc.!Ok n
-        Parameters
-        ----------
-        other_geometries: List of Geometrys ... might be nice to accept list of coords too
-
-        Returns
-        -------
-        works in place (on self)
-        """
-        if len(other_geometries) > 0:
-            offset = self.getGeometricCenter() # Attribute center should be used if it exists
-            self.coords -= offset
-
-            for other_geom in other_geometries:
-                geom = copy.deepcopy(other_geom)
-                # center all other geometries to remove offset
-                geom.centerCoordinates()
-                # all geometries have to be ordered like first geometry in order to sum them
-                geom.reorderAtoms(self.getTransformationIndices(geom))
-                self.coords += geom.coords
-            self.coords /= (len(other_geometries) + 1)    # +1 for this geometry itself
-            self.coords += offset
-
-
-    def getPrimitiveSlab(self, surface, threshold=1e-6):
+###############################################################################
+#                          Get Part of a Geometry                             #
+###############################################################################
+    def get_primitive_slab(self, surface, threshold=1e-6):
         """
         Generates a primitive slab unit cell with the z-direction perpendicular
         to the surface.
@@ -1021,9 +1173,6 @@ class Geometry:
         # flip surface lattice such that surface normal becomes the z-axis
         surface_lattice = np.flip(surface_lattice, 0)
         
-        frac_surface_lattice = getFractionalCoords( surface_lattice, lattice )
-        #print(frac_surface_lattice)
-        
         slab = self.__class__()
         slab.lattice_vectors = surface_lattice
         
@@ -1041,7 +1190,7 @@ class Geometry:
                         for new_species, coord in zip(atomic_numbers, scaled_positions):
                             
                             new_coord = coord.dot(lattice) + np.array([h,k,l]).dot(lattice)
-                            frac_new_coord = getFractionalCoords(new_coord, surface_lattice)
+                            frac_new_coord = utils.get_fractional_coords(new_coord, surface_lattice)
                         
                             L1 = np.sum( frac_new_coord >= 1-threshold )
                             L2 = np.sum( frac_new_coord < -threshold )
@@ -1055,7 +1204,7 @@ class Geometry:
                 break
             
             if shell == 100:
-                warnings.warn('<Geometry.getPrimitiveSlab> could not build a correct slab.')
+                warnings.warn('<Geometry.get_primitive_slab> could not build a correct slab.')
         
         slab.alignLatticeVectorToVector(np.array([0,0,1]),2)
         slab.alignLatticeVectorToVector(np.array([1,0,0]),0)
@@ -1063,7 +1212,7 @@ class Geometry:
         scaled_slab_lattice = np.array(slab.lattice_vectors)
         # break symmetry in z-direction
         scaled_slab_lattice[2,:] *= 2
-        frac_coords = getFractionalCoords(slab.coords, scaled_slab_lattice)
+        frac_coords = utils.get_fractional_coords(slab.coords, scaled_slab_lattice)
         species = [PERIODIC_TABLE[s] for s in slab.species]
         
         (primitive_slab_lattice, primitive_slab_scaled_positions, primitive_slab_atomic_numbers) \
@@ -1083,36 +1232,50 @@ class Geometry:
         check_lattice, _, _ = spglib.standardize_cell(primitive_slab.getSPGlibCell())
         
         assert np.allclose( check_lattice, lattice ), \
-        '<Geometry.getPrimitiveSlab> the slab that was constructed \
+        '<Geometry.get_primitive_slab> the slab that was constructed \
         could not be reduced to the original bulk unit cell. Something \
         must have gone wrong.'
         
         return primitive_slab
 
-    def shiftSlabToBottom(self):
-        min_z = np.min(self.coords[:, -1])
-        self.coords[:, -1] -= min_z
-    def setVacuumheight(self,vac_height, bool_shift_to_bottom=False):
-        if bool_shift_to_bottom:
-            self.shiftSlabToBottom()
-        min_z = np.min(self.coords[:, -1])
-        max_z = np.max(self.coords[:, -1])
-        self.lattice_vectors[-1, -1] = max_z + vac_height - min_z
-
-        if vac_height < min_z:
-            raise Exception(
-                """setVacuumheight: the defined vacuum height is smaller than 
-                height of the lowest atom. Shift unit cell either manually or by
-                the keyword bool_shift_to_bottom towards the bottom
-                of the unit cell."""
-            )
-        self.lattice_vectors[-1, -1] = max_z + vac_height - min_z
     
-    def getSlab(self, layers, surface=None, threshold=1e-6, surface_replica=(
-            1,1),vacuum_height=None, bool_shift_slab_to_bottom=False):
+    def get_slab(self,
+                 layers: int,
+                 surface: np.array | None=None,
+                 threshold: float=1e-6,
+                 surface_replica: (int, int)=(1,1),
+                 vacuum_height: float | None=None, 
+                 bool_shift_slab_to_bottom: bool=False):
+        """
+        Generates a slab.
         
+        Returns:
+        --------
+        primitive_slab : Geometry
+
+        Parameters
+        ----------
+        layers : int
+            Number of layers of the slab.
+        surface : np.array | None, optional
+            miller indices, eg. (1,1,1)
+        threshold : float, optional
+            numerical threshold for symmetry operations
+        surface_replica : (int, int), optional
+            DESCRIPTION. The default is (1,1).
+        vacuum_height : float | None, optional
+            DESCRIPTION. The default is None.
+        bool_shift_slab_to_bottom : bool, optional
+            DESCRIPTION. The default is False.
+
+        Returns
+        -------
+        slab_new : Geometry
+            New Geometry
+
+        """
         if surface is not None:
-            primitive_slab = self.getPrimitiveSlab(surface, threshold=threshold)
+            primitive_slab = self.get_primitive_slab(surface, threshold=threshold)
         else:
             primitive_slab = self
         
@@ -1143,7 +1306,7 @@ class Geometry:
                 )
             else:
                 if bool_shift_slab_to_bottom:
-                    self.shiftSlabToBottom()
+                    self.shift_to_bottom()
 
         return slab_new
 
@@ -1391,7 +1554,7 @@ class Geometry:
         #TODO: Parallelize
 
         #0) Preparation: 
-        recip_lattice = self.getReciprocalLattice()
+        recip_lattice = self.get_reciprocal_lattice()
         b1 = recip_lattice[0]
         b2 = recip_lattice[1]
         b3 = recip_lattice[2]
@@ -1607,7 +1770,7 @@ class Geometry:
         symm_geometry.transformFractional(R,np.array([0,0,0]),self.lattice_vectors)
         symm_geometry.moveByFractionalCoords(t)
         #prevent problems if the center is very close to the edge
-        center = getFractionalCoords(symm_geometry.getGeometricCenter(),symm_geometry.lattice_vectors)
+        center = utils.get_fractional_coords(symm_geometry.getGeometricCenter(),symm_geometry.lattice_vectors)
         center[:2] %= 1.0
         if 1-center[0]<0.001:
             adjust = -(center[0]-0.0001)
@@ -1622,7 +1785,7 @@ class Geometry:
         offset_symm = np.mean(symm_geometry.coords,axis=0)
         symm_geometry.centerCoordinates()
         indices = centered_geometry.getTransformationIndices(symm_geometry)
-        symm_geometry.reorderAtoms(indices)
+        symm_geometry.reorder_atoms(indices)
         symm_geometry.move(offset_symm)
         # compare in first unit cell
         symm_geometry_1UC = copy.deepcopy(symm_geometry)
@@ -1670,54 +1833,10 @@ class Geometry:
         Returns:
             angle between main axis and x axis in degree
         """
-        main_ax = self.getMainAxes()[1][:,0]
+        main_ax = self.get_main_axes()[1][:,0]
         if main_ax[1]<0:
             main_ax *= -1
         return (np.arctan2(main_ax[1], main_ax[0])*180/np.pi)
-
-
-    def getReciprocalLattice(self):
-        """
-        Calculate the reciprocal lattice of the Geometry lattice_vectors in standard form
-        For convention see en.wikipedia.org/wiki/Reciprocal_lattice
-        Returns: 
-            recip_lattice: np.array(3x3)
-                rowwise reciprocal lattice vectors
-        """
-
-        a1 = self.lattice_vectors[0]
-        a2 = self.lattice_vectors[1]
-        a3 = self.lattice_vectors[2]
-
-        volume = np.cross(a1, a2).dot(a3)
-
-        b1 = np.cross(a2, a3)
-        b2 = np.cross(a3, a1)
-        b3 = np.cross(a1, a2)
-
-        recip_lattice = np.array([b1, b2, b3])*2*np.pi/volume
-        return recip_lattice
-
-
-    def setVacuumLevel(self,vacuum_level):
-        ''' sets vacuum level of geometry calculation '''
-        
-        self.vacuum_level = vacuum_level
-
-
-    def setMultipolesCharge(self,charge):
-        """
-        Sets the charge of all multipoles
-        :param charge: list or float or int
-        :return:
-        """
-        if isinstance(charge,list):
-            assert len(charge) == len(self.multipoles)
-            for i, m in enumerate(self.multipoles):
-                m[4] = charge[i]
-        else:
-            for i, m in enumerate(self.multipoles):
-                m[4] = charge
 
 
     def moveMultipoles(self,shift):
@@ -1994,7 +2113,7 @@ class Geometry:
         
         if lattice is None:
             lattice = self.lattice_vectors
-        frac_coords = ut.getFractionalCoords(self.coords, lattice)
+        frac_coords = utils.get_fractional_coords(self.coords, lattice)
         
 
         
@@ -2510,7 +2629,7 @@ class Geometry:
         if not layer_indices:
             sub_new = sub
         else:
-            sub_new = GeometryFile()
+            sub_new = self.__class__()
             sub_new.lattice_vectors = sub.lattice_vectors
             for layer_ind in layer_indices:
                 sub_new += sub.getAtomsByIndices(layers[heights[layer_ind]])
@@ -2660,13 +2779,6 @@ class Geometry:
             
         return np.array(bond_lengths)
 
-    def reorderAtoms(self, inds):
-        "Reorders Atoms with index list"
-        self.coords = self.coords[inds, :]
-        self.species = [self.species[i] for i in inds]
-        self.constrain_relax = self.constrain_relax[inds, :]
-        self.initial_charge = [self.initial_charge[i] for i in inds]
-        self.initial_moment = [self.initial_moment[i] for i in inds]
 
     def add_atoms(self, cartesian_coords, species, constrain_relax=None, initial_moment=None, initial_charge=None, external_force=None, calculate_friction=None):
         """Add additional atoms to the current geometry file.
@@ -2759,11 +2871,16 @@ class Geometry:
         species = [PERIODIC_TABLE[s] for s in self.species]
         return species
 
-    def getPeriodicReplica(self, replications, lattice=None, explicit_replications=None):
+
+    def get_periodic_replica(self,
+                             replications: tuple,
+                             lattice:np.array | None=None,
+                             explicit_replications: [list, list, list] | None=None):
         """
         Return a new geometry file that is a periodic replica of the original file.
         repeats the geometry N-1 times in all given directions:
         (1,1,1) returns the original file
+
         Parameters
         ----------
         replications : tuple or list
@@ -2778,7 +2895,7 @@ class Geometry:
 
         Returns
         -------
-        New geometry file
+        New geometry
         """
         #TODO implement geometry_parts the right way (whatever this is)
         if lattice is None:
@@ -2821,6 +2938,7 @@ class Geometry:
         for i,r in enumerate(lattice_multipliers):
             new_geom.lattice_vectors[i,:] *= r
         return new_geom
+    
 
     def getPeriodicReplicaToFillBox(self,
                                     box_limits
@@ -2857,6 +2975,7 @@ class Geometry:
                 break
             layer_index += 1
         return new_geom
+    
 
     def splitIntoMolecules(self,threshold):
         """Splits a structure into individual molecules. Two distinct molecules A and B are defined as two sets of atoms,
@@ -3000,7 +3119,7 @@ class Geometry:
         return : tuple
             (lattice vectors, frac coordinates of atoms, atomic numbers)
         """
-        coordinates = getFractionalCoords(self.coords, self.lattice_vectors)
+        coordinates = utils.get_fractional_coords(self.coords, self.lattice_vectors)
         
         atom_number = []
         for atom_name in self.species:
@@ -3170,7 +3289,7 @@ class Geometry:
         return evals
 
 
-    def getNumberOfElectrons(self):
+    def get_number_of_electrons(self) -> float:
         electrons = []
         for s in self.species:
             try:
@@ -3187,7 +3306,7 @@ class Geometry:
 ###############################################################################
 #                        ControlFile Helpers                                  #
 ###############################################################################
-    def getCubeFileGrid(self,divisions,origin = None,verbose=True):
+    def getCubeFileGrid(self, divisions, origin = None, verbose=True):
         """EXPERIMENTAL!
            creates cube file grid with given number of divisions in each direction.
            If only one division is given, this will be used in all directions.
@@ -3336,16 +3455,14 @@ class Geometry:
 ###############################################################################
     def getAsASE(self):
         import ase
-        """Convert geometry file to ASE object"""
+        """
+        Convert geometry file to ASE object
+        
+        """
         #atoms_string = ""
         atom_coords = []
         atom_numbers = []
         for i in range(self.n_atoms):
-            #atom_string = self.species[i]
-            #if len(atom_string)> 2:
-            #    atom_string = atom_string[:2]
-            #atoms_string += self.species[i]
-                
             # Do not export 'emptium" atoms
             if self.species[i] != 'Em':
                 atom_coords.append(self.coords[i,:])
@@ -4706,446 +4823,8 @@ class Geometry:
         return(indizes_of_native_adatoms, indizes_of_adlayer_atoms )
         
         
-
-    def common_data(self, list1, list2):
-    #checks if list1 and list2 share at least one element
-        result = False
-     
-        for x in list1:
-
-            for y in list2:
-       
-                if x == y:
-                    result = True
-                    return result 
-                     
-        return result
-        
-
-    def BuildPossibleTranslationVectors( self , e1, e2, e3 , max_size_of_translation_vector = 4):
-    # builds all possible vectors that can be a linear combination of e1, e2, e3. 
-    # max_size_of_translation_vector determines the maximum number of linear combinations of e1 e2 and e3 to get the resulting vector
-
-        possible_vectors = []
-
-        for a in range(max_size_of_translation_vector):
-            for b in range(max_size_of_translation_vector):
-                for c in range(max_size_of_translation_vector):
-                    #print(a,b,c)
-                    vec_i_1_plus = a*e1 + b*e2 + c*e3
-                    vec_i_1_minus = -(a*e1 + b*e2 + c*e3)
-
-                    vec_i_2_plus = a*e1 - b*e2 + c*e3
-                    vec_i_2_minus = -(a*e1 - b*e2 + c*e3)
-
-                    vec_i_3_plus = a*e1 + b*e2 - c*e3
-                    vec_i_3_minus = -(a*e1 + b*e2 - c*e3)            
-
-
-                    possible_vectors += [vec_i_1_plus, vec_i_1_minus, \
-                                        vec_i_2_plus, vec_i_2_minus, \
-                                        vec_i_3_plus, vec_i_3_minus]
-
-
-
-        ############## find all equivalent vectors among the possible vectors
-        equivalent_vectors = []
-        for i in range(len(possible_vectors)):
-            equivalent_vectors.append([])
-
-        counter = 0
-        for i, vec_i in enumerate(possible_vectors):
-            equivalent_vectors[i].append(i)
-            for j, vec_j in enumerate( possible_vectors ):
-
-
-                if i !=j :
-                    if np.all(np.isclose(vec_i, vec_j , atol=0.001) ):
-
-
-                        equivalent_vectors[i].append(j)
-                        equivalent_vectors[j].append(i)
-
-                        equivalent_vectors[i]=list(set(equivalent_vectors[i]))
-                        equivalent_vectors[j]=list(set(equivalent_vectors[j]))
-
-
-        ##### list all vectors that must be erased to obtain a list of unique translation vectors
-        list_of_vectors_that_must_remain = []
-        list_of_vectors_that_will_be_erased = []
-
-        for list_i in equivalent_vectors:
-            #print(list_i)
-            #print(list_i[0])
-
-            if len(list_i) >0:
-                if list_i[0] not in list_of_vectors_that_will_be_erased:
-                    list_of_vectors_that_must_remain.append(list_i[0])
-                for list_i_element_j in list_i[1:]:
-                    if list_i_element_j not in list_of_vectors_that_must_remain:
-                        list_of_vectors_that_will_be_erased.append(list_i_element_j)
-        list_of_vectors_that_will_be_erased=list(set(list_of_vectors_that_will_be_erased))
-
-
-        ############# make a list of only unique translation vectors
-        possible_unique_translation_vectors = []
-
-        for i,vec_i in enumerate(possible_vectors):
-            if i not in list_of_vectors_that_will_be_erased:
-                possible_unique_translation_vectors.append(vec_i)
-                
-                
-        possible_unique_translation_vectors_lengths = []
-        
-        for vec_i in possible_unique_translation_vectors:
-            length_i = np.linalg.norm(vec_i)
-            possible_unique_translation_vectors_lengths.append(length_i)
-                
-        #print('possible_unique_translation_vectors_lengths: ',possible_unique_translation_vectors_lengths)
-        length_sorted_indices = np.argsort(possible_unique_translation_vectors_lengths)
-        #print('length_sorted_indices: ',length_sorted_indices)
-        
-        length_sorted_unique_translation_vectors = \
-        list( np.array( possible_unique_translation_vectors)[length_sorted_indices]  )
-        
-        return length_sorted_unique_translation_vectors
-        
-          
-
-
-
-
-    def clusterAtomsInSameMoleculeNONPeriodic(self, geo, epsilon=0.2):
-        
-
-    # this function gives you for every atom a list of other atoms that belong to the same molecule.
-    # the output is a dictionary. 
-    # the keys of the dictionary are the indices of the atoms of the input geometry file.
-    # the values of the dictionary is a list of other atom indices that belong to the same molecule
-
-    # epsilon defines the range of the length of a covalent bond between 2 atoms so that the 2 atoms are considered to belong to the same molecule
-        
-    ########## got threw all atoms and for every atom find it's neighbors that are covalently bond
-        
-        neighbour_of_atoms = {}#key is an atom index , value are all the molecular neighbors of this atom
-
-        for i in geo.getIndicesOfAllAtoms():
-            
-            neighbours_of_atom_i = []
-            coords_i = geo.coords[i]
-            species_i = geo.species[i]
-
-            for j in [k for k in geo.getIndicesOfAllAtoms() if k !=i]:
-                
-                coords_j = geo.coords[j]
-                species_j = geo.species[j]        
-                covalent_distance_i_j = getCovalentRadius(species_i) + getCovalentRadius(species_j)
-                dist_ij = np.linalg.norm(coords_i - coords_j)
-
-                if  dist_ij < covalent_distance_i_j + epsilon:
-                    neighbours_of_atom_i.append(j)
-
-            neighbour_of_atoms[i] = neighbours_of_atom_i    
-
-
-
-    ########### now for every atom find all other atoms that belong to the same molecule
-
-        neighbour_of_atoms_dynamic_helper = copy.deepcopy(neighbour_of_atoms)
-
-        for current_atom_index_i in neighbour_of_atoms_dynamic_helper.keys():
-
-
-            atoms_that_belong_to_the_same_molecule = [current_atom_index_i]
-
-            atoms_that_belong_to_the_same_molecule += neighbour_of_atoms_dynamic_helper[current_atom_index_i]    
-      
-
-
-            for other_atom_index_j in neighbour_of_atoms_dynamic_helper.keys():
-
-                if current_atom_index_i in neighbour_of_atoms_dynamic_helper[other_atom_index_j]  \
-                or self.common_data( neighbour_of_atoms_dynamic_helper[other_atom_index_j] , \
-                                 atoms_that_belong_to_the_same_molecule )  :
-
-
-
-                    atoms_that_belong_to_the_same_molecule.append(other_atom_index_j)
-                    atoms_that_belong_to_the_same_molecule += neighbour_of_atoms[other_atom_index_j]
-
-
-                    neighbour_of_atoms_dynamic_helper[other_atom_index_j] += atoms_that_belong_to_the_same_molecule
-
-                    neighbour_of_atoms_dynamic_helper[other_atom_index_j] = list(set(neighbour_of_atoms_dynamic_helper[other_atom_index_j]))
-
-
-
-            atoms_that_belong_to_the_same_molecule = list( set(atoms_that_belong_to_the_same_molecule) )
-
-
-            neighbour_of_atoms_dynamic_helper[current_atom_index_i] = atoms_that_belong_to_the_same_molecule
-
-
-
-        for atom_i in neighbour_of_atoms_dynamic_helper.keys():
-            neighbour_of_atoms_dynamic_helper[atom_i] = list(set( neighbour_of_atoms_dynamic_helper[atom_i]   ))
-
-
-
-        return neighbour_of_atoms_dynamic_helper
-
-
-
-
-    def clusterAtomsInSameMoleculePeriodic(self, geo, epsilon=0.2):
-    
-        # this function gives you for every atom a list of other atoms that belong to the same molecule IN A PERIODIC CASE ...
-        # ... EVEN IF THE MOLECULE IS TORN APPART IN A UNIT CELL, ...
-        # ... I.E. IF ONLY FOR THE PERIODIC REPLICATION IT IS OBVIOUS WHICH ATOMS BELONG TO THE SAME MOLECULE
-        # the output is a dictionary. 
-        # the keys of the dictionary are the indices of the atoms of the input geometry file.
-        # the values of the dictionary is a list of other atom indices that belong to the same molecule
-        
-        # epsilon defines the range of the length of a covalent bond between 2 atoms so that the 2 atoms are considered to belong to the same molecule
-        
-        assert np.all( geo.lattice_vectors is not np.array([0,0,0]) )
-        
-        
-        
-        geo_periodic = geo.getPeriodicReplica([3,3,1])
-
-        neighbour_of_atom_NONperiodic = self.clusterAtomsInSameMoleculeNONPeriodic(geo=geo, epsilon=epsilon)
-        neighbour_of_atom_periodic    = self.clusterAtomsInSameMoleculeNONPeriodic(geo=geo_periodic, epsilon=epsilon)
-        
-        e1=geo.lattice_vectors[0]
-        e2=geo.lattice_vectors[1]
-        e3=geo.lattice_vectors[2]
-        
-        possible_translation_vectors = [ e1,e2,e3,e1+e1, e1+e2,  e1+e3, e2+e2,  e2+e3, e3+e3, e1+e1+e1, e1+e1+e2,\
-        e1+e1+e3,e2+e2+e1,e2+e2+e2,e2+e2+e3,e3+e3+e1, e3+e3+e2, e3+e3+e3, e1+e2+e3, e2+e1+e1+e2,  e3+e1+e1+e2,        \
-        e3+e1+e1+e3, e3+e2+e2+e1, e3+e2+e2+e3, e3+e3+e1+e1, e3+e3+e1+e2, e3+e3+e2+e2  ]
-
-
-        neighbour_of_atom_periodic_DYNAMIC_Helper = copy.deepcopy(neighbour_of_atom_periodic)
-        neighbour_of_atom_NONperiodic_DYNAMIC_Helper = copy.deepcopy(neighbour_of_atom_NONperiodic)
-
-
-        for current_atom_i in neighbour_of_atom_NONperiodic_DYNAMIC_Helper.keys():
-
-
-            current_atom_i_coords = geo.coords[current_atom_i]
-
-            atoms_in_the_same_molecule = neighbour_of_atom_NONperiodic_DYNAMIC_Helper[current_atom_i]
-
-            for other_atom_j in neighbour_of_atom_periodic_DYNAMIC_Helper.keys():
-
-                other_atom_j_coords = geo_periodic.coords[other_atom_j]
-
-                for translation_vector_k in possible_translation_vectors:
-                    current_atom_i_coords_transl_k = current_atom_i_coords + translation_vector_k
-
-                    if np.all(np.isclose(current_atom_i_coords_transl_k, other_atom_j_coords, 0.01) ):
-
-                        atoms_in_the_same_molecule.append(other_atom_j)
-                        atoms_in_the_same_molecule += neighbour_of_atom_periodic_DYNAMIC_Helper[other_atom_j]
-
-                        atoms_in_the_same_molecule = list(set(atoms_in_the_same_molecule))
-
-                        neighbour_of_atom_periodic_DYNAMIC_Helper[other_atom_j] += atoms_in_the_same_molecule
-                        neighbour_of_atom_periodic_DYNAMIC_Helper[other_atom_j] = list(set(neighbour_of_atom_periodic_DYNAMIC_Helper[other_atom_j]))
-
-
-                neighbour_of_atom_NONperiodic_DYNAMIC_Helper[current_atom_i] +=atoms_in_the_same_molecule
-
-                neighbour_of_atom_NONperiodic_DYNAMIC_Helper[current_atom_i] = list(set(neighbour_of_atom_NONperiodic_DYNAMIC_Helper[current_atom_i] ))
-
-
-
-        for current_atom_i in neighbour_of_atom_NONperiodic_DYNAMIC_Helper.keys():
-            atoms_in_the_same_molecule = [current_atom_i]
-            atoms_in_the_same_molecule += neighbour_of_atom_NONperiodic_DYNAMIC_Helper[current_atom_i]
-
-            atoms_in_the_same_molecule = list(set(atoms_in_the_same_molecule))
-
-            for other_atom_j in neighbour_of_atom_NONperiodic_DYNAMIC_Helper.keys():
-
-                if self.common_data( neighbour_of_atom_NONperiodic_DYNAMIC_Helper[current_atom_i] ,
-                                 neighbour_of_atom_NONperiodic_DYNAMIC_Helper[other_atom_j]  ) :
-
-                    atoms_in_the_same_molecule.append(other_atom_j)
-                    atoms_in_the_same_molecule += neighbour_of_atom_NONperiodic_DYNAMIC_Helper[other_atom_j]
-
-                    atoms_in_the_same_molecule = list(set(atoms_in_the_same_molecule))
-
-                    neighbour_of_atom_NONperiodic_DYNAMIC_Helper[other_atom_j] += atoms_in_the_same_molecule
-                    neighbour_of_atom_NONperiodic_DYNAMIC_Helper[other_atom_j] = list(set(neighbour_of_atom_NONperiodic_DYNAMIC_Helper[other_atom_j]))
-
-                neighbour_of_atom_NONperiodic_DYNAMIC_Helper[current_atom_i] += atoms_in_the_same_molecule
-
-                neighbour_of_atom_NONperiodic_DYNAMIC_Helper[current_atom_i] = \
-                list(set(neighbour_of_atom_NONperiodic_DYNAMIC_Helper[current_atom_i]))
-
-
-
-        for keyi in neighbour_of_atom_NONperiodic_DYNAMIC_Helper.keys():
-
-            temp_helperlist =  neighbour_of_atom_NONperiodic_DYNAMIC_Helper[keyi]
-            temp_helperlist_dynamic = copy.deepcopy(temp_helperlist)
-
-            for k in temp_helperlist:
-                if k not in geo.getIndicesOfAllAtoms():
-                    temp_helperlist_dynamic.remove(k)
-
-
-            neighbour_of_atom_NONperiodic_DYNAMIC_Helper[keyi] = copy.deepcopy(temp_helperlist_dynamic)
-
-
-
-        
-        return neighbour_of_atom_NONperiodic_DYNAMIC_Helper
-            
-
-    def MapMoleculeAsCloseAsPossibleToOrigin(self, molecule_geo , lattice_vectors, max_translation_vect_length = 2):
-    
-        # shifts a molecule as close to the origin as possible, in a PERIODIC STRUCTURE WITH LATTICE VECTORS lattice_vectors
-        
-        
-        e1 = lattice_vectors[0]
-        e2 = lattice_vectors[1]
-        e3 = lattice_vectors[2]
-        
-        possible_translation_vectors = self.BuildPossibleTranslationVectors(\
-                            e1=e1, e2=e2, e3=e3 , max_size_of_translation_vector=max_translation_vect_length)    
-        
-        geos_list = []
-        distances_to_origin_list = []
-        translation_vectors_list = []
-
-        for translation_vector_x in possible_translation_vectors:
-
-            new_molecule_geo_x = copy.deepcopy(molecule_geo)
-            new_molecule_geo_x.transform(t=translation_vector_x, R=np.eye(3))
-
-            center_of_mass_coordinates_x = new_molecule_geo_x.getCenterOfMass()
-
-            distances_to_origin_x = np.linalg.norm(center_of_mass_coordinates_x)
-
-
-            if np.all(center_of_mass_coordinates_x>=0):
-
-                distances_to_origin_list.append(distances_to_origin_x)
-                geos_list.append(new_molecule_geo_x)
-                translation_vectors_list.append(translation_vector_x)
-
-        origin_distance_sorted_indices = np.argsort(np.array(distances_to_origin_list))
-
-        origin_distance_sorted_geos_list = list( np.array(geos_list)[origin_distance_sorted_indices] )
-        
-        origin_distance_sorted_translation_vectors_list = \
-        list( np.array( translation_vectors_list )[origin_distance_sorted_indices]  )
-        
-        
-        ideal_translation_vector = origin_distance_sorted_translation_vectors_list[0]
-        geo_closest_to_origin = origin_distance_sorted_geos_list[0]
-        
-        
-
-        return ideal_translation_vector , geo_closest_to_origin
-
-
-                
-    def ReassambleMoleculesTornInUnitCell(self, geo, max_size_of_translation_vector=3, epsiolon=0.2 ):
-    
-        # this function reassambles atoms in a unit cell so that one will obtain coherent molecules (if there are coherent molecules in the periodic structure) ...
-        # ... EVEN IF THE MOLECULE IS TORN APPART IN A UNIT CELL, ...
-        # ... I.E. IF ONLY FOR THE PERIODIC REPLICATION IT IS OBVIOUS WHICH ATOMS BELONG TO THE SAME MOLECULE
-        
-        # max_size_of_translation_vectors gives the number of periodic replica in which one check for coherent molecules. usually 3 is ok
-        # epsilon defines the range of the length of a covalent bond between 2 atoms so that the 2 atoms are considered to belong to the same molecule
- 
-    
-        assert np.any(geo.lattice_vectors is not np.array([0,0,0])  )
-    
-        e1 = geo.lattice_vectors[0]
-        e2 = geo.lattice_vectors[1]
-        e3 = geo.lattice_vectors[2]
-
-        possible_translation_vectors = self.BuildPossibleTranslationVectors(\
-            e1=e1, e2=e2, e3=e3,max_size_of_translation_vector=max_size_of_translation_vector)
-
-
-        atoms_in_the_same_molecule_PERIODIC = self.clusterAtomsInSameMoleculePeriodic(geo=geo, epsilon=epsiolon)
-
-        atoms_in_the_same_molecule_NONPERIODIC = self.clusterAtomsInSameMoleculeNONPeriodic(geo=geo, epsilon=epsiolon)
-
-
-        new_geo = copy.deepcopy(geo)
-        
-        for atom_i in atoms_in_the_same_molecule_NONPERIODIC.keys():
-
-            all_atoms_in_molecule_NONPERIODIC_i = atoms_in_the_same_molecule_NONPERIODIC[atom_i]
-            all_atoms_in_molecule_PERIODIC_i = atoms_in_the_same_molecule_PERIODIC[atom_i]
-
-            if len(all_atoms_in_molecule_NONPERIODIC_i) is not len(all_atoms_in_molecule_PERIODIC_i):
-
-                for translation_vector_k in possible_translation_vectors:
-
-                    #figure_ik, axes_ik = plt.subplots(nrows=1, ncols=2, figsize=[10,5])
-
-                    temp_geo_ik = copy.deepcopy(new_geo)
-
-
-
-                    temp_geo_ik.transform(t=translation_vector_k,R=np.eye(3),\
-                                          atom_indices = all_atoms_in_molecule_NONPERIODIC_i)
-
-
-                    #temp_geo_ik.visualizeAtomIndices(ax=axes_ik[1])
-                    #temp_geo_ik.visualize(ax=axes_ik[1])
-
-                    #new_geo.visualizeAtomIndices(ax=axes_ik[0])
-                    #new_geo.visualize(ax=axes_ik[0])
-                    #plt.show()
-
-                    temp_atoms_in_the_same_molecule_NONPERIODIC = self.clusterAtomsInSameMoleculeNONPeriodic(temp_geo_ik)
-                    temp_all_atoms_in_molecule_NONPERIODIC_i_k = temp_atoms_in_the_same_molecule_NONPERIODIC[atom_i]
-                    #print('all_atoms_in_molecule_NONPERIODIC_i: ',all_atoms_in_molecule_NONPERIODIC_i)
-                    #print('temp_all_atoms_in_molecule_NONPERIODIC_i_k: ' ,temp_all_atoms_in_molecule_NONPERIODIC_i_k)
-
-                    if len(temp_all_atoms_in_molecule_NONPERIODIC_i_k ) > len(all_atoms_in_molecule_NONPERIODIC_i ):
-
-
-
-                        new_geo = copy.deepcopy(temp_geo_ik)
-                        all_atoms_in_molecule_NONPERIODIC_i = temp_all_atoms_in_molecule_NONPERIODIC_i_k
-
-                        atoms_in_the_same_molecule_NONPERIODIC = self.clusterAtomsInSameMoleculeNONPeriodic(geo=new_geo)
-
-
-                    ##### shift the new part back to origin as close as possible
-
-                        #print('\n\n NOW WE shift back close to the origin: ')
-                        molecule_to_shift = new_geo.getAtomsByIndices(all_atoms_in_molecule_NONPERIODIC_i)
-
-
-                        molecule_to_origin_translation_vector = \
-                        self.MapMoleculeAsCloseAsPossibleToOrigin(molecule_geo=molecule_to_shift,\
-                                                         lattice_vectors=new_geo.lattice_vectors,\
-                                                         max_translation_vect_length=max_size_of_translation_vector)[0]
-
-
-
-                        new_geo.transform(R=np.eye(3), t=molecule_to_origin_translation_vector,
-                                         atom_indices=all_atoms_in_molecule_NONPERIODIC_i)
-
-
-                        break
-
-        return new_geo                   
-        
-        
 class AimsGeometry(Geometry):
-    def parse_geometry(self, text):
+    def parse(self, text):
         """
         Parses text from AIMS geometry file and sets all necessary parameters
         in AimsGeometry.
@@ -5428,7 +5107,7 @@ class AimsGeometry(Geometry):
             text += "homogeneous_field {} {} {}\n".format(*self.homogenous_field)
 
         if is_fractional:
-            coords = getFractionalCoords(self.coords, self.lattice_vectors)
+            coords = utils.get_fractional_coords(self.coords, self.lattice_vectors)
             line_start = "atom_frac"
         else:
             coords = self.coords
@@ -5513,7 +5192,7 @@ class AimsGeometry(Geometry):
         
     
 class ZMatrixGeometry(Geometry):
-    def parse_geometry(self, text):
+    def parse(self, text):
         species, coords = ZMatrixUtils.convertZMatrixToCartesian(*ZMatrixUtils.parseZMatrix(text))
         print(species, coords)
         self.add_atoms(coords, species)
@@ -5540,7 +5219,7 @@ class ZMatrixGeometry(Geometry):
     
     
 class VaspGeometry(Geometry):
-    def parse_geometry(self, text):
+    def parse(self, text):
         """ Read the VASP structure definition in the typical POSCAR format 
             (also used by CONTCAR files, for example) from the file with the given filename.
     
@@ -5736,8 +5415,11 @@ class VaspGeometry(Geometry):
 
 
 class XYZGeometry(Geometry):
-    def parse_geometry(self, text):
-        """Reads a .xyz file. Designed to work with .xyz files produced by Avogadro"""
+    def parse(self, text):
+        """
+        Reads a .xyz file. Designed to work with .xyz files produced by Avogadro
+        
+        """
 
         # to use add_atoms we need to initialize coords the same as for Geometry
         self.n_atoms = 0
@@ -5752,39 +5434,44 @@ class XYZGeometry(Geometry):
         # parse will assume first few lines are comments
         started_parsing_atoms = False
 
-        for ind,line in enumerate(fi):
+        for ind, line in enumerate(fi):
             if ind == 0:
                 if len(line.split())==1:
                     read_natoms = int(line.split()[0])
                     continue
+                
+            # look for lattice vectors
+            if 'Lattice' in line:
+                split_line = line.split('Lattice')[1]
+                
+                lattice_parameters = re.findall("\d+\.\d+", split_line)
+                
+                if len(lattice_parameters) == 9:
+                    lattice_parameters = np.array(lattice_parameters, dtype=np.float64)
+                    self.lattice_vectors = np.reshape(lattice_parameters, (3,3))
+            
+            n_words = len( re.findall('[a-zA-Z]+', line) )
+            n_floats = len( re.findall('\d+\.\d+', line) )
             split_line = line.split()
-
+            
             # first few lines may be comments or properties
             if not started_parsing_atoms:
-                
-                if len(split_line) != 4:
+                if n_words == 1 and (n_floats == 3 or n_floats == 6):
                     continue
                 else:
                     started_parsing_atoms = True
                            
             else:
-                
                 if split_line == []:
-                    # finished
                     break
                 else:
-
-                    # now all lines must have 4 entries
-                    assert len(split_line) == 4, "Bad atoms specification: " + str(split_line)
-
-
-            
-            #--- parse atom ---
-            specie,x,y,z = split_line
-            coords.append([float(x),float(y),float(z)])
-            species.append(str(specie))
-            count_natoms += 1
-            #--
+                    assert n_words == 1 and (n_floats == 3 or n_floats == 6), \
+                        "Bad atoms specification: " + str(split_line)
+                
+                # write atoms
+                coords.append( np.array(split_line[1:4], dtype=np.float64) )
+                species.append(str(split_line[0]))
+                count_natoms += 1
 
         if not started_parsing_atoms:
             raise RuntimeError("Not atoms found in xyz file!")     
@@ -5867,24 +5554,6 @@ class MoldenGeometry(Geometry):
                         text_dist += '{0:10.4f}'.format(np.real(displacements[l, d])*length_conversion)
                     text_dist += '\n'
             text += text_dist
-        return text
-
-
-class GaussianGeometry(Geometry):
-    def get_text(self,route='', link0='%nproc=1',title='', charge=0, multiplicity=1):
-        """Creates Gaussian input for coordinates
-            Settings input via string will be added at the top of the document"""
-
-        # there also exists a gaussian input class which could be used
-        text = GaussianInput(
-            geometry=self,
-            route=route,
-            link0=link0,
-            title=title,
-            charge=charge,
-            multiplicity=multiplicity
-        ).getTextGaussian()
-
         return text
 
 
