@@ -2,7 +2,7 @@ from typing import Tuple, Union
 
 import numpy as np
 
-import dfttools.utils as utils
+import dfttools.utils.utils as utils
 from dfttools.base_parser import BaseParser
 
 
