@@ -44,7 +44,7 @@ class TestParserAndWriter(unittest.TestCase):
         return geometry
     
         
-    def test_save_to_file(self):
+    def test_save_and_read_file(self):
         geometry = self._get_geometry()
         geometry.save_to_file('temp/geometry.in')
         
