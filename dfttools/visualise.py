@@ -22,9 +22,7 @@ class VisualiseAims(AimsOutput):
         title=None,
         forces=False,
         ks_eigenvalues=False,
-        fig_size=(18, 6),
-        p2_y_scale="log",
-        p3_ylim=(-500, 500),
+        fig_size=(24, 6),
     ) -> figure.Figure:
         """Plot the SCF convergence accuracy parameters.
 
@@ -83,7 +81,6 @@ class VisualiseAims(AimsOutput):
                 tot_scf_iters, delta_charge_sd, label=r"$\Delta$ charge/spin density"
             )
 
-        ax[0].set_yscale(p2_y_scale)
         ax[0].set_xlabel("SCF iter")
         ax[0].legend()
         if title is not None:
@@ -99,7 +96,6 @@ class VisualiseAims(AimsOutput):
             label=r"$\Delta \; \Sigma$ eigenvalues",
         )
         ax[1].set_xlabel("SCF iter")
-        ax[1].set_ylim(p3_ylim)
         ax[1].legend()
         if title is not None:
             ax[1].set_title(rf"{title} change of $\Sigma$ eigenvalues and total E")
@@ -124,31 +120,28 @@ class VisualiseAims(AimsOutput):
             ks_eigenvals = self.get_all_ks_eigenvalues()
 
             if isinstance(ks_eigenvals, dict):
-                for i, j in zip(ks_eigenvals["eigenvalue_eV"], ks_eigenvals["state"]):
-                    ax[i_subplot].plot(tot_scf_iters, i, label=f"KS state {j}")
+                # Don't include last eigenvalue as it only prints after final SCF
+                # iteration
+                # Add 1 to total SCF iterations to match the length of the eigenvalues
+                # and we want to include the first pre SCF iteration
+                for i, j in zip(
+                    ks_eigenvals["eigenvalue_eV"][:-2], ks_eigenvals["state"][:-2]
+                ):
+                    ax[i_subplot].plot(tot_scf_iters + 1, i, label=f"KS state {j}")
 
             elif isinstance(ks_eigenvals, tuple):
                 su_ks_eigenvals = ks_eigenvals[0]
                 sd_ks_eigenvals = ks_eigenvals[1]
 
-                print(tot_scf_iters)
-                print(su_ks_eigenvals)
+                for ev in su_ks_eigenvals["eigenvalue_eV"][:-2].T:
+                    ax[i_subplot].plot(tot_scf_iters + 1, ev, c="C0")
 
-                for i, j in zip(
-                    su_ks_eigenvals["eigenvalue_eV"], su_ks_eigenvals["state"]
-                ):
-                    ax[i_subplot].plot(tot_scf_iters, i, label=f"Spin-up KS state {j}")
-
-                for i, j in zip(
-                    sd_ks_eigenvals["eigenvalue_eV"], sd_ks_eigenvals["state"]
-                ):
-                    ax[i_subplot].plot(
-                        tot_scf_iters, i, label=f"Spin-down KS state {j}"
-                    )
+                for ev in sd_ks_eigenvals["eigenvalue_eV"][:-2].T:
+                    ax[i_subplot].plot(tot_scf_iters + 1, ev, c="C1")
 
             ax[i_subplot].set_xlabel("SCF iter")
             ax[i_subplot].set_ylabel("Energy (eV)")
-            # ax[i_subplot].legend()
+            ax[i_subplot].set_yscale("symlog")
 
             if title is not None:
                 ax[i_subplot].set_title(f"{title} KS state energies")

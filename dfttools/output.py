@@ -159,8 +159,10 @@ class AimsOutput(Output):
         spin_polarised = self.check_spin_polarised()
 
         # Get the number of KS states and scf iterations
+        # Add 2 to SCF iters as if output_level full is specified, FHI-aims prints the
+        # KS states once before the SCF starts and once after it finishes
+        n_scf_iters = self.get_n_scf_iters() + 2
         n_ks_states = self.get_n_initial_ks_states()
-        n_scf_iters = self.get_n_scf_iters()
 
         # Parse line to find the start of the KS eigenvalues
         target_line = "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
@@ -204,35 +206,43 @@ class AimsOutput(Output):
             up_n = 0
             down_n = 0
             for i, line in enumerate(aims_out):
+
+                # Printing of KS states is weird in aims.out. Ensure that we don't add
+                # more KS states than the array is long
+                if up_n == n_scf_iters and down_n == n_scf_iters:
+                    break
+
                 if target_line in line:
-                    if aims_out[i - 2] == "Spin-up eigenvalues:":
-                        up_n += 1
+                    # The spin-up line is two lines above the target line
+                    if aims_out[i - 2].strip() == "Spin-up eigenvalues:":
                         # Get the KS states from this line until the next empty line
-                        for j, line in enumerate(aims_out[i:]):
+                        for j, line in enumerate(aims_out[i + 1 :]):
                             if len(line) > 1:
                                 values = line.split()
-                                su_eigenvalues["state"][up_n][i] = int(values[0])
-                                su_eigenvalues["occupation"][up_n][i] = float(values[1])
-                                su_eigenvalues["eigenvalue_eV"][up_n][i] = float(
+                                su_eigenvalues["state"][up_n][j] = int(values[0])
+                                su_eigenvalues["occupation"][up_n][j] = float(values[1])
+                                su_eigenvalues["eigenvalue_eV"][up_n][j] = float(
                                     values[3]
                                 )
                             else:
+                                up_n += 1
                                 break
 
-                    if aims_out[i - 2] == "Spin-down eigenvalues:":
-                        down_n += 1
+                    # The spin-down line is two lines above the target line
+                    if aims_out[i - 2].strip() == "Spin-down eigenvalues:":
                         # Get the KS states from this line until the next empty line
-                        for j, line in enumerate(aims_out[i:]):
+                        for j, line in enumerate(aims_out[i + 1 :]):
                             if len(line) > 1:
                                 values = line.split()
-                                sd_eigenvalues["state"][down_n][i] = int(values[0])
-                                sd_eigenvalues["occupation"][down_n][i] = float(
+                                sd_eigenvalues["state"][down_n][j] = int(values[0])
+                                sd_eigenvalues["occupation"][down_n][j] = float(
                                     values[1]
                                 )
-                                sd_eigenvalues["eigenvalue_eV"][down_n][i] = float(
+                                sd_eigenvalues["eigenvalue_eV"][down_n][j] = float(
                                     values[3]
                                 )
                             else:
+                                down_n += 1
                                 break
 
             return su_eigenvalues, sd_eigenvalues
@@ -414,11 +424,15 @@ class AimsOutput(Output):
 
         init_ev_start = 0
         n_ks_states = 0
-        while target_line not in self.file_contents["aims_out"][0]:
+        # Find the first time the KS states are printed
+        while target_line not in self.file_contents["aims_out"][init_ev_start]:
             init_ev_start += 1
 
+        # Then count the number of lines until the next empty line
         else:
-            while len(self.file_contents["aims_out"][init_ev_start]) > 1:
+            init_ev_end = init_ev_start + 1
+            while len(self.file_contents["aims_out"][init_ev_end]) > 1:
+                init_ev_end += 1
                 n_ks_states += 1
 
         return n_ks_states
