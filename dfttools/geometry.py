@@ -536,8 +536,8 @@ class Geometry:
     def transform(self,
                   R: np.array,
                   t: np.array=np.array([0,0,0]),
-                  rotation_center:np.array | None=None,
-                  atom_indices:np.array | None=None) -> None:
+                  rotation_center: Union[np.array, None]=None,
+                  atom_indices: Union[np.array, None]=None) -> None:
         """
         Performs a symmetry transformation of the coordinates by rotation and
         translation. The transformation is applied as
@@ -1241,10 +1241,10 @@ class Geometry:
     
     def get_slab(self,
                  layers: int,
-                 surface: np.array | None=None,
+                 surface: Union[np.array, None]=None,
                  threshold: float=1e-6,
                  surface_replica: (int, int)=(1,1),
-                 vacuum_height: float | None=None, 
+                 vacuum_height: Union[float, None]=None, 
                  bool_shift_slab_to_bottom: bool=False):
         """
         Generates a slab.
@@ -2874,8 +2874,8 @@ class Geometry:
 
     def get_periodic_replica(self,
                              replications: tuple,
-                             lattice:np.array | None=None,
-                             explicit_replications: [list, list, list] | None=None):
+                             lattice: Union[np.array, None]=None,
+                             explicit_replications: Union[list, None]=None):
         """
         Return a new geometry file that is a periodic replica of the original file.
         repeats the geometry N-1 times in all given directions:
