@@ -124,14 +124,14 @@ class Geometry:
         return self.n_atoms
 
 
-    def __add__(self, other):
+    def __add__(self, other_geometry):
         geom = copy.deepcopy(self)
-        geom += other
+        geom += other_geometry
         return geom
 
 
-    def __iadd__(self, other):
-        self.add_geometry(other)
+    def __iadd__(self, other_geometry):
+        self.add_geometry(other_geometry)
         return self
     
 
@@ -149,53 +149,6 @@ class Geometry:
         """Field should be a numpy array (Ex, Ey, Ez) with the Field in V/A"""
         assert len(E) == 3, "Expected E-field components [Ex, Ey, Ez], but got " + str(E)
         self._homogeneous_field = np.asarray(E)
-
-
-    def is_periodic(self):
-        return not np.allclose(self.lattice_vectors, np.zeros([3, 3]))
-
-
-    def add_geometry(self, geometry):
-        """Adds full geometry to initial GeometryFile."""
-        
-        #check parts: (needs to be done before adding atoms to self)
-        if hasattr(self,'geometry_parts') and hasattr(geometry,'geometry_parts'):
-            for part,name in zip(geometry.geometry_parts, geometry.geometry_part_descriptions):
-                if len(part) > 0:
-                    self.geometry_parts.append([i + self.n_atoms for i in part])
-                    self.geometry_part_descriptions.append(name)
-                    
-        # some lines of code in order to preserve backwards compatibility
-        if not hasattr(geometry, "external_force"):
-            geometry.external_force = np.zeros([0, 3], np.float64)
-        self.add_atoms(geometry.coords,
-                      geometry.species,
-                      constrain_relax=geometry.constrain_relax,
-                      initial_moment=geometry.initial_moment,
-                      initial_charge=geometry.initial_charge,
-                      external_force=geometry.external_force,
-                      calculate_friction=geometry.calculate_friction)
-        
-        #check lattice vectors:
-        # g has lattice and self not:
-        if not np.any(self.lattice_vectors) and np.any(geometry.lattice_vectors):
-            self.lattice_vectors = np.copy(geometry.lattice_vectors)
-            
-        # both have lattice vectors:
-        elif np.any(self.lattice_vectors) and np.any(geometry.lattice_vectors):
-            warnings.warn('Caution: The lattice vectors of the first file will be used!')
-
-        #add multipoles
-        self.add_multipoles(geometry.multipoles)
-        
-        #check center:
-        # g has center and self not:
-        if hasattr(self, 'center') and hasattr(geometry, 'center'):
-            if self.center is None and geometry.center is not None:
-                self.center = geometry.center.copy()
-            # both have a center:
-            elif self.center is not None and geometry.center is not None:
-                warnings.warn('Caution: The center of the first file will be used!')
 
 
     def add_multipoles(self, multipoles):
@@ -217,55 +170,6 @@ class Geometry:
         # else: one list
         else:
             self.multipoles.append(multipoles)
-
-
-    def get_from_ase_atoms_object(self,
-                                  atoms,
-                                  scaled=False,
-                                  info_str=None,
-                                  wrap=False):
-        """Reads an ASE.Atoms object. Taken from ase.io.aims and adapted. Only basic features are implemented.
-            Args:
-                atoms: ase.atoms.Atoms
-                    structure to output to the file
-                scaled: bool
-                    If True use fractional coordinates instead of Cartesian coordinates
-                info_str: str
-                    A string to be added to the header of the file
-                wrap: bool
-                    Wrap atom positions to cell before writing
-        """
-
-        from ase.constraints import FixAtoms
-        if isinstance(atoms, (list, tuple)):
-            if len(atoms) > 1:
-                raise RuntimeError(
-                    "Don't know how to save more than "
-                    "one image to FHI-aims input"
-                )
-            else:
-                atoms = atoms[0]
-
-        if atoms.get_pbc().any():
-            self.lattice_vectors = np.array(atoms.get_cell())
-
-        fix_cart = np.zeros([len(atoms), 3])
-        if atoms.constraints:
-            for constr in atoms.constraints:
-                if isinstance(constr, FixAtoms):
-                    fix_cart[constr.index] = [True, True, True]
-        constrain_relax=fix_cart
-
-        coords=[]
-        species=[]
-        for i, atom in enumerate(atoms):
-            specie = atom.symbol
-            if isinstance(specie,int):
-                specie = PERIODIC_TABLE[specie]
-            species.append(specie)
-            coords.append(atom.position)
-        coords = np.array(coords)
-        self.add_atoms(coords,species,constrain_relax)
 
 
 ###############################################################################
@@ -316,7 +220,262 @@ class Geometry:
 
 
 ###############################################################################
-#                             Transformation                                  #
+#                         Data exchange with ASE                              #
+###############################################################################
+    def get_from_ase_atoms_object(self,
+                                  atoms,
+                                  scaled=False,
+                                  info_str=None,
+                                  wrap=False):
+        """Reads an ASE.Atoms object. Taken from ase.io.aims and adapted. Only basic features are implemented.
+            Args:
+                atoms: ase.atoms.Atoms
+                    structure to output to the file
+                scaled: bool
+                    If True use fractional coordinates instead of Cartesian coordinates
+                info_str: str
+                    A string to be added to the header of the file
+                wrap: bool
+                    Wrap atom positions to cell before writing
+        """
+    
+        from ase.constraints import FixAtoms
+        if isinstance(atoms, (list, tuple)):
+            if len(atoms) > 1:
+                raise RuntimeError(
+                    "Don't know how to save more than "
+                    "one image to FHI-aims input"
+                )
+            else:
+                atoms = atoms[0]
+    
+        if atoms.get_pbc().any():
+            self.lattice_vectors = np.array(atoms.get_cell())
+    
+        fix_cart = np.zeros([len(atoms), 3])
+        if atoms.constraints:
+            for constr in atoms.constraints:
+                if isinstance(constr, FixAtoms):
+                    fix_cart[constr.index] = [True, True, True]
+        constrain_relax=fix_cart
+    
+        coords=[]
+        species=[]
+        for i, atom in enumerate(atoms):
+            specie = atom.symbol
+            if isinstance(specie,int):
+                specie = PERIODIC_TABLE[specie]
+            species.append(specie)
+            coords.append(atom.position)
+        coords = np.array(coords)
+        self.add_atoms(coords,species,constrain_relax)
+    
+    
+    def get_as_ase(self):
+        import ase
+        """
+        Convert geometry file to ASE object
+        
+        """
+        #atoms_string = ""
+        atom_coords = []
+        atom_numbers = []
+        for i in range(self.n_atoms):
+            # Do not export 'emptium" atoms
+            if self.species[i] != 'Em':
+                atom_coords.append(self.coords[i,:])
+                atom_numbers.append(getAtomicNumber(self.species[i]))
+                
+        ase_system = ase.Atoms(numbers=atom_numbers, positions=atom_coords)
+        ase_system.cell = self.lattice_vectors
+        
+        if not np.sum(self.lattice_vectors) == 0.0:
+            ase_system.pbc = [1, 1, 1]
+                
+        return ase_system
+
+
+###############################################################################
+#                    Adding and removing atoms (in place)                     #
+###############################################################################
+    def add_atoms(self,
+                  cartesian_coords,
+                  species,
+                  constrain_relax=None,
+                  initial_moment=None,
+                  initial_charge=None,
+                  external_force=None,
+                  calculate_friction=None) -> None:
+        """
+        Add additional atoms to the current geometry file.
+        
+        Parameters
+        ----------
+        cartesion_coords : List of numpy arrays of shape [nx3]
+            coordinates of new atoms
+        species : list of strings
+            element symbol for each atom
+        constrain_relax : list of lists of bools (optional)
+            [bool,bool,bool] (for [x,y,z] axis) for all atoms that should be constrained during a geometry relaxation
+        
+        Retruns
+        -------
+        None
+        
+        """
+        if constrain_relax is None or len(constrain_relax) == 0:
+            constrain_relax = np.zeros([len(species),3], bool)
+        if external_force is None or len(external_force) == 0:
+            external_force = np.zeros([len(species),3], np.float64)
+        if calculate_friction is None:
+            calculate_friction = np.array([False]*len(species))
+        if initial_moment is None:
+            initial_moment = [0.0]*len(species)
+        if initial_charge is None:
+            initial_charge = [0.0]*len(species)
+        # TODO: this should not be necessary as self.coords should always be a np.array
+        if not hasattr(self, 'coords') or self.coords is None:
+            assert isinstance(cartesian_coords, np.ndarray)
+            self.coords = cartesian_coords
+        else:
+            self.coords = np.concatenate((self.coords, cartesian_coords), axis=0)
+        self.species += species
+        self.n_atoms = self.coords.shape[0]
+        
+        self.constrain_relax = np.concatenate((self.constrain_relax, constrain_relax), axis=0)
+        self.external_force = np.concatenate((self.external_force, external_force), axis=0)
+        self.calculate_friction = np.concatenate((self.calculate_friction, calculate_friction))
+        self.initial_moment  += initial_moment
+        self.initial_charge  += initial_charge
+        
+
+    def add_geometry(self, geometry):
+        """Adds full geometry to initial GeometryFile."""
+        
+        #check parts: (needs to be done before adding atoms to self)
+        if hasattr(self,'geometry_parts') and hasattr(geometry,'geometry_parts'):
+            for part,name in zip(geometry.geometry_parts, geometry.geometry_part_descriptions):
+                if len(part) > 0:
+                    self.geometry_parts.append([i + self.n_atoms for i in part])
+                    self.geometry_part_descriptions.append(name)
+                    
+        # some lines of code in order to preserve backwards compatibility
+        if not hasattr(geometry, "external_force"):
+            geometry.external_force = np.zeros([0, 3], np.float64)
+        self.add_atoms(geometry.coords,
+                      geometry.species,
+                      constrain_relax=geometry.constrain_relax,
+                      initial_moment=geometry.initial_moment,
+                      initial_charge=geometry.initial_charge,
+                      external_force=geometry.external_force,
+                      calculate_friction=geometry.calculate_friction)
+        
+        #check lattice vectors:
+        # g has lattice and self not:
+        if not np.any(self.lattice_vectors) and np.any(geometry.lattice_vectors):
+            self.lattice_vectors = np.copy(geometry.lattice_vectors)
+            
+        # both have lattice vectors:
+        elif np.any(self.lattice_vectors) and np.any(geometry.lattice_vectors):
+            warnings.warn('Caution: The lattice vectors of the first file will be used!')
+    
+        #add multipoles
+        self.add_multipoles(geometry.multipoles)
+        
+        #check center:
+        # g has center and self not:
+        if hasattr(self, 'center') and hasattr(geometry, 'center'):
+            if self.center is None and geometry.center is not None:
+                self.center = geometry.center.copy()
+            # both have a center:
+            elif self.center is not None and geometry.center is not None:
+                warnings.warn('Caution: The center of the first file will be used!')
+
+
+    def remove_atoms(self, atom_inds: np.array) -> None:
+        """
+        Remove atoms with indices atom_inds. If no indices are specified, all
+        atoms are removed.
+
+        Parameters
+        ----------
+        atom_inds : np.array
+            Indices of atoms to be removed.
+
+        Returns
+        -------
+        None
+
+        """
+        if hasattr(self,'geometry_parts') and len(self.geometry_parts) > 0:
+            # (AE): added "len(self.geometry_parts) > 0" to suppress this frequent warning when it is supposely not relevant (?)
+            warnings.warn('CAUTION: geometry_parts indices are not updated after atom deletion!!\n \
+                           You are welcome to implement this!!')
+        if atom_inds is None:
+            atom_inds = range(len(self))
+        mask = np.ones(len(self.species), dtype=bool)
+        mask[atom_inds] = False
+        
+        self.species = list(np.array(self.species)[mask])
+        self.constrain_relax = self.constrain_relax[mask,:]
+        self.external_force = self.external_force[mask,:]
+        self.calculate_friction = self.calculate_friction[mask]
+        self.coords = self.coords[mask,:]
+        self.n_atoms = len(self.constrain_relax)
+
+
+        if hasattr(self, 'hessian') and self.hessian is not None:
+            flat_mask = np.kron(mask, np.ones(3, dtype=bool))
+            new_dim = np.sum(flat_mask)
+            a, b = np.meshgrid(flat_mask, flat_mask)
+            hess_mask = np.logical_and(a, b)
+            new_hessian = self.hessian[hess_mask].reshape(new_dim, new_dim)
+            self.hessian = new_hessian
+            
+    
+    def remove_atoms_by_species(self, species: str) -> None:
+        """
+        Removes all atoms of a given species.
+
+        Parameters
+        ----------
+        species : str
+            Atom species to be removed.
+
+        Returns
+        -------
+        None
+        
+        """
+        L = np.array(self.species) == species
+        atom_inds = np.where(L)[0]
+        self.removeAtoms(atom_inds)
+    
+    
+    def truncate(self, n_atoms: int) -> None:
+        """
+        Keep only the first n_atoms atoms
+
+        Parameters
+        ----------
+        n_atoms : int
+            Number of atoms to be kept.
+
+        Returns
+        -------
+        None
+
+        """
+        self.species = self.species[:n_atoms]
+        self.constrain_relax = self.constrain_relax[:n_atoms]
+        self.external_force = self.external_force[:n_atoms]
+        self.calculate_friction= self.calculate_friction[:n_atoms]
+        self.coords = self.coords[:n_atoms,:]
+        self.n_atoms = n_atoms
+
+
+###############################################################################
+#                         Transformations (in place)                          #
 ###############################################################################
     def map_to_first_unit_cell(self, lattice_vectors=None, dimensions=np.array(range(3))):
         """
@@ -606,20 +765,24 @@ class Geometry:
 
     def swap_lattice_vectors(self, axis_1=0, axis_2=1):
         """
-            Can be used to interchange two lattice vectors
-            Attention! Other values - for instance k_grid - will stay unchanged!!
+        Can be used to interchange two lattice vectors
+        Attention! Other values - for instance k_grid - will stay unchanged!!
         :param axis_1 integer [0,1,2]
         :param axis_2 integer [0,1,2]     axis_1 !=axis_2
         :return:
+        
         """
         self.lattice_vectors[[axis_1, axis_2], :] = self.lattice_vectors[[axis_2, axis_1], :]
         self.coords[[axis_1, axis_2], :] = self.coords[[axis_2, axis_1], :]
 
 
     def transform_fractional(self, R, t, lattice=None):
-        """Transforms the coordinates by rotation and translation, where R,t are
+        """
+        Transforms the coordinates by rotation and translation, where R,t are
         given in fractional coordinates
-        The transformation is applied as c_new[3x1] = R[3x3] * c_old[3x1] + t[3x1]"""
+        The transformation is applied as c_new[3x1] = R[3x3] * c_old[3x1] + t[3x1]
+        
+        """
         if lattice is None:
             lattice=self.lattice_vectors
         coords_frac = utils.get_fractional_coords(self.coords, lattice)
@@ -811,6 +974,19 @@ class Geometry:
 ###############################################################################
 #                      Get Properties of the Geometry                         #
 ###############################################################################
+    def get_is_periodic(self) -> bool:
+        """
+        Checks if the geometry is periodic.
+
+        Returns
+        -------
+        bool
+            Ture if geometry is periodic.
+
+        """
+        return not np.allclose(self.lattice_vectors, np.zeros([3, 3]))
+
+
     def get_reassembled_molecule(self, threshold: float=2.0):
         
         geom_replica = self.getPeriodicReplica((1,1,1), explicit_replications=([-1,0,1],[-1,0,1],[-1,0,1]))
@@ -1103,6 +1279,163 @@ class Geometry:
             return transformation_indices
 
 
+    def get_volume_of_unit_cell(self) -> float:
+        """
+        Calcualtes the volume of the unit cell.
+    
+        Returns
+        -------
+        float
+            Volume of the unit cell.
+    
+        """
+        a1 = self.lattice_vectors[0]
+        a2 = self.lattice_vectors[1]
+        a3 = self.lattice_vectors[2]
+        volume = np.cross(a1, a2).dot(a3)
+        return volume
+    
+    
+    def get_geometric_center(self, ignore_center_attribute=False, indices=None) -> np.array:
+        """
+        Returns the center of the geometry. If the attribute *center* is set,
+        it is used as the definition for the center of the geometry.
+
+        Parameters
+        ----------
+        ignore_center_attribute : Bool
+            If True, the attribute self.center is used
+            Otherwise, the function returns the geometric center of the structure,
+            i.e. the average over the position of all atoms.
+
+        indices: iterable of indices or None
+            indices of all atoms to consider when calculating the center. Useful to calculate centers of adsorbates only
+            if None, all atoms are used
+
+        Returns
+        --------
+        center : np.array
+            Center of the geometry
+        """
+
+        if not hasattr(self, 'center') or self.center is None or ignore_center_attribute or indices is not None:
+            if indices is None:
+                indices = np.arange(self.n_atoms)
+            center = np.mean(self.coords[indices],axis=0)
+        else:
+            center = np.zeros([3])
+            for i, weight in self.center.items():
+                center += self.coords[i,:] * weight
+        return center
+
+
+    def get_center_of_mass(self) -> np.array:
+        """
+        Mind the difference to self.getGeometricCenter
+
+        Returns
+        -------
+        center_of_mass: np.array
+            The 3D-coordinate of the center of mass
+            
+        """
+        species_helper = []
+        for si in self.species:
+            si_new = si.split('_')[0]
+            species_helper.append(si_new)
+        
+        masses_np = np.array([ATOMIC_MASSES[PERIODIC_TABLE[s]] for s in species_helper], dtype=np.float64)       
+        center_of_mass = self.coords.T.dot(masses_np) / masses_np.sum()
+        return center_of_mass
+    
+    
+    def get_number_of_electrons(self) -> float:
+        """
+        Determines the number of electrons.
+
+        Returns
+        -------
+        float
+            Number of electrons.
+
+        """
+        electrons = []
+        for s in self.species:
+            try:
+                if '_' in s:
+                    curr_species = s.split('_')[0]
+                else:
+                    curr_species = s
+                electrons.append(PERIODIC_TABLE[curr_species])
+
+            except KeyError:
+                KeyError('Species {} is not known'.format(s))
+        return np.sum(electrons)
+    
+    
+    def get_mass_of_all_atoms(self) -> list:
+        """
+        Determines the atomic mass for all atoms.
+
+        Returns
+        -------
+        list
+            List of atomic masses for all atoms in the same order as
+            the atoms.
+
+        """
+        masses = []
+        for s in self.species:
+            try:
+                if '_' in s:
+                    curr_species = s.split('_')[0]
+                else:
+                    curr_species = s
+                masses.append(ATOMIC_MASSES[PERIODIC_TABLE[curr_species]])
+
+            except KeyError:
+                KeyError('Atomic mass for species {} is not known'.format(s))
+        return masses
+
+
+    def get_atomic_mass(self) -> float:
+        """
+        Determines the atomic mass of the entrie geometry.
+
+        Returns
+        -------
+        float
+            Atomic mass of the entrie geometry.
+
+        """
+        atomic_mass = 0
+        
+        for s in self.species:
+            atomic_mass += ATOMIC_MASSES[PERIODIC_TABLE[s]]
+        
+        return atomic_mass
+
+
+    def get_max_size(self) -> float:
+        """
+        Determine the maximum distance between two atoms of the geometry.
+
+        Returns
+        -------
+        max_dist : float
+            Maximum distance between atoms.
+
+        """
+        coords = copy.deepcopy(self.coords)
+        coords[:, :2] -= np.mean(coords[:, :2], axis=0)
+        # self.centerXYCoordinates()
+        distances=[]
+        for atom in coords:
+            distances += [np.linalg.norm(atom[:2])]
+        max_dist = max(distances)
+        return max_dist
+    
+
 ###############################################################################
 #                          Get Part of a Geometry                             #
 ###############################################################################
@@ -1310,15 +1643,6 @@ class Geometry:
 
         return slab_new
 
-    def getMaxSize(self):
-        coords = copy.deepcopy(self.coords)
-        coords[:, :2] -= np.mean(coords[:, :2], axis=0)
-        # self.centerXYCoordinates()
-        distances=[]
-        for atom in coords:
-            distances += [np.linalg.norm(atom[:2])]
-        max_dist = max(distances)
-        return max_dist
 
     def getSurroundingBox(self, on_atoms=False, on_both=False, correct_ratio=True, max_atom_radius=2.5, fixed_ratio=None):
         """ returns coordinates [min_x,max_x,min_y,max_y] such that the unit cell is well surrounded
@@ -1374,377 +1698,10 @@ class Geometry:
 
         return x_min,x_max,y_min,y_max
 
-    def reflectOnAxis(self, angle):
-        """
-        reflects the geometry with respect to an axis centered on the origin, with inclination = angle (degrees)
-        """
-        #conversion from angle
-        angle_radians = np.deg2rad(angle)
-        m = np.tan(angle_radians)
-        new_geom = copy.deepcopy(self)
-        for i, coord in enumerate(new_geom.coords):
-            x = coord[0]
-            y = coord[1]
-            z = coord[2]
-            x_new = ((1-(m**2))*x + 2*m*y)/(m**2 + 1)
-            y_new = (((m**2)-1)*y + 2*m*x)/(m**2 + 1)
-            new_coord = [x_new, y_new, z]
-            self.coords[i] = new_coord
-
-    def replaceSpeciesByLayers(self,layers,threshold=1):
-        """Modifies the specie of the substrate layers individually
-            :param new_layers = list [layer on top, second layer from top... last layer on bottom]
-            Including the adsorbate!!!
-            each layer can be: str() if all atoms have to transform to the same specie
-                               list(), to set every individual atom specie
-                               None, if the layer species should not change
-            :param threshold: see getAtomLayersByHeight()"""
-
-        old_layers_dict = self.getAtomLayersByHeight(threshold=threshold)
-        old_layers_heights = [x for x in old_layers_dict.keys()]
-        old_layers_heights.sort(reverse=True) #sort top to bottom
-        old_layers_inds = [old_layers_dict[k] for k in old_layers_heights]
-
-        assert len(layers) == len(old_layers_inds),\
-            'The number of provided layers is different from the number of' \
-            ' layers in the geometry'
-        old_species = np.array(self.species)
-        for i,layer in enumerate(layers):
-            if layer is None:
-                continue
-            elif isinstance(layer,list):
-                assert len(layer) == len(old_layers_inds[i]),\
-                'Layer n.{} has a different number of atoms from the provided new layer'.format(i)
-                new_layer = layer
-            elif isinstance(layer,str):
-                new_layer = [layer for n in range(len(old_layers_inds[i]))]
-            else:
-                raise TypeError('Wrong layer format. Each layer must be None, str or list.')
-            old_species[old_layers_inds[i]] = new_layer
-
-        new_species = list(old_species)
-        self.species = new_species
-
-
-
-
 
 ###############################################################################
 #                           Evaluation Functions                              #
 ###############################################################################
-
-    def getEigenvaluesAndEigenvectors(
-            self,
-            bool_only_real=True,
-            bool_symmetrize_hessian=False,
-            bool_omega2=False
-    ):
-        """
-        This function is supposed to return all eigenvalues and eigenvectors of the matrix self.hessian
-
-        Parameters
-        ----------
-        geometries: List of Geometrys ... might be nice to accept list of coords too
-        bool_only_real: returns only real valued eigenfrequencies + eigenmodes (ATTENTION: if you want to also include
-        instable modes, you have to symmetrize the hessian as provided below)
-        bool_symmetrize_hessian: symmetrized the hessian only for this function (no global change)
-        bool_omega2: returns omega2 as third argument
-
-        Returns
-        -------
-        Eigenfrequencies: numpy array of the eigenfrequencies in cm^(-1)
-        Eigenvectors: list of numpy arrays, where each array is a normalized
-            displacement for the corresponding eigenfrequency, such that
-            new_coords = coords + displacement * amplitude.
-            the ith row in an array are the x,y,z displacements for the ith
-            atom
-        Omega2: (only if bool_omega2!) direct eigenvalues as squared angular frequencies instead of inverse wavelengths
-        """
-
-        assert hasattr(self,'hessian') and self.hessian is not None, \
-            'Hessian must be given to calculate the Eigenvalues!'
-        try:
-            masses = [ut.ATOMIC_MASSES[ut.PERIODIC_TABLE[s]] for s in self.species]
-        except KeyError:
-            print('getEigenValuesAndEigenvectors: Some Species were not known, used version without _ suffix')
-            masses = [ut.ATOMIC_MASSES[ut.PERIODIC_TABLE[s.split('_')[0]]] for s in self.species]
-
-        masses = np.repeat(masses, 3)
-        M = np.diag(1.0 / masses)
-
-        hessian = copy.deepcopy(self.hessian)
-        if bool_symmetrize_hessian:
-            hessian = (hessian + np.transpose(hessian)) / 2
-
-        omega2, X = np.linalg.eig(M.dot(hessian))
-        
-        if bool_only_real:
-            # only real valued eigen modes
-            real_mask = np.isreal(omega2)
-            min_omega2 = 1e-3
-            min_mask = omega2 >= min_omega2
-            mask = np.logical_and(real_mask, min_mask)
-
-            omega2 = np.real(omega2[mask])
-            X = np.real(X[:, mask])
-            omega = np.sqrt(omega2)
-        else:
-            # all eigen modes
-            omega = np.sign(omega2) * np.sqrt(np.abs(omega2))
-
-        conversion = np.sqrt((Units.EV_IN_JOULE) / (Units.ATOMIC_MASS_IN_KG * Units.ANGSTROM_IN_METER ** 2))
-        omega_SI = omega * conversion
-        f_inv_cm = omega_SI * Units.INVERSE_CM_IN_HZ / (2 * np.pi)
-        
-        eigenvectors = [column.reshape(-1, 3) for column in X.T]
-
-        # sort modes by energies (ascending)
-        ind_sort = np.argsort(f_inv_cm)
-        eigenvectors = list(np.array(eigenvectors)[ind_sort, :, :])
-        f_inv_cm = f_inv_cm[ind_sort]
-        omega2 = omega2[ind_sort]
-
-        if bool_omega2:
-            return f_inv_cm, eigenvectors, omega2
-        else:
-            return f_inv_cm, eigenvectors
-
-    def symmetrizeHessian(self,hessian=None):
-        h = copy.deepcopy(self.hessian)
-        self.hessian = (h+np.transpose(h))/2
-
-    def getAtomFormFactor(self, recip_vector_length):
-        species = self.species
-        atom_factor = {}
-        for s in set(species):
-            atom_factor[s] = ut.getAtomicFormFactor(s, recip_vector_length)
-
-        return np.array([atom_factor[s] for s in species])
-        
-    def getDiffractionIntensities(self, hkl_index_dict = None, q_minmax_dict = None, density_matrix=None, matrix_lattice=None, scaleToUnity = False, debug = False, use_atom_factors=True):
-        """Calculates a mock x-ray spectrum of the geometry, as intensities at reciprocal lattice points 
-        I.e., for each reciprocal lattice point k, we calculate
-        sum_atoms exp(-ikr), where r is the real-space position of each atom in the geometry file.
-        Note that EITHER hkl_index_dict or q_minmax_dict should be provided, but never both
-        Arguments: 
-                - hkl_index_dict type(dicdicttionry): Should contain the minimimum and maximum values of the hkl
-                                                  indices, using the keys h_min, h_max, k_min, k_max, l_min, l_max.
-                                                  Missing indices are interpreted as zero.
-
-                - q_minmax_dict, type (dict): Contains the minimum and maximum reciprocal lattice vector to be probed. 
-                                              Keys are q_min and q_max.
-
-                - density_matrix: np.array(dim=3)
-                    threedimensional numpy array with electron density in e/A³
-
-                - matrix_lattice: np.array(3x3)
-                    lattice corresponding to the density matrix grid, i.e. the voxel lattice
-                    if density_matrix is specified, matrix_lattice must be specified as well
-
-                - scaleToUnity: Normally, intensities scale with the number of electrons in the basis
-                                (which is equaivalent to the intensity of the 0,0,0 peak).
-                                with scaleToUnity, the intensities are divided by the electron number
-
-                - debug: bool
-                    internal debug variable
-
-        returns: dict with key = h/k/l, and value as tuple with (reciprocal lattice point , |S|^2)
-        Recommended usage: Remove substrate first!
-        """
-        #TODO: Parallelize
-
-        #0) Preparation: 
-        recip_lattice = self.get_reciprocal_lattice()
-        b1 = recip_lattice[0]
-        b2 = recip_lattice[1]
-        b3 = recip_lattice[2]
-        ikr_array = np.zeros(self.n_atoms, dtype='complex128')
-        structure_factor_array = np.zeros(self.n_atoms, dtype='complex128')
-        xrayspectrum = {}
-        species_numbers = self.getSpeciesAtomicNumber()
-        n_electrons = np.sum(species_numbers)
-
-        if density_matrix is not None:
-            assert matrix_lattice is not None, 'If density_matrix is given, matrix_lattice must be specified as well!'
-        
-        #1) Assert that the function was called correctly
-        assert not ((hkl_index_dict is None) and (q_minmax_dict is None)), 'Assertion Error in getDiffractionIntensities. Please provide either hkl_index_dict or q_minmax_dict.'
-        assert not ((hkl_index_dict is not None) and (q_minmax_dict is not None)), 'Assertion Error in getDiffractionIntensities. Please provide either hkl_index_dict or q_minmax_dict, not both'
-        assert hkl_index_dict is None or type(hkl_index_dict) == type(dict()), 'Assertion Error in getDiffractionIntensities. hkl_index_dict must be a dictionary (or None)'
-        assert q_minmax_dict is None or type(q_minmax_dict) == type(dict()), 'Assertion Error in getDiffractionIntensities. q_minmax_dict must be a dictionary (or None)'
-
-        #2a Try reading the min/max values from the dictory, if it exists 
-        if hkl_index_dict is not None:
-            try:
-                h_min = hkl_index_dict['h_min']
-            except KeyError:
-                h_min = 0
-
-            try:
-                h_max = hkl_index_dict['h_max']
-            except KeyError:
-                h_max = 0
-
-            try:
-                k_min = hkl_index_dict['k_min']
-            except KeyError:
-                k_min = 0
-
-            try:
-                k_max = hkl_index_dict['k_max']
-            except KeyError:
-                k_max = 0
-            
-            try:
-                l_min = hkl_index_dict['l_min']
-            except KeyError:
-                l_min = 0
-            
-            try:
-                l_max = hkl_index_dict['l_max']
-            except KeyError:
-                l_max = 0
-                
-            assert not all([v==0 for v in hkl_index_dict.values()]), 'At least one h k or l value must be different to 0.'
-
-
-        #2b: Try to estimate upper boundaries hkl from q_max
-        if q_minmax_dict is not None:
-            try:
-                q_min = q_minmax_dict['q_min']
-            except:
-                q_min = 0
-            try:
-                q_max = q_minmax_dict['q_max']
-            except:
-                q_max = 0
-
-            #The following originates from a general solution of (hx1+kx2)^2 + (hy1+ky2)^2 < q_max^2
-            p_k = 2*(b1[0]*b2[0]+b1[1]*b2[1])/(b2[0]**2+b2[1]**2)
-            k_max = int(np.ceil(-p_k/2 + np.sqrt(p_k**2/4+q_max**2)))
-            
-            p_h = 2*(b1[0]*b2[0]+b1[1]*b2[1])/(b1[0]**2+b1[1]**2)
-            h_max = int(np.ceil(-p_h/2 + np.sqrt(p_k**2/4+q_max**2)))
-#            print("OTH debug information: h_max, k_max", h_max, k_max)
-            #TODO: Implement minima. For now, I don't think this will save a lot of time (not more than I need to calculate the values anyways)
-            h_min = 0
-            k_min = 0
-            l_min = 0
-            l_max = 0
-            if (debug):
-                k_max = max(h_max, k_max)
-                h_max = max(h_max, k_max)
-                k_max = k_max*5
-                h_max = h_max*5
-#                h_min = -h_max
-#                k_min = -k_max
-
-
-        #3) Here starts the actual work: calculate the results
-        for h in range(h_min,h_max+1):
-            for k in range(k_min, k_max+1):
-                for l in range(l_min, l_max+1):
-                    recip_vector = h*b1 + k*b2 + l*b3
-                    recip_coordinate = np.sqrt(recip_vector[0]**2+recip_vector[1]**2+recip_vector[2]**2)
-
-                    if q_minmax_dict is not None:
-                        if not (q_min < recip_coordinate < q_max): 
-                            continue
-    
-                    #write more pyhtonic
-                    for i_atom in range(self.n_atoms):
-                         my_coord = self.coords[i_atom]
-                         ikr_array[i_atom] = np.dot(my_coord, recip_vector)*1j #calculate ikr
-
-                    eikr_array = np.exp(ikr_array) # calculate e^ikr for each element
-
-                    #Multiply number of electrons in for each element!
-                    if use_atom_factors:
-                        structure_factors = self.getAtomFormFactor(recip_coordinate)
-                    else:
-                        structure_factors = species_numbers
-                    structure_factor_array = structure_factors*eikr_array
-
-                    Structure_Factor = np.sum(structure_factor_array) # sum over all elements
-                    Abs_Structure_Factor = np.abs(Structure_Factor) # take S absolute
-
-                    if scaleToUnity:
-                        Abs_Structure_Factor = Abs_Structure_Factor/n_electrons
-
-                    xrayspectrum[(h,k,l)] = (recip_coordinate, Abs_Structure_Factor)
-
-        return xrayspectrum
-
-    # not sure if this belongs to Geometry
-    def getVanDerWaalsEnergy(self,geometry2 = None, s6 = 0.94, alpha = 23):
-        ''' Calculates the Van der Waals Interaction Energy between two molecules 
-            s6 is the global scaling factor for Grimme VdW
-            s6 for PBE in aims is 0.94
-            alpha is the damping function factor'''
-            
-        if geometry2 is None:
-            raise NotImplementedError('Vdw Self Interaction Energy is not yet implemented')
-        
-        else:
-            not_avail_self = [i for i in range(self.n_atoms) if self.species[i] not in C6_COEFFICIENTS]
-            not_avail_g2 = [i for i in range(geometry2.n_atoms) if geometry2.species[i] not in C6_COEFFICIENTS]
-            
-            
-            if len(not_avail_self) > 0 or len(not_avail_g2)>0:
-                warnings.warn('Could not find VdW Coefficients for {}'.format( set([self.species[i] for i in not_avail_self]+ [geometry2.species[j] for j in not_avail_g2])))
-            
-            g1 = copy.deepcopy(self)
-            g1.removeAtoms(not_avail_self)
-            g2 = copy.deepcopy(geometry2)
-            g2.removeAtoms(not_avail_g2)
-            
-            
-            R_ij = scipy.spatial.distance.cdist(g1.coords, g2.coords)
-            C_i = np.array([C6_COEFFICIENTS[s] for s in g1.species])
-            C_j = np.array([C6_COEFFICIENTS[s] for s in g2.species])
-            C_i,C_j = np.meshgrid(C_i,C_j,indexing='ij')
-            C_ij = 2 * C_i * C_j / (C_i + C_j)
-            
-            R0_i = np.array([R0_COEFFICIENTS[s] for s in g1.species])
-            R0_j = np.array([R0_COEFFICIENTS[s] for s in g2.species])
-            R0_i, R0_j = np.meshgrid(R0_i, R0_j,indexing='ij')
-            R0_ij = R0_i + R0_j
-            
-            f_damp = 1 / (1 + np.exp(-alpha*(R_ij/R0_ij -1)))
-            
-            E_disp = - s6 * np.sum(C_ij/R_ij**6 *f_damp)
-            
-            return E_disp
-
-
-    def getCoulombMatrix(self):
-        """
-        Calculate the CouloumbMatrix of the geometry.
-        This can be used as a feature vector for machine learning.
-        See: R. Ramakrishnan, P. O. Dral, M. Rupp, O. A. von Lilienfeld, J. Chem. Theor. Comput. 2015, 11, 2087
-        """        
-        M = np.zeros([self.n_atoms, self.n_atoms])
-        Z = [PERIODIC_TABLE[s] for s in self.species]
-        Z_eff = [SLATER_EFFECTIVE_CHARGES[z] for z in Z]
-        #diagonal
-        for i in range(self.n_atoms):
-            M[i,i] = 0.5 * Z_eff[i]**2.4
-        # off diagonal; symmetric  
-        for i in range(self.n_atoms):
-            for j in range(i+1, self.n_atoms):
-                M[i,j] = Z_eff[i]*Z_eff[j]/np.linalg.norm(self.coords[i,:]-self.coords[j,:])
-                M[j,i] = M[i,j]
-        return M
-
-
-    def getD3DispersionCorrection(self):
-
-        return self.getD3DispersionObject().getEnergyAndForces()
-
-    def getD3DispersionObject(self):
-        from aimstools.D3DispersionCorrection import D3DispersionCorrection
-        return D3DispersionCorrection(self)
-
     def checkSymmetry(self,transformation,tolerance,return_symmetrical=False):
         """Returns True if the geometry is symmetric with respect to the transformation, and False if it is not.
         If the geometry is periodic, transformation can be tuple (rotation, translation) or np.array (only rotation), \
@@ -1800,31 +1757,12 @@ class Geometry:
         else:
             return is_symmetric
 
-    def getVolumeOfUnitCell(self):
-        a1 = self.lattice_vectors[0]
-        a2 = self.lattice_vectors[1]
-        a3 = self.lattice_vectors[2]
-        volume = np.cross(a1, a2).dot(a3)
-        return volume
+    
 
 ###############################################################################
 #                             VARIOUS                                         #
 #                          not yet sorted                                     #
 ###############################################################################
-    def doesASmallerUnitCellExist(self):
-        """Purpose: Returns true is a smaller unit cell can be generated
-        Functionality: If a smaller unit cell exists, the 1,0,0 or the 0,1,0 peak 
-        of the X Ray Spectrum have no intensity. To find out what the smallest periodicity is
-        one wouuld have to find the first non-zero-intensity peak"""
-
-        hkl_minmax_dict = {"h_min":0, "h_max":1, "k_min": 0, "k_max":1}
-        my_spectrum = self.getDiffractionIntensities(hkl_index_dict = hkl_minmax_dict)
-        if np.isclose(my_spectrum[(1,0,0)],0) or np.isclose(my_spectrum[(0,1,0)],0):
-            return True
-        else:
-            return False
-
-
     def getOrientationOfMainAxis(self):
         """
         Get the orientation of the main axis relative to the x axis
@@ -1851,53 +1789,6 @@ class Geometry:
             m[1]+=shift[1]
             m[2]+=shift[2]
 
-
-    def truncate(self, n_atoms):
-        """Keep only the first n_atoms atoms"""
-        self.species = self.species[:n_atoms]
-        self.constrain_relax = self.constrain_relax[:n_atoms]
-        self.external_force = self.external_force[:n_atoms]
-        self.calculate_friction= self.calculate_friction[:n_atoms]
-        self.coords = self.coords[:n_atoms,:]
-        self.n_atoms = n_atoms
-
-    def removeAtoms(self,atom_inds):
-        """remove atoms with indices atom_inds.
-        If no indices are specified, all atoms are removed"""
-        if hasattr(self,'geometry_parts') and len(self.geometry_parts) > 0:
-            # (AE): added "len(self.geometry_parts) > 0" to suppress this frequent warning when it is supposely not relevant (?)
-            warnings.warn('CAUTION: geometry_parts indices are not updated after atom deletion!!\n \
-                           You are welcome to implement this!!')
-        if atom_inds is None:
-            atom_inds = range(len(self))
-        mask = np.ones(len(self.species), dtype=bool)
-        mask[atom_inds] = False
-
-#        self.species = [i for j,i in enumerate(self.species) if j not in atom_inds]
-        self.species = list(np.array(self.species)[mask])
-        self.constrain_relax = self.constrain_relax[mask,:]
-        self.external_force = self.external_force[mask,:]
-        self.calculate_friction = self.calculate_friction[mask]
-        self.coords = self.coords[mask,:]
-        self.n_atoms = len(self.constrain_relax)
-
-
-        if hasattr(self, 'hessian') and self.hessian is not None:
-            flat_mask = np.kron(mask, np.ones(3, dtype=bool))
-            new_dim = np.sum(flat_mask)
-            a, b = np.meshgrid(flat_mask, flat_mask)
-            hess_mask = np.logical_and(a, b)
-            new_hessian = self.hessian[hess_mask].reshape(new_dim, new_dim)
-            self.hessian = new_hessian
-    
-    def removeAtomsBySpecies(self, species):
-        """
-        removes specific atom species
-        """
-        
-        L = np.array(self.species) == species
-        atom_inds = np.where(L)[0]
-        self.removeAtoms(atom_inds)
 
     def removeAllConstraints(self):
         self.constrain_relax=np.zeros([len(self.species), 3], bool)
@@ -2265,13 +2156,6 @@ class Geometry:
 
         return indices_to_remove
 
-    def removeEmptium(self):
-        empt_inds = []
-        for i,s in enumerate(self.species):
-            if 'Em' in s:
-                empt_inds.append(i)
-        self.removeAtoms(empt_inds)
-
 
     def getSubstrateIndicesFromParts(self, do_warn=True):
         """
@@ -2325,7 +2209,7 @@ class Geometry:
         return indices
 
 
-    @ut.deprecated      # this implicitly assumes a metal substrate, use getAdsorbateIndices instead
+    
     def getIndicesOfMolecules(self, substrate_species=None):
         """WARNING: do not use this function, it is deprecated!
         It fetches the indices of the substrate atoms, but it defaults to 
@@ -2637,12 +2521,19 @@ class Geometry:
         return sub_new
 
 
-    def getAreaInNm2(self):
-        """Returns the area of the surface described by lattice_vectors 0 and 1 of the geometry, assuming that the lattice_vector 2 is orthogonal to both"""
+    def get_area(self) -> float:
+        """
+        Returns the area of the surface described by lattice_vectors 0 and 1 of
+        the geometry, assuming that the lattice_vector 2 is orthogonal to both.
+
+        Returns
+        -------
+        float
+            Area of the unit cell.
+
+        """
         a=deepcopy(self.lattice_vectors[0,:-1])
         b=deepcopy(self.lattice_vectors[1,:-1])
-        a/=10
-        b/=10
         area = np.abs(np.cross(a,b))
         return area
 
@@ -2674,57 +2565,8 @@ class Geometry:
     
         return layers, total_number_layers
 
-    # IDEA: It would be wise to create a new function getCenter
-    def getGeometricCenter(self, ignore_center_attribute=False, indices=None):
-        """
-        Returns the center of the geometry. If the attribute *center* is set, it is used as the definition for the center of the geometry, provided that
 
-        Parameters
-        ----------
-        ignore_center_attribute : Bool
-            If True, the attribute self.center is used
-            Otherwise, the function returns the geometric center of the structure,
-            i.e. the average over the position of all atoms.
 
-        indices: iterable of indices or None
-            indices of all atoms to consider when calculating the center. Useful to calculate centers of adsorbates only
-            if None, all atoms are used
-
-        Returns
-        --------
-        center : np.array
-            Center of the geometry
-        """
-
-        if not hasattr(self, 'center') or self.center is None or ignore_center_attribute or indices is not None:
-            if indices is None:
-                indices = np.arange(self.n_atoms)
-            center = np.mean(self.coords[indices],axis=0)
-        else:
-            center = np.zeros([3])
-            for i, weight in self.center.items():
-                center += self.coords[i,:] * weight
-        return center
-
-    def getCenterOfMass(self):
-        """
-        Mind the difference to self.getGeometricCenter
-
-        Returns
-        -------
-        center_of_mass: well, the 3D-coordinate of the center of mass
-        """
-        
-        # R.B. debug: enable also species that have an '_' in it
-        species_helper = []
-        for si in self.species:
-            si_new = si.split('_')[0]
-            species_helper.append(si_new)
-        
-        #masses_np = np.array([ATOMIC_MASSES[PERIODIC_TABLE[s]] for s in self.species], dtype=np.float64)
-        masses_np = np.array([ATOMIC_MASSES[PERIODIC_TABLE[s]] for s in species_helper], dtype=np.float64)       
-        center_of_mass = self.coords.T.dot(masses_np) / masses_np.sum()
-        return center_of_mass
     
     def getAllNeighbouringAtoms(self, bond_factor=1.5):
         coords = self.coords
@@ -2779,43 +2621,6 @@ class Geometry:
             
         return np.array(bond_lengths)
 
-
-    def add_atoms(self, cartesian_coords, species, constrain_relax=None, initial_moment=None, initial_charge=None, external_force=None, calculate_friction=None):
-        """Add additional atoms to the current geometry file.
-        
-        Parameters
-        ----------
-        cartesion_coords : List of numpy arrays of shape [nx3]
-            coordinates of new atoms
-        species : list of strings
-            element symbol for each atom
-        constrain_relax : list of lists of bools (optional)
-            [bool,bool,bool] (for [x,y,z] axis) for all atoms that should be constrained during a geometry relaxation
-        """
-        if constrain_relax is None or len(constrain_relax) == 0:
-            constrain_relax = np.zeros([len(species),3], bool)
-        if external_force is None or len(external_force) == 0:
-            external_force = np.zeros([len(species),3], np.float64)
-        if calculate_friction is None:
-            calculate_friction = np.array([False]*len(species))
-        if initial_moment is None:
-            initial_moment = [0.0]*len(species)
-        if initial_charge is None:
-            initial_charge = [0.0]*len(species)
-        # TODO: this should not be necessary as self.coords should always be a np.array
-        if not hasattr(self, 'coords') or self.coords is None:
-            assert isinstance(cartesian_coords, np.ndarray)
-            self.coords = cartesian_coords
-        else:
-            self.coords = np.concatenate((self.coords, cartesian_coords), axis=0)
-        self.species += species
-        self.n_atoms = self.coords.shape[0]
-        
-        self.constrain_relax = np.concatenate((self.constrain_relax, constrain_relax), axis=0)
-        self.external_force = np.concatenate((self.external_force, external_force), axis=0)
-        self.calculate_friction = np.concatenate((self.calculate_friction, calculate_friction))
-        self.initial_moment  += initial_moment
-        self.initial_charge  += initial_charge
 
     def removeCollisions(self, keep_latest: Union[bool, slice] = True):
         """Removes all atoms that are in a collision group as given by GeometryFile.getCollidingGroups.
@@ -3230,27 +3035,6 @@ class Geometry:
         print (len(DistanceSet), " entries found")
         return DistanceSet
 
-    def getMassPerAtom(self):
-        masses = []
-        for s in self.species:
-            try:
-                if '_' in s:
-                    curr_species = s.split('_')[0]
-                else:
-                    curr_species = s
-                masses.append(ATOMIC_MASSES[PERIODIC_TABLE[curr_species]])
-
-            except KeyError:
-                KeyError('Atomic mass for species {} is not known'.format(s))
-        return masses
-
-    def getAtomicMass(self):
-        atomic_mass = 0
-        
-        for s in self.species:
-            atomic_mass += ATOMIC_MASSES[PERIODIC_TABLE[s]]
-        
-        return atomic_mass
 
     def getPrincipalMomentsOfInertia(self):
         """
@@ -3288,20 +3072,6 @@ class Geometry:
         evals, evecs = np.linalg.eigh(I)
         return evals
 
-
-    def get_number_of_electrons(self) -> float:
-        electrons = []
-        for s in self.species:
-            try:
-                if '_' in s:
-                    curr_species = s.split('_')[0]
-                else:
-                    curr_species = s
-                electrons.append(PERIODIC_TABLE[curr_species])
-
-            except KeyError:
-                KeyError('Species {} is not known'.format(s))
-        return np.sum(electrons)
 
 ###############################################################################
 #                        ControlFile Helpers                                  #
@@ -3448,1380 +3218,7 @@ class Geometry:
 
         species_name_dict = {s_old: sorted(list(set(s_new))) for s_old, s_new in species_name_dict.items()}
         return species_name_dict
-
-
-###############################################################################
-#                           VISUALISATION                                     #
-###############################################################################
-    def getAsASE(self):
-        import ase
-        """
-        Convert geometry file to ASE object
-        
-        """
-        #atoms_string = ""
-        atom_coords = []
-        atom_numbers = []
-        for i in range(self.n_atoms):
-            # Do not export 'emptium" atoms
-            if self.species[i] != 'Em':
-                atom_coords.append(self.coords[i,:])
-                atom_numbers.append(getAtomicNumber(self.species[i]))
-                
-        ase_system = ase.Atoms(numbers=atom_numbers, positions=atom_coords)
-        ase_system.cell = self.lattice_vectors
-        
-        if not np.sum(self.lattice_vectors) == 0.0:
-            ase_system.pbc = [1, 1, 1]
-                
-        return ase_system
-            
-        
-    def printWithASE(self, filename, scale=20):
-        import ase.io
-        """Save the current geometry file as an image (e.g. png), using ASE.
-        Parameters:
-        -----------
-        filename : string
-        scale : integer
-            larger values yield higher resolution images, but image size is
-            internally limited to 500px in some ASE versions        
-        """
-        atoms = self.getAsASE()
-        ase.io.write(filename, atoms, scale=scale)
     
-#    def showInASEViewer(self):
-#        from ase.visualize import view
-#        atoms = self.getAsASE()
-#        view(atoms)
-
-    # old: def printToFile(self,name,axes = [0,1],value_list = None,maxvalue = None,cbar_label='', hide_axes=False,title = None):
-    def printToFile(self, name, title = None, dpi=300, **kwargs):
-        """
-        saves figure to destination name
-        Parameters
-        ----------
-        name
-        title
-        dpi         int
-        kwargs
-
-        Returns
-        -------
-
-        """
-        import matplotlib.pyplot as plt
-
-        is_interactive = plt.isinteractive()
-        plt.interactive(False)
-        fig = plt.figure()
-        self.visualize(**kwargs)
-
-        transparent = kwargs.get('transparent',False)
-
-        if title is not None:
-            plt.title(title,fontsize=20,fontweight='bold')
-        #plt.tight_layout(pad=0)
-        plt.savefig(name,bbox_inches='tight',transparent=transparent, dpi=dpi)
-        plt.close(fig)
-        plt.interactive(is_interactive)
-
-    def visualize(self,
-                  axes=[0,1],
-                  min_zorder=0,
-                  value_list=None,
-                  maxvalue=None,
-                  minvalue=None,
-                  cbar_label='',
-                  hide_axes=False,
-                  axis_labels=True,
-                  auto_limits=True,
-                  crop_ratio=None,
-                  brightness_modifier=None,
-                  print_lattice_vectors=False,
-                  print_unit_cell=False,
-                  plot_new_vectors=False,
-                  alpha=1.0,
-                  linewidth=1,
-                  lattice_linewidth=None,
-                  lattice_color='k',
-                  lattice_linestyle='-',
-                  atom_scale=1,
-                  highlight_inds=[],
-                  highlight_color='C2',
-                  color_list = None,
-                  cmap=None,
-                  ax=None,
-                  xlim=None,
-                  ylim=None,
-                  zlim=None,
-                  plot_method='circles',
-                  invert_colormap=False,
-                  edge_color=None,
-                  show_colorbar=True,
-                  reverse_sort_inds=False,
-                  axis_labels_format="/",
-                  **kwargs):
-        """
-        Generates at plt-plot of the current geometry file.
-        If value_list is given, atoms are colored according to it.
-        Atoms have even zorder numbers starting with the lowermost atom!!!
-
-        Parameter:
-        ----------
-
-        axes : list of 2 int elements
-            axis that should be visualized, x=0, y=1, z=2
-            By default, we look at the geometry from:
-            the "top" (our viewpoint is at z = +infinity) when we visualize the xy plane;
-            the "right" (our viewpoint is at x = +infinity) when we visualize the yz plane;
-            the "front" (our viewpoint is at y = -infinity) when we visualize the xz plane.
-            In order to visualize the geometry from the opposite viewpoints, one needs to use the reverse_sort_inds flag,
-            and invert the axis when necessary (= set axis limits so that the first value is larger than the second value)
-
-        min_zorder : int
-            plotting layer
-
-        value_list : None or list of length nr. atoms
-
-        maxvalue : None
-
-        cbar_label : str
-
-        hide_axes : bool
-            hide axis
-
-        axis_labels : bool
-            generates automatic axis labels
-
-        auto_limits : bool
-            set xlim, ylim automatically
-
-        crop_ratio: float
-            defines the ratio between xlim and ylim if auto_limits is enabled
-
-        brightness_modifier : float or list/array with length equal to the number of atoms
-            modifies the brightness of selected atoms. If brightness_modifier is a list/array, then
-            brightness_modifier[i] sets the brightness for atom i, otherwise all atoms are set to the same brightness value.
-            This is done by tweaking the 'lightness' value of said atoms' color in the HSL (hue-saturation-lightness) colorspace.
-            Effect of brightness_modifier in detail:
-              -1.0 <= brightness_modifier < 0.0  : darker color
-              brightness_modifier == 0.0 or None : original color
-              0.0 < brightness_modifier <= 1.0   :  brighter color
-
-        print_lattice_vectors : bool
-            display lattice vectors
-
-        print_unit_cell : bool
-            display original unit cell
-
-        alpha : float between 0 and 1
-
-        color_list : list or string
-            choose colors for visualizing each atom. If only one color is passed, all atoms will have that color.
-
-        plot_method: str
-            circles: show filled circles for each atom
-            wireframe: show molecular wireframe, standard settings: don't show H,
-
-        reverse_sort_inds: bool
-            if set to True, inverts the order at which atoms are visualized, allowing to visualize the geometry from the "bottom", from the "left" or from the "back".
-            Example: if one wants to visualize the geometry from the "left" (= viewpoint at x=-infinity), atoms at lower x values should be visualized after atoms at high x values, and hide them.
-            This is the opposite of the default behavior of this function, and can be achieved with reverse_sort_inds=True
-            NOTE: in order to correctly visualize the structure from these non-default points of view, setting this flag to True is not sufficient: one must also invert the XY axes of the plot where needed.
-            Example: when visualizing from the "left", atoms with negative y values should appear on the right side of the plot, and atoms with positive y values should appear on the left side of the plot.
-            But if one simply sets reverse_sort_inds=True, atoms with negative y values will appear on the left side of the plot (because the x axis of the plot, the horizontal axis, goes from left to right!) and viceversa.
-            This is equivalent to visualizing a mirrored image of the structure.
-            To visualize the structure correctly, one should then set the x_limits of the plot with a first value smaller than the second value, so the x axis is inverted, and shows y-negative values on the left and viceversa.
-        """
-        
-        import matplotlib.pyplot as plt
-        import matplotlib as mpl
-        import matplotlib.colors
-        import matplotlib.cm as cmx
-        import colorsys
-
-        # default for lattice_linewidth (which is used to draw the lattice)
-        if lattice_linewidth is None:
-            lattice_linewidth = 2*linewidth
-
-        orig_inds = np.arange(self.n_atoms)
-        remove_inds = []
-        if xlim is not None:
-            remove_x = self.getCroppingIndices(xlim=xlim, auto_margin=True)
-            remove_inds+=list(remove_x)
-        if ylim is not None:
-            remove_y = self.getCroppingIndices(ylim=ylim, auto_margin=True)
-            remove_inds+=list(remove_y)
-        if zlim is not None:
-            remove_z = self.getCroppingIndices(zlim=zlim, auto_margin=True)
-            remove_inds+=list(remove_z)
-            
-        crop_inds = list(set(remove_inds))
-        
-        if len(crop_inds)>0:
-            orig_inds = [orig_inds[i] for i in orig_inds if i not in crop_inds]
-            cropped_geom = copy.deepcopy(self)
-            cropped_geom.removeAtoms(crop_inds)
-        else:
-            cropped_geom = self
-
-        if ax is None:
-            ax = plt.gca()
-
-        axnames = ['x','y','z']
-        orig_coords = cropped_geom.coords
-        orig_species = cropped_geom.species
-#        orig_constrain = cropped_geom.constrain_relax
-        
-        # sorting along projecting dimension.
-        # If sort_ind == 1, which means that we look at XZ, along the Y axis, in order to enforce our default behaviour
-        # of looking at the XZ from "under" (== from the negative side of the Y axis), we need to flip the order
-        # at which we see atoms, so we reverse the order of sort inds.
-        # If the flat reverse_sort_inds is set to True, the order will be flipped again, to bring us out of our default.
-        for i in range(3):
-            if i not in axes: 
-                sort_ind = i
-                
-        inds = np.argsort(orig_coords[:,sort_ind])
-
-        if sort_ind == 1:
-            inds = inds[::-1]
-        if reverse_sort_inds:
-            inds = inds[::-1]
-
-        orig_inds = [orig_inds[i] for i in inds]
-        coords = orig_coords[inds]
-#        constrain = orig_constrain[inds]
-        species = [orig_species[i] for i in inds]
-        n_atoms = len(species)
-        circlesize = [getCovalentRadius(s)*atom_scale for s in species]
-
-        # Specify atom colors by value list or default atom colors
-        if value_list is None and color_list is None:
-            colors = [getSpeciesColor(s) for s in species]
-            colors = np.array(colors)
-        elif color_list is not None:
-            if len(color_list) == 1:
-                colors = list(color_list)*len(self.species)
-                colors = [mpl.colors.to_rgb(colors[i]) for i in inds]
-            else:
-                assert len(species) == len(color_list), 'Color must be specified for all atoms or none!' + \
-                    f" Expected {len(species)}, but got {len(color_list)} values"
-                colors = [mpl.colors.to_rgb(color_list[i]) for i in inds] # converting all types of color inputs to rgba here
-            colors = np.array(colors)
-        else:
-            assert len(value_list) == self.n_atoms, "Number of Values does not match number of atoms in geometry"
-            values = [value_list[i] for i in orig_inds]
-
-            if minvalue is not None:
-                assert maxvalue is not None, 'Error! If minvalue is defined also maxvalue must be defined'
-
-            if maxvalue is None and minvalue is None:
-                maxvalue = np.max(np.abs(value_list))
-                minvalue = -maxvalue
-
-                if maxvalue < 1E-5:
-                    maxvalue = 1E-5
-                    print('Maxvalue for colormap not specified and smaller 1E-5, \nsetting it automatically to: ', maxvalue)
-                else:
-                    print('Maxvalue for colormap not specified, \nsetting it automatically to: ', maxvalue)
-
-            if maxvalue is not None and minvalue is None:
-                minvalue = -maxvalue
-
-
-            if cmap is None:
-                if invert_colormap:
-                    cw = plt.get_cmap('coolwarm_r')
-                else:
-                    cw = plt.get_cmap('coolwarm')
-            else:
-                cw = plt.get_cmap(cmap)
-
-            cNorm = matplotlib.colors.Normalize(vmin=minvalue, vmax=maxvalue)
-            scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cw)
-            
-            a = np.array([[minvalue,maxvalue]])
-            img = plt.imshow(a,cmap=cw)
-            img.set_visible(False)
-            colors = []
-            for v in values:
-                colors.append(scalarMap.to_rgba(v))
-                
-        # make specified atoms brighter by adding color_offset to all rgb values
-
-        if brightness_modifier is not None:
-
-            # Check if brightness modifier is flat (i.e. a single value) or per atom (list of length n_atoms)
-            if isinstance(brightness_modifier, float) or isinstance(brightness_modifier, int):
-                brightness_modifier = brightness_modifier * np.ones(n_atoms)
-
-            else:
-                # Sort list according to orig_inds (which is already cropped if necessary!)
-                assert len(brightness_modifier) == self.n_atoms, "Argument 'brightness_modifier' must either be a " \
-                                                                 "scalar (float or int) or a list with length equal " \
-                                                                 "to the number of atoms"
-                brightness_modifier = [brightness_modifier[i] for i in orig_inds]
-
-            assert len(brightness_modifier) == n_atoms, "Something went wrong while reformatting brightness_modifier!"
-            for i in range(n_atoms):
-                hls_color = np.array(colorsys.rgb_to_hls(*colors[i,:]))
-                hls_color[1] += brightness_modifier[i]*(1-hls_color[1])
-                hls_color = np.clip(hls_color,0,1)
-                colors[i,:] = colorsys.hls_to_rgb(*hls_color)    
-        else:
-            brightness_modifier = np.zeros(n_atoms)
-
-        zorder = min_zorder
-
-        if plot_method =='circles':
-            for i,s in enumerate(species):
-                if plot_method=='circles':
-                    x1 = coords[i,axes[0]]
-                    x2 = coords[i,axes[1]]
-                    if orig_inds[i] not in highlight_inds:
-                        if edge_color is None:
-                            curr_edge_color = np.zeros(3)+brightness_modifier[i] if brightness_modifier[i]>0 else np.zeros(3)
-                        else:
-                            curr_edge_color = edge_color
-
-                        ax.add_artist(plt.Circle([x1,x2],circlesize[i], color=colors[i], zorder=zorder,
-                                                 linewidth=linewidth, alpha=alpha,
-                                                 ec=curr_edge_color))
-                    else:
-                        if edge_color is None:
-                            curr_edge_color = highlight_color
-                        else:
-                            curr_edge_color = edge_color
-                        ax.add_artist(plt.Circle([x1,x2],circlesize[i],color=colors[i],zorder=zorder,linewidth=linewidth,
-                                                 alpha=alpha,ec=curr_edge_color))
-                    zorder += 2
-
-        elif plot_method == 'wireframe':
-            self.visualizeWireframe(coords=coords, species=species,
-                                    linewidth=linewidth, min_zorder=min_zorder,
-                                    axes=axes, alpha=alpha, **kwargs)
-
-        if print_lattice_vectors:
-            ax.add_artist(plt.arrow(0, 0, *cropped_geom.lattice_vectors[0, axes], zorder=zorder, fc=lattice_color,
-                                    ec=lattice_color, head_width=0.5, head_length=1))
-            ax.add_artist(plt.arrow(0, 0, *cropped_geom.lattice_vectors[1, axes], zorder=zorder, fc=lattice_color,
-                                    ec=lattice_color, head_width=0.5, head_length=1))
-        if print_unit_cell:
-            cropped_geom.visualizeUnitCell(lattice=None, linecolor=lattice_color, axes=axes, linestyle=lattice_linestyle,
-                                           linewidth=lattice_linewidth, zorder=zorder,
-                                           plot_new_cell=plot_new_vectors,ax=ax)
-
-            # # moved this functionality out of the visualizer, if it works we can delete this part <aj,2020/07/22>
-            #
-            # if hasattr(cropped_geom, 'original_lattice_vectors') and not plot_new_vectors:
-            #     lattice = cropped_geom.original_lattice_vectors
-            # else:
-            #     lattice = cropped_geom.lattice_vectors
-            #
-            # # FIXME: Function crashes when axes == (1,2) and print_unit_cell==True.
-            # # IDEA: Enable code to draw projection of full unit cell into the yz and xz planes
-            # ax.add_artist(ax.arrow(0,0,*lattice[0,axes],zorder=zorder,
-            #                         fc=lattice_color,ec=lattice_color,
-            #                         head_width=0.0,head_length=0, width=lattice_linewidth))
-            # ax.add_artist(ax.arrow(0,0,*lattice[1,axes],zorder=zorder,
-            #                         fc=lattice_color,ec=lattice_color,
-            #                         head_width=0.0,head_length=0, width=lattice_linewidth))
-            #
-            # ax.add_artist(ax.arrow(lattice[1,axes[0]], lattice[1,axes[1]], *lattice[0,axes],zorder=zorder,
-            #                         fc=lattice_color,ec=lattice_color,
-            #                         head_width=0.0,head_length=0, width=lattice_linewidth))
-            # ax.add_artist(ax.arrow(lattice[0,axes[0]], lattice[0,axes[1]], *lattice[1,axes],zorder=zorder,
-            #                         fc=lattice_color,ec=lattice_color,
-            #                         head_width=0.0,head_length=0, width=lattice_linewidth))
-        
-        # scale:
-        xmax = np.max(coords[:,axes[0]]) + 2
-        xmin = np.min(coords[:,axes[0]]) - 2
-        ymax = np.max(coords[:,axes[1]]) + 2
-        ymin = np.min(coords[:,axes[1]]) - 2
-
-        if auto_limits:
-            if print_lattice_vectors:
-                xmin_lattice = np.min(cropped_geom.lattice_vectors[:,axes[0]]) - 1
-                xmax_lattice = np.max(cropped_geom.lattice_vectors[:,axes[0]]) + 1
-                ymin_lattice = np.min(cropped_geom.lattice_vectors[:,axes[1]]) - 1
-                ymax_lattice = np.max(cropped_geom.lattice_vectors[:,axes[1]]) + 1
-
-                ax_xmin = min(xmin, xmin_lattice)
-                ax_xmax = max(xmax, xmax_lattice)
-                ax_ymin = min(ymin, ymin_lattice)
-                ax_ymax = max(ymax, ymax_lattice)
-
-            else:
-                ax_xmin, ax_xmax, ax_ymin, ax_ymax = xmin, xmax, ymin, ymax
-                # allow for a fixed ratio when defining the limits
-                # For this calculate the lengths and make the smaller limit longer so that the ratio fits
-
-            if crop_ratio is not None:
-
-                len_xlim = ax_xmax - ax_xmin
-                len_ylim = ax_ymax - ax_ymin
-                curr_crop_ratio = len_xlim/len_ylim
-                
-
-                if curr_crop_ratio>crop_ratio:
-                    # make y limits larger
-                    y_padding_fac = len_xlim/(crop_ratio*len_ylim)
-                    y_padding = len_ylim*(y_padding_fac-1)
-                    ax_ymin -= y_padding/2
-                    ax_ymax += y_padding/2
-                    
-                else:
-                    # make x limits larger
-                    x_padding_fac = (crop_ratio * len_ylim)/len_xlim
-                    x_padding = len_xlim * (x_padding_fac-1)
-                    ax_xmin -= x_padding/2
-                    ax_xmax += x_padding/2
-                    
-
-            ax.set_xlim([ax_xmin, ax_xmax])
-            ax.set_ylim([ax_ymin, ax_ymax])
-
-
-        # If limits are given, set them
-        limits = [xlim,ylim,zlim]
-        x1lim = limits[axes[0]]
-        x2lim = limits[axes[1]]
-        if x1lim is not None:
-            ax.set_xlim(x1lim)
-        if x2lim is not None:
-            ax.set_ylim(x2lim)
-
-        if axis_labels:
-            if axis_labels_format == "/":
-                ax.set_xlabel(r'{} / $\AA$'.format(axnames[axes[0]]))
-                ax.set_ylabel(r'{} / $\AA$'.format(axnames[axes[1]]))
-            elif axis_labels_format == "[]":
-                ax.set_xlabel(r'{} [$\AA$]'.format(axnames[axes[0]]))
-                ax.set_ylabel(r'{} [$\AA$]'.format(axnames[axes[1]]))
-        
-        if show_colorbar and (value_list is not None):
-            cbar = plt.colorbar(ax=ax)
-            cbar.ax.set_ylabel(cbar_label)
-        
-        ax.set_aspect('equal')
-        plt.grid(False)
-        if hide_axes:
-            ax.set_axis_off()
-            ax.get_xaxis().set_visible(False)
-            ax.get_yaxis().set_visible(False)
-
-    def visualize3D(self):
-        import pyvista as pv
-
-        # %% Visualization
-        pv.set_plot_theme('document')
-        p = pv.Plotter()
-
-        # p.add_mesh(contours, show_scalar_bar=False, cmap='coolwarm',smooth_shading=True)
-        for n_ind in range(self.n_atoms):
-            species = self.species[n_ind]
-            c = self.coords[n_ind, :]
-            new_sphere = pv.Sphere(radius=COVALENT_RADII[species], center=[c[0], c[1], c[2]])
-            p.add_mesh(new_sphere, color=getSpeciesColor(species), smooth_shading=True)
-        # p.add_mesh(geom_points,render_points_as_spheres=True,point_size=10)
-        p.show()
-        
-    
-    def getMoleculesWireframe(self,
-                              line_width=10,
-                              neglect_species=['H'],):
-        """
-        Get wireframe of molecue in a format that can be visualised with
-        plotly.
-
-        Parameters
-        ----------
-        line_width : int, optional
-            Width of the lines. The default is 10.
-        neglect_species : list of strings, optional
-            List of atom sprecies that should not be visualised.
-            The default is ['H'].
-
-        Returns
-        -------
-        data : TYPE
-            List of geometry_objects plottable by plotly.
-
-        """
-        import plotly.graph_objects as go
-        
-        wireframe = self.getWireframe(coords=None,
-                                      species=None,
-                                      bond_factor=1.5,
-                                      neglect_species=neglect_species,
-                                      color=None,
-                                      species_colors={})
-        
-        data = []
-        
-        for wire in wireframe:
-            x = np.array([wire[0][0], wire[1][0]])
-            y = np.array([wire[0][1], wire[1][1]])
-            z = np.array([wire[0][2], wire[1][2]])
-            
-            color = ut.getPlotlyColor(wire[2])
-            
-            data_new = go.Scatter3d(x=x, y=y, z=z,
-                                    mode='lines',
-                                    line=dict(color=color, width=line_width),
-                                    showlegend=False)
-            data.append(data_new)
-        
-        return data
-
-
-    def getMoleculesSpheres(self,
-                            marker_size=3,
-                            neglect_species=['H'],):
-        """
-        Get spheres of atoms in molecue in a format that can be visualised with
-        plotly.
-
-        Parameters
-        ----------
-        marker_size : int, optional
-            Size of the spheres that represent the atoms.
-            The default is 3.
-        neglect_species : list of strings, optional
-            List of atom sprecies that should not be visualised.
-            The default is ['H'].
-
-        Returns
-        -------
-        data : list of geometry_objects
-            List of geometry_objects plottable by plotly.
-
-        """
-        import plotly.graph_objects as go
-        
-        data = []
-        
-        for ind in range(len(self)):
-            
-            if not self.species[ind] in neglect_species:
-                color = ut.getPlotlyColor( ut.SPECIES_COLORS[self.species[ind]] )
-                
-                data_new = go.Scatter3d(x=np.array([self.coords[ind,0]]),
-                                        y=np.array([self.coords[ind,1]]),
-                                        z=np.array([self.coords[ind,2]]),
-                                        mode='markers',
-                                        marker=dict(color=color, size=marker_size),
-                                        showlegend=False)
-                
-                data.append(data_new)
-        
-        return data
-    
-    
-    def visualizePlotly(self,
-                        line_width=10,
-                        marker_size=3,
-                        neglect_species=['H'],
-                        fig=None):
-        
-        import plotly.graph_objects as go
-        
-        data_3 = self.getMoleculesWireframe(line_width=line_width,
-                                            neglect_species=neglect_species)
-        
-        data_4 = self.getMoleculesSpheres(marker_size=marker_size,
-                                          neglect_species=neglect_species)
-        
-        if fig is None:
-            fig = go.Figure()
-        
-        for d in data_3:
-            fig.add_trace(d)
-            
-        for d in data_4:
-            fig.add_trace(d)
-        
-        return fig
-        
-
-    def visualizeUnitCell(self,
-                          lattice=None,
-                          linecolor='k',
-                          axes=[0, 1],
-                          linestyle='-',
-                          linewidth=3,
-                          zorder=1,
-                          plot_new_cell=False,
-                          alpha=1,
-                          ax=None,
-                          shift = np.array([0,0])):
-
-        import matplotlib.pyplot as plt
-        if ax is None:
-            ax = plt.gca()
-        if lattice is None:
-            if hasattr(self, 'original_lattice_vectors') and not plot_new_cell:
-                lattice = self.original_lattice_vectors
-            else:
-                lattice = self.lattice_vectors
-        if lattice is None:
-            lattice = self.lattice_vectors
-        polygon_coords = np.array([[0, 0],
-                                   lattice[axes[0], axes],
-                                   lattice[axes[1], axes] + lattice[axes[0], axes],
-                                   lattice[axes[1], axes],
-                                   [0, 0]]) + shift
-
-        handle = ax.plot(polygon_coords[:, 0],
-                         polygon_coords[:, 1],
-                         color=linecolor,
-                         linestyle=linestyle,
-                         linewidth=linewidth,
-                         zorder=zorder,
-                         alpha=alpha)[0]
-        return handle
-
-    def determineBonds(self):
-        bond_lengths = {}
-        for species in self.species:
-            cropped_species = species.split('_')[0]
-            bond_lengths[species] = [ut.COVALENT_RADII[cropped_species], ut.VAN_DER_WAALS_RADII[cropped_species]]
-        species_multiplicity = {'C':4, 'O':2, 'H':1, 'N':3, 'Ag':4}
-        # TODO calculate species combination bond length as sum of covalent radii and sum of vdw radii
-
-        # TODO: get all distances between all atoms
-        # get maximum species multiplicity closest atoms, they must all be within bond_lengths
-        # return bonds between two atoms as index tuple
-
-    def visualizeAtomIndices(self, axes=[0, 1],min_zorder=0, ax=None, fontsize=10):
-        """
-        plot indices on top of atoms
-        """
-
-
-        import matplotlib.pyplot as plt
-
-        orig_coords = self.coords
-
-        for i in range(3):
-            if i not in axes:
-                sort_ind = i
-        inds = np.argsort(orig_coords[:, sort_ind])
-        coords = orig_coords[inds]
-
-        if ax is None:
-            ax = plt.gca()
-
-        coords = coords[:, axes]
-        color_list = ['k' if (self.species[i] == 'H') else 'w' for i in inds]
-        inds = [str(i) for i in inds]
-        
-
-        self.visualizeTextOnGeometry(coords, inds, min_zorder=min_zorder, ax=ax, color_list = color_list, fontsize=fontsize)        
-        
-
-    def visualizeTextOnGeometry(self,coords,text_list,min_zorder=0, ax=None,color=(1,1,1,1),fontsize=10,
-                                highlight_indices=None,
-                                highlight_color='C2',
-                                color_list=None):
-        # plot arbitrary text on top of coordinates.
-        # split off from visualizeAtomIndices for more generality
-        import matplotlib.pyplot as plt
-
-        if color_list is None:
-            color_list = [color]*len(text_list)
-
-        if highlight_indices is None:
-            highlight_indices = []
-
-        if ax is None:
-            ax = plt.gca()
-
-        assert len(coords) == len(text_list), 'Text and coordinates must have same length'
-        for i in range(len(coords)):
-            if i in highlight_indices:
-                text_color = highlight_color
-            else:
-                text_color = color_list[i]
-            
-            ax.text(coords[i,0],coords[i,1],text_list[i],fontsize=fontsize,fontweight='bold',
-                     horizontalalignment='center', verticalalignment='center',zorder=2*i+min_zorder+1,color=text_color)
-
-    # INFO: there exists a function called visualizeTotalForceAndTorque in AIMSOutputReader
-    # def visualizeTotalForceAndTorque
-
-    def visualize2DSymmetries(self,
-                            symmetries=None,
-                            symmetry_precision=1e-05,
-                            color='green',
-                            linewidth=0.1,
-                            alpha=0.6,
-                            ax=None,
-                            min_zorder=None):
-        """
-        Visualizes the symmetry axis and inversion center of the structure. By default, obtains the symmetries by calling getSymmetries().
-        Symmetries can also be provided externally.
-        :param symmetries: symmetries, in the same format as getSymmetries() provides
-        :param symmetry_precision: see getSymmetries()
-        :param color: "
-        :param linewidth: "
-        :param alpha:  "
-        :return: 0
-        TEST IT FOR A WHILE AND POLISH IT BEFORE SUBMITTING
-        """
-        import matplotlib.pyplot as plt
-        if symmetries is None:
-            symmetries = self.getSymmetries(symmetry_precision=symmetry_precision)
-        # check input format
-        assert isinstance(symmetries,dict), 'Wrong format for symmetries'
-        assert all(key in symmetries for key in ['rotations','translations','equivalent_atoms']),'Wrong format for symmetries'
-
-        rs = symmetries['rotations']
-        ts = symmetries['translations']
-        eqs = symmetries['equivalent_atoms']
-
-        if ax is None:
-            ax = plt.gca()
-        # I want it to be over the plotting of the molecule
-        if min_zorder is None:
-            zorder = 2*len(self.coords)+1
-        else:
-            zorder = min_zorder
-
-        for i,r3 in enumerate(rs):
-            # get 2D terms
-            r=r3[:2,:2]
-            t=ts[i]
-            t=getCartesianCoords(frac_coords=t,lattice_vectors=self.lattice_vectors)[:2]/2 #position of inversion center: translation_vector/2
-            # ignore identity
-            if (r == np.array([[1,0],[0,1]])).all():
-                continue
-            # plot inversion center
-            elif (r == np.array([[-1,0],[0,-1]])).all():
-                ax.add_artist(plt.Circle(t, linewidth*4, color=color,linewidth=linewidth,alpha=alpha,zorder=zorder))
-            # plot reflection axis
-            elif (r == np.array([[1,0],[0,-1]])).all():
-                starting_point = t  #because (0,0) is also symmetric with respect to the axis
-
-
-                ax.add_artist(ax.arrow(starting_point[0], starting_point[1], self.lattice_vectors[0][0],self.lattice_vectors[0][1],fc=color,ec=color,head_width=1.0, head_length=1, width=linewidth,zorder=zorder,alpha=alpha))
-                ax.add_artist(ax.arrow(starting_point[0], starting_point[1], -self.lattice_vectors[0][0],-self.lattice_vectors[0][1],fc=color,ec=color,head_width=1.0, head_length=1, width=linewidth,zorder=zorder))
-            elif (r == np.array([[-1,0],[0,1]])).all():
-                starting_point = t
-                ax.add_artist(ax.arrow(starting_point[0], starting_point[1], self.lattice_vectors[1][0],self.lattice_vectors[1][1],fc=color,ec=color,head_width=1.0, head_length=1, width=linewidth,zorder=zorder,alpha=alpha))
-                ax.add_artist(ax.arrow(starting_point[0], starting_point[1], -self.lattice_vectors[1][0],-self.lattice_vectors[1][1],fc=color,ec=color,head_width=1.0, head_length=1, width=linewidth,zorder=zorder,alpha=alpha))
-            else:
-                print('Only reflections parallel to UC axes are implemented at the moment')
-        # set proportions and size
-        self.visualize(ax=ax, hide_axis=True, alpha=0.0)
-
-    def visualizeArrowsOnAtoms(self,arrow_vectors,
-                        axes=[0,1],
-                        vector_colors=None,
-                        color_by_species=True,
-                        visualize_constrained=False,
-                        min_zorder=1, arrow_width=0.005,
-                        show_legend=True,
-                        legend_length=1,
-                        legend_text = 'your text here'):
-        """
-
-        Parameters
-        ----------
-        arrow_vectors: np.array([n_atoms,3])
-            vector coordinates to be plotted starting from atom position i
-
-        axes: [int, int]
-            indices of axes to plot
-
-        vector_colors: list, None
-            list of colors for all arrows
-
-        color_by_species: bool
-            color by species if true and color list is None, 'k' otherwise
-
-        print_constrained: bool
-            whether or not to show the constrained atom positions
-
-        min_zorder: int
-            z order
-
-        arrow_width: float
-            width of arrowhead in A
-
-        show_legend: bool
-            whether or not to show the legend on lower right
-
-        legend_length: float
-            realspace length of the legend bar
-
-        legend_text: str
-            content of the legend labeling
-
-        Returns
-        -------
-
-        """
-
-        import matplotlib.pyplot as plt
-
-        orig_coords = self.coords
-        orig_species = self.species
-        orig_constrain = self.constrain_relax
-
-        for i in range(3):
-            if i not in axes:
-                sort_ind = i
-
-        # sort by coordinate that is not in axes
-        inds = np.argsort(orig_coords[:, sort_ind])
-        coords = orig_coords[inds]
-        arrow_vectors = arrow_vectors[inds]
-        constrain = orig_constrain[inds]
-        species = [orig_species[i] for i in inds]
-        circlesize = [COVALENT_RADII[s[:2]] for s in species]
-        if color_by_species:
-            colors = [getSpeciesColor(s) for s in species]
-        elif vector_colors is not None:
-            colors = vector_colors
-        else:
-            colors = ['k']*len(species)
-        ax = plt.gca()
-
-        zorder = min_zorder
-        for i, s in enumerate(species):
-            # printing arrows as artists didnt work
-            # arrow_length = np.sqrt(x1_arrow**2 + x2_arrow**2)
-            # ax.add_artist(plt.arrow(x1,x2,x1_arrow,x2_arrow ,width = arrow_length*0.1,linewidth = 0.3*arrow_length,
-            #              zorder = zorder+1,fc = colors[i],head_width=0.2*arrow_length, head_length=0.1*arrow_length))
-            # quiver has quite an overhead, but does the job
-            if (not all(constrain[i, :])) or visualize_constrained:
-                plt.quiver(coords[i, axes[0]],
-                           coords[i, axes[1]],
-                           arrow_vectors[i, axes[0]],
-                           arrow_vectors[i, axes[1]],
-                           zorder=zorder + 1, units='xy', scale_units='xy', scale=1, angles='xy', pivot='tail',
-                           color=colors[i], edgecolor='k', linewidth=1, width=arrow_width, minlength=.005,minshaft=.01)
-            zorder += 2
-
-        xmax = np.max(coords[:, axes[0]]) + 2
-        xmin = np.min(coords[:, axes[0]]) - 2
-        ymax = np.max(coords[:, axes[1]]) + 2
-        ymin = np.min(coords[:, axes[1]]) - 2
-        if show_legend:
-            # scale / 'legend' arrow
-            plt.quiver(xmax - legend_length-1, ymin + 1, legend_length, 0, zorder=zorder + 1, units='xy', scale_units='xy', scale=1, angles='xy',
-                       pivot='tail')
-            ax.text(xmax - 3, ymin + 1.2, legend_text, zorder=zorder + 1, fontsize=8)
-
-        # this function should not rescale images
-        # ax.set_xlim((xmin, xmax))
-        # ax.set_ylim((ymin, ymax))
-        # ax.set_aspect('equal')
-
-    def visualizeAtomDisplacements(self,
-                                   other_geom,
-                                   axes=[0,1],
-                                   vector_colors=None,
-                                   color_by_species=False,
-                                   visualize_constrained=False,
-                                   min_zorder=1,
-                                   arrow_width=0.05):
-        """
-        visualize the shifts atoms have made during e.g. a geometry optimization.
-        This file only visualizes the shifts, to visualize the geometry, call self.visualize() beforehand
-
-        Parameters
-        ----------
-        other_geom: GeometryFile
-            geometry file which must be similar enough to the current file to be visualized
-
-        For all other parameters see GeometryFile.visualizeArrows
-
-        Returns
-        -------
-
-        """
-
-        shifts = self.coords - other_geom.coords
-
-        other_geom.visualizeArrowsOnAtoms(shifts,
-                                          axes=axes,
-                                          vector_colors=vector_colors,
-                                          color_by_species=color_by_species,
-                                          visualize_constrained=visualize_constrained,
-                                          min_zorder=min_zorder,
-                                          arrow_width=arrow_width,
-                                          show_legend=False,
-                                          legend_length=1,
-                                          legend_text='unimportant')
-
-    def visualizeForces(self,
-                        forces,
-                        axes=[0,1],
-                        arrow_scale=10,
-                        print_constrained=False,
-                        min_zorder=1,
-                        arrow_width=0.005,
-                        show_legend=True,
-                        legend_length=2):
-        """
-
-        Parameters
-        ----------
-        forces: np.array([n_atoms,3])
-            input forces which, after scaling, will be plotted
-
-        axes: [int, int]
-            indices of axes to plot
-
-        arrow_scale: float
-            factor to scale arrows for forces
-
-        print_constrained: bool
-            whether or not to show the constrained atom positions
-
-        min_zorder: int
-            z order
-
-        arrow_width: float
-            width of arrowhead in A
-
-        show_legend: bool
-            whether or not to show the legend on lower right
-
-        legend_length: float
-            length of the legend bar in incoming units
-        """
-
-        scaled_forces = forces*arrow_scale
-        legend_text = '{} eV/A'.format(2/arrow_scale)
-
-        self.visualizeArrowsOnAtoms(scaled_forces,
-                             axes=axes,
-                             vector_colors=None,
-                             color_by_species=True,
-                             visualize_constrained=print_constrained,
-                             min_zorder=min_zorder,
-                             arrow_width=arrow_width,
-                             show_legend=show_legend,
-                             legend_length=legend_length,
-                             legend_text=legend_text)
-
-    
-    def getWireframe(self,
-                     coords=None,
-                     species=None,
-                     bond_factor=1.5,
-                     neglect_species=['H'],
-                     color=None,
-                     species_colors={}):
-        """
-        Visualize the geometry as wireframe colored either according to species or in a specific color.
-        Can be used in combination with visualize to show wireframe molecules on top of a substrate.
-
-        Parameters
-        ----------
-        linewidth: float
-            width of plotted lines
-
-        linewidth_in_Angstrom: Bool
-            If True, the plotter is changed from plt.plot to DataLinewidthPlot which allows to specify
-            linewidth in axis units (which is usually Angstrom in our case). This is not the standard as
-            it is much slower!
-
-        bond_factor: float
-            all atom distances with (r_cov1 + r_cov2)*bond_factor will be considered as bonds
-
-        neglect_species: list(species_string)
-            species to be neglected for wireframe plot
-
-        min_zorder: int
-            zorder of plot
-
-        color: color specifier
-            specifies color of all lines, can be overwritten by species color
-
-        species_colors: dict(species:color)
-            overwrites all other color definitions for this species
-
-        Returns
-        -------
-        None
-
-        """
-
-        if coords is None:
-            coords = self.coords
-        if species is None:
-            species = self.species
-
-        all_species = set(species)
-        cov_radii = ut.COVALENT_RADII
-        all_species_pairs = itertools.product(all_species,repeat=2)
-        bond_thresholds = {}
-        for pair in all_species_pairs:
-            bond_thresholds[pair] = (cov_radii[pair[0]]+cov_radii[pair[1]])*bond_factor
-
-        species_colors_internal = {}
-        for s in all_species:
-            if color is None:
-                species_colors_internal[s] = ut.SPECIES_COLORS[s]
-            else:
-                species_colors_internal[s] = color
-
-        species_colors_internal.update(species_colors)
-
-        wireframe = []
-
-        for i, coord in enumerate(coords):
-            if species[i] not in neglect_species:
-                neighbor_coords = []
-                neighbor_species = []
-                for j, coord_test in enumerate(coords[i:]):
-                    if species[j+i] not in neglect_species:
-                        dist = np.linalg.norm(coord - coord_test)
-                        if dist < bond_thresholds[species[i],species[j+i]]:
-                            neighbor_coords.append(coord_test)
-                            neighbor_species.append(species[j+i])
-
-                for k, (coord_neighbour, species_neighbor) in enumerate(zip(neighbor_coords, neighbor_species)):
-                    coord_half = (coord_neighbour+coord)/2.0
-                    
-                    wire_0 = [coord,
-                              coord_half,
-                              species_colors_internal[species[i]],]
-                    
-                    wire_1 = [coord_half,
-                              coord_neighbour,
-                              species_colors_internal[species_neighbor],]
-                    
-                    wireframe.append(wire_0)
-                    wireframe.append(wire_1)
-        
-        return wireframe
-    
-    
-    def visualizeWireframe(self,
-                           coords=None,
-                           species=None,
-                           linewidth=3,
-                           linewidth_in_Angstrom=False,
-                           bond_factor=1.5,
-                           neglect_species=['H'],
-                           min_zorder=1,
-                           axes=[0, 1],
-                           color=None,
-                           species_colors={},
-                           alpha=1):
-        """
-        Visualize the geometry as wireframe colored either according to species or in a specific color.
-        Can be used in combination with visualize to show wireframe molecules on top of a substrate.
-
-        Parameters
-        ----------
-        linewidth: float
-            width of plotted lines
-
-        linewidth_in_Angstrom: Bool
-            If True, the plotter is changed from plt.plot to DataLinewidthPlot which allows to specify
-            linewidth in axis units (which is usually Angstrom in our case). This is not the standard as
-            it is much slower!
-
-        bond_factor: float
-            all atom distances with (r_cov1 + r_cov2)*bond_factor will be considered as bonds
-
-        neglect_species: list(species_string)
-            species to be neglected for wireframe plot
-
-        min_zorder: int
-            zorder of plot
-
-        color: color specifier
-            specifies color of all lines, can be overwritten by species color
-
-        species_colors: dict(species:color)
-            overwrites all other color definitions for this species
-
-        Returns
-        -------
-        None
-
-        """
-
-        import matplotlib.pyplot as plt
-        from aimstools.PlotUtilities import DataLinewidthPlot
-        if coords is None:
-            coords = self.coords
-        if species is None:
-            species = self.species
-
-        ax0 = axes[0]
-        ax1 = axes[1]
-
-        all_species = set(species)
-        cov_radii = ut.COVALENT_RADII
-        all_species_pairs = itertools.product(all_species,repeat=2)
-        bond_thresholds = {}
-        for pair in all_species_pairs:
-            bond_thresholds[pair] = (cov_radii[pair[0]]+cov_radii[pair[1]])*bond_factor
-
-        species_colors_internal = {}
-        for s in all_species:
-            if color is None:
-                species_colors_internal[s] = ut.SPECIES_COLORS[s]
-            else:
-                species_colors_internal[s] = color
-
-        species_colors_internal.update(species_colors)
-        if linewidth_in_Angstrom:
-            plot_function = DataLinewidthPlot
-        else:
-            plot_function = plt.plot
-
-        for i, coord in enumerate(coords):
-            if species[i] not in neglect_species:
-                neighbor_coords = []
-                neighbor_species = []
-                for j, coord_test in enumerate(coords[i:]):
-                    if species[j+i] not in neglect_species:
-                        dist = np.linalg.norm(coord - coord_test)
-                        if dist < bond_thresholds[species[i],species[j+i]]:
-                            neighbor_coords.append(coord_test)
-                            neighbor_species.append(species[j+i])
-
-                for k, (coord_neighbour, species_neighbor) in enumerate(zip(neighbor_coords, neighbor_species)):
-                    x_half = (coord_neighbour[ax0]-coord[ax0])/2 + coord[ax0]
-                    y_half = (coord_neighbour[ax1]-coord[ax1])/2 + coord[ax1]
-
-                    plot_function((coord[ax0], x_half),
-                             (coord[ax1], y_half),
-                             color=species_colors_internal[species[i]],
-                             solid_capstyle='round',
-                             zorder=min_zorder,
-                             linewidth=linewidth,
-                             alpha=alpha)
-
-                    plot_function((x_half, coord_neighbour[ax0]),
-                             (y_half, coord_neighbour[ax1]),
-                             color=species_colors_internal[species_neighbor],
-                             solid_capstyle='round',
-                             zorder=min_zorder,
-                             linewidth=linewidth,
-                             alpha=alpha)
-                             
-                             
-        
-
-    def find_native_adatoms_and_adlayer_atoms(self, layer_intervall = 0.5, std_intervall_scale=1 ,show_std_intervall_for_native_adatoms=False):
-        
-        
-        # in this code all native adatoms and all adlayer atoms are detected as follows:
-        #1. for all species we calculate where the the net plane layers (ONE LAYER IS DEFINED BY ALL ATOMS WITHIN THE layer_intervall----) 
-            #are and how much atoms of the species are in the netplane
-        #2. find species that are obviously only in the adlayer and the species that are also in the slab
-        #3. for all slab species calcuate the change of the number of atoms between consecutive layers : 
-            #The adatom layer of a species starts when the change of atoms per layer is very big between two layers
-            # The mathematical criterium for finding the native adatoms goes as follows:
-                #We calcualte the standard deviation of the change of the number of atoms (for all changes between all consecutive layers)
-                #If in layer x the change in the number of atoms dnx is greater than the next smaller change in the number of atoms dny (in any layer y) 
-                #plus the standard deviation of the changes between all consecutive layers std( [dn1,dn2,dn3,...,dnN] )*std_intervall_scale
-                #then in layer x we have adatoms.
-                # -----------YOU CAN SCALE THE STANDARD DEVIATION FOR ACCEPTING A SLAB ATOM AS AN ADATOM BY VARYING std_intervall_scale
-                # for std_intervall_scale < 1 adatoms are more likely identified but you risk to accept layer of common slab atoms as an adatom layer
-                # for std_intervall_scale > 1 adatoms are less likely accepted but you can be more sure not to accept a layer of common slab atoms as the adatom layer
-        
-      
-        import matplotlib.pyplot as plt
-
-
-    # Generate a geometry file where all equivalent species are mapped to one species (Ag_reallylight, Ag_light, Ag):->Ag
-        geo_equivalent_species = copy.deepcopy(self)
-        for i, sp_i in enumerate(geo_equivalent_species.species):
-            if '_' in sp_i:
-                index_underline = sp_i.index('_')
-                geo_equivalent_species.species[i] = sp_i[0:index_underline]
-
-    # Here we create the dictionary species_layers_and_number_of_atoms_in_layer. 
-    # For every species it contains the z-coordinates of layers (within an intervall=layer_intervall) and the number of atoms that are in each layer
-    #z.B.:  species_layers_and_number_of_atoms_in_layer = {'Au': [[19.45561088, 18.67587968], [3, 2]],  'O': [[18.44341458, 19.74653296], [1, 1]] , ... }
-        species_layers_and_number_of_atoms_in_layer = {}
-        layers = geo_equivalent_species.getAtomLayers(threshold=layer_intervall)
-        
-        for species_i in set(geo_equivalent_species.species):
-            layer_keys_species_i = layers[species_i].keys()
-            number_of_atoms_in_layer = []
-            for layer_j in layer_keys_species_i:
-                #print(layer_j)
-                #print(layers[species_i][layer_j])
-                layer_j_number_of_atoms = len(layers[species_i][layer_j])
-                #print(layer_j_number_of_atoms)
-                number_of_atoms_in_layer.append(layer_j_number_of_atoms)
-            
-            species_layers_and_number_of_atoms_in_layer[species_i] = [list( layers[species_i].keys() ),number_of_atoms_in_layer]
-
-    # Here we find the slab species and obvious adlayer species
-    # generate a list of all species that can not be part of the substrat, i.e. a list of all the species that are obviously part of an adlayer 
-    # and a list of species that 
-    # here the trick is that the standard deviation of the z coordinates for the slab species is muuuuch bigger #
-    #than the standard deviation of the z coordinates for the obvious adlayer species
-        pure_adlayer_species = []
-        slab_species = []
-        standard_deviation_of_z_coordinates = {}
-        for sp_i in set(geo_equivalent_species.species):
-            all_atoms_species_i = geo_equivalent_species.getAtomsBySpecies(species=sp_i)
-            all_z_coordinates_species_i =  np.array(all_atoms_species_i.coords)[:][:,2]
-            std_species_i = np.std(all_z_coordinates_species_i)
-            standard_deviation_of_z_coordinates[str(sp_i)] = std_species_i
-
-        max_standardeviation = max(standard_deviation_of_z_coordinates.values())  # must be the standard deviation of a slab species
-        if max_standardeviation < 2:
-            print('Error! This geometry file probaply doesnt contain a slab')
-            print('Error! This geometry file probaply doesnt contain a slab')
-            print('Error! This geometry file probaply doesnt contain a slab')
-            print('Error! This geometry file probaply doesnt contain a slab')
-        for species_i in standard_deviation_of_z_coordinates.keys():
-            if standard_deviation_of_z_coordinates[ str(species_i) ] < max_standardeviation/3:
-                pure_adlayer_species.append(species_i)
-            else:
-                slab_species.append(species_i)
-
-    # Here we create two dictionaryy. one for the species that are only in the adlayer and one for the species that are also in the slab:
-    # species_layers_and_number_of_atoms_in_layer_SLABSPECIES   and    species_and_number_of_atoms_in_layer_ONLYADLAYERSPECIES. 
-    # For every species it contains the z-coordinates of layers (within an intervall=layer_intervall) and the number of atoms that are in each layer
-    #z.B.:  species_layers_and_number_of_atoms_in_layer = {'Au': [[19.45561088, 18.67587968], [3, 2]],  'O': [[18.44341458, 19.74653296], [1, 1]] , ... 
-        species_and_number_of_atoms_in_layer_SLABSPECIES = {}
-        species_and_number_of_atoms_in_layer_ONLYADLAYERSPECIES = {}
-        
-        for key_i in species_layers_and_number_of_atoms_in_layer.keys():
-            
-            if str(key_i) in pure_adlayer_species:
-                species_and_number_of_atoms_in_layer_ONLYADLAYERSPECIES[str(key_i)] = \
-                species_layers_and_number_of_atoms_in_layer[key_i]
-            
-            if str(key_i) in slab_species:
-                species_and_number_of_atoms_in_layer_SLABSPECIES[str(key_i)] = \
-                species_layers_and_number_of_atoms_in_layer[key_i]
-
-        
-     # Here we search for the native adatoms of the slab species with the standard deviation of the change of the number of atoms in the layers #
-     # between consecutive layers as explained in the beginning.  
-        
-        
-        
-        slab_species_has_adatom = {} 
-        # dictionary of the form {'Species': {adatoms_above_z_coordinate:value1,slab_below_z_coordinate:value2,} }    
-          #value1=None : no adatoms of this slab species
-        
-        native_adatom_species = [] # list of all native adatom species
-
-        species_and_number_of_atoms_in_layer_SLABSPECIES = species_and_number_of_atoms_in_layer_SLABSPECIES
-        
-        for species_i in species_and_number_of_atoms_in_layer_SLABSPECIES.keys():
-            
-            species_i_has_adatom = False
-            
-            z_coords_layers = species_layers_and_number_of_atoms_in_layer[str(species_i)][0]
-            nr_of_atoms_in_layer = species_layers_and_number_of_atoms_in_layer[str(species_i)][1]
-            
-            sort_index = np.array(z_coords_layers).argsort()
-            z_coords_layers= np.array(z_coords_layers)[[sort_index]] 
-            nr_of_atoms_in_layer =  np.array(nr_of_atoms_in_layer)[[sort_index]] 
-            
-
-
-     
-
-
-            
-            diff_nr = np.diff(np.array(nr_of_atoms_in_layer))
-            diff_z = np.diff(np.array(z_coords_layers))
-            ### Take the absolute value of the differences !!!!! And take only the difference not divided by dz !!!!
-            d_nr = np.abs( diff_nr )#/ diff_z )
-            z_points = np.array(z_coords_layers)[0:-1] + diff_z/2
-            
-            
-            std_d_nr = np.std(d_nr)
-            
-            ind_largest_d_nr = np.argsort(d_nr)[-1]
-            largest_d_nr = d_nr[ind_largest_d_nr]
-            z_points_largest_d_nr = z_points[ind_largest_d_nr]
-            
-            # find the index of the second largest d_nr
-            ind_secondlargest_d_nr = np.argsort(d_nr)[-2]
-            secondlargest_d_nr = d_nr[ind_secondlargest_d_nr]
-            z_points_secondlargest_d_nr = z_points[ind_secondlargest_d_nr]
-            
-            if show_std_intervall_for_native_adatoms == True:
-                # plot the number of atoms in the layers for every species
-                plt.plot( z_coords_layers  , nr_of_atoms_in_layer , 'x' )
-                plt.title(str(species_i))
-                plt.xlabel(r'z')
-                plt.ylabel(r'Nr of atoms in layer')
-                plt.show()
-                # plot the change in the number of atoms between consecutive layers
-                plt.plot(z_points,d_nr, 'o')
-                plt.plot(z_points, secondlargest_d_nr*np.ones(len(z_points)), linestyle='--', color='grey')
-                plt.plot(z_points, (secondlargest_d_nr+std_d_nr*std_intervall_scale)*np.ones(len(z_points)), \
-                         linestyle='--', color='red')
-                plt.plot(z_points, (secondlargest_d_nr-std_d_nr*std_intervall_scale)*np.ones(len(z_points)), \
-                         linestyle='--', color='red')
-                
-                plt.ylabel(r'|$dN_{Layer}$|')
-                plt.xlabel('z')
-                plt.title(str(species_i))
-                plt.show()
-                
-
-            ## identify if you have an adatom
-            # maybe implement the possibility that an adatom is only identified if it lies above the top slab layer of
-            # the species with the largest radius
-            
-            if std_d_nr > 1 and largest_d_nr > (secondlargest_d_nr + std_d_nr*std_intervall_scale ):
-                species_i_has_adatom = True
-                
-            if species_i_has_adatom == True:
-                adatoms_above_z_coordinate = z_points_largest_d_nr
-                slab_below_z_coordinate = z_points_largest_d_nr
-                slab_species_has_adatom[str(species_i)] = {'adatoms_above_z_coordinate':adatoms_above_z_coordinate, \
-                                                           'slab_below_z_coordinate' :slab_below_z_coordinate}
-                
-                native_adatom_species.append(str(species_i))
-                
-            elif species_i_has_adatom == False:
-                adatoms_above_z_coordinate = None
-                slab_below_z_coordinate = z_coords_layers[-1] + layer_intervall
-                slab_species_has_adatom[str(species_i)] = {'adatoms_above_z_coordinate':adatoms_above_z_coordinate, \
-                                                           'slab_below_z_coordinate' :slab_below_z_coordinate}
-            
-
-        #print('slab_species_has_adatom: ',slab_species_has_adatom)
-        #print('native_adatom_species',native_adatom_species)
-
-
-    # Finally we make two lists of indizes that label all native adatoms and all adlayer atoms in the original geometry file
-        indizes_of_adlayer_atoms = []
-        indizes_of_native_adatoms = []
-        for i in self.getIndicesOfAllAtoms():
-            sp_i = self.species[i]
-            #print(sp_i)
-            if '_' in sp_i:
-                index_underline = sp_i.index('_')
-                sp_i = sp_i[0:index_underline]
-            #print(sp_i)
-            #print('')
-            if sp_i in pure_adlayer_species:
-                indizes_of_adlayer_atoms.append(i)
-            elif sp_i in native_adatom_species:
-                z_below_adatoms = slab_species_has_adatom[sp_i]['adatoms_above_z_coordinate']
-                if self.coords[i][2] > z_below_adatoms:
-                    indizes_of_native_adatoms.append(i)
-
-        return(indizes_of_native_adatoms, indizes_of_adlayer_atoms )
-        
         
 class AimsGeometry(Geometry):
     def parse(self, text):
