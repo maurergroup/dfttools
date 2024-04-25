@@ -1,4 +1,4 @@
-import dfttools.utils.utils as utils
+import dfttools.utils.file_utils as fu
 from dfttools.base_parser import BaseParser
 
 
@@ -38,7 +38,7 @@ class AimsControl(Parameters):
     def __init__(self, control_in="control.in") -> None:
         super().__init__(control_in=control_in)
         # Check if the control.in file was provided
-        utils.check_required_files(self._supported_files, "control_in")
+        fu.check_required_files(self._supported_files, "control_in")
 
     def add_control_keywords(self, **kwargs: dict) -> None:
         """Add keywords to the control.in file.

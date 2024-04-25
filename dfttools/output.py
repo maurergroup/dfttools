@@ -2,7 +2,7 @@ from typing import Tuple, Union
 
 import numpy as np
 
-import dfttools.utils.utils as utils
+import dfttools.utils.file_utils as fu
 from dfttools.base_parser import BaseParser
 
 
@@ -47,15 +47,16 @@ class AimsOutput(Output):
     def __init__(self, aims_out="aims.out"):
         super().__init__(aims_out=aims_out)
         # Check if the aims.out file was provided
-        utils.check_required_files(self._supported_files, "aims_out")
+        fu.check_required_files(self._supported_files, "aims_out")
 
     def check_exit_normal(self) -> bool:
-        """Check if the FHI-aims calculation exited normally.
+        """
+        Check if the FHI-aims calculation exited normally.
 
         Returns
         -------
         bool
-            Whether the calculation exited normally or not.
+            whether the calculation exited normally or not
         """
 
         if "Have a nice day." == self.file_contents["aims_out"][-2].strip():
