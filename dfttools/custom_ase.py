@@ -7,7 +7,8 @@ from ase.io import aims
 
 
 class CustomAims(Aims):
-    """A custom FHI-aims calculator which addresses bugs in the default ASE
+    """
+    A custom FHI-aims calculator which addresses bugs in the default ASE
     implementation.
 
     Please refer to the ASE calculator for the documentation:
