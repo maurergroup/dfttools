@@ -140,6 +140,181 @@ class AimsOutput(Output):
             if "s.c.f. calculation      :" in line:
                 return float(line.split()[-2])
 
+    def get_n_relaxation_steps(self) -> int:
+        """
+        Get the number of relaxation steps from the aims.out file.
+
+        Returns
+        -------
+        int
+            the number of relaxation steps
+        """
+
+        n_relax_steps = 0
+        for line in reversed(self.file_contents["aims_out"]):
+            if "Number of relaxation steps" in line:
+                return int(line.split()[-1])
+
+            # If the calculation did not finish normally, the number of relaxation steps
+            # will not be printed. In this case, count each relaxation step as they were
+            # calculated by checking when the SCF cycle converged.
+            if "Self-consistency cycle converged." == line.strip():
+                n_relax_steps += 1
+
+        return n_relax_steps
+
+    def get_n_scf_iters(self) -> int:
+        """
+        Get the number of SCF iterations from the aims.out file.
+
+        Returns
+        -------
+        int
+            the number of scf iterations
+        """
+
+        n_scf_iters = 0
+        for line in reversed(self.file_contents["aims_out"]):
+            if "Number of self-consistency cycles" in line:
+                return int(line.split()[-1])
+
+            # If the calculation did not finish normally, the number of SCF iterations
+            # will not be printed. In this case, count each SCF iteration as they were
+            # calculated
+            if "Begin self-consistency iteration #" in line:
+                n_scf_iters += 1
+
+        return n_scf_iters
+
+    def get_i_scf_conv_acc(self) -> dict:
+        """Get SCF convergence accuracy values from the aims.out file.
+
+        Returns
+        -------
+        dict
+            the scf convergence accuracy values from the aims.out file
+        """
+
+        # Read the total number of SCF iterations
+        n_scf_iters = self.get_n_scf_iters()
+        n_relax_steps = self.get_n_relaxation_steps() + 1
+
+        # Check that the calculation finished normally otherwise number of SCF
+        # iterations is not known
+        self.scf_conv_acc_params = {
+            "scf_iter": np.zeros(n_scf_iters),
+            "change_of_charge": np.zeros(n_scf_iters),
+            "change_of_charge_spin_density": np.zeros(n_scf_iters),
+            "change_of_sum_eigenvalues": np.zeros(n_scf_iters),
+            "change_of_total_energy": np.zeros(n_scf_iters),
+            # "change_of_forces": np.zeros(n_relax_steps),
+            "forces_on_atoms": np.zeros(n_relax_steps),
+        }
+
+        current_scf_iter = 0
+        current_relax_step = 0
+        # new_scf_iter = True
+
+        for i, line in enumerate(self.file_contents["aims_out"]):
+            spl = line.split()
+            if len(spl) > 1:
+                if "Begin self-consistency iteration #" in line:
+                    # save the scf iteration number
+                    self.scf_conv_acc_params["scf_iter"][current_scf_iter] = int(
+                        spl[-1]
+                    )
+                    # use a counter rather than reading the SCF iteration number as it
+                    # resets upon re-initialisation and for each geometry opt step
+                    current_scf_iter += 1
+
+                # Use spin density if spin polarised calculation
+                if "Change of charge/spin density" in line:
+
+                    self.scf_conv_acc_params["change_of_charge"][
+                        current_scf_iter - 1
+                    ] = float(spl[-2])
+                    self.scf_conv_acc_params["change_of_charge_spin_density"][
+                        current_scf_iter - 1
+                    ] = float(spl[-1])
+
+                # Otherwise just use change of charge
+                elif "Change of charge" in line:
+                    self.scf_conv_acc_params["change_of_charge"][
+                        current_scf_iter - 1
+                    ] = float(spl[-1])
+
+                if "Change of sum of eigenvalues" in line:
+                    self.scf_conv_acc_params["change_of_sum_eigenvalues"][
+                        current_scf_iter - 1
+                    ] = float(spl[-2])
+
+                if "Change of total energy" in line:
+                    self.scf_conv_acc_params["change_of_total_energy"][
+                        current_scf_iter - 1
+                    ] = float(spl[-2])
+
+                # NOTE
+                # In the current aims compilation I'm using to test this, there is
+                # something wrong with printing the change of forces. It happens
+                # multiple times per relaxation and is clearly wrong so I am removing
+                # this functionality for now
+
+                # if "Change of forces" in line:
+                #     # Only save the smallest change of forces for each geometry
+                #     # relaxation step. I have no idea why it prints multiple times but
+                #     # I assume it's a data race of some sort
+                #     if new_scf_iter:
+                #         self.scf_conv_acc_params["change_of_forces"][
+                #             current_relax_step - 1
+                #         ] = float(spl[-2])
+
+                #         new_scf_iter = False
+
+                #     elif (
+                #         float(spl[-2])
+                #         < self.scf_conv_acc_params["change_of_forces"][-1]
+                #     ):
+                #         self.scf_conv_acc_params["change_of_forces"][
+                #             current_relax_step - 1
+                #         ] = float(spl[-2])
+
+                if "Forces on atoms" in line:
+                    self.scf_conv_acc_params["forces_on_atoms"][
+                        current_relax_step - 1
+                    ] = float(spl[-2])
+
+                if line.strip() == "Self-consistency cycle converged.":
+                    # new_scf_iter = True
+                    current_relax_step += 1
+
+        return self.scf_conv_acc_params
+
+    def get_n_initial_ks_states(self) -> int:
+        """Get the number of Kohn-Sham states from the first SCF step.
+
+        Returns
+        -------
+        int
+            the number of kohn-sham states
+        """
+
+        target_line = "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
+
+        init_ev_start = 0
+        n_ks_states = 0
+        # Find the first time the KS states are printed
+        while target_line not in self.file_contents["aims_out"][init_ev_start]:
+            init_ev_start += 1
+
+        # Then count the number of lines until the next empty line
+        else:
+            init_ev_end = init_ev_start + 1
+            while len(self.file_contents["aims_out"][init_ev_end]) > 1:
+                init_ev_end += 1
+                n_ks_states += 1
+
+        return n_ks_states
+
     def get_all_ks_eigenvalues(self) -> Union[dict, Tuple[dict, dict]]:
         """Get all Kohn-Sham eigenvalues from a calculation.
 
@@ -347,177 +522,11 @@ class AimsOutput(Output):
         else:
             raise ValueError("Could not determine if calculation was spin polarised.")
 
-    def get_i_scf_conv_acc(self) -> dict:
-        """Get SCF convergence accuracy values from the aims.out file.
+    def get_pert_soc_ks_eigenvalues(self) -> dict:
 
-        Returns
-        -------
-        dict
-            the scf convergence accuracy values from the aims.out file
-        """
+        raise NotImplementedError
 
-        # Read the total number of SCF iterations
-        n_scf_iters = self.get_n_scf_iters()
-        n_relax_steps = self.get_n_relaxation_steps() + 1
+        aims_out = self.file_contents["aims_out"]
 
-        # Check that the calculation finished normally otherwise number of SCF
-        # iterations is not known
-        self.scf_conv_acc_params = {
-            "scf_iter": np.zeros(n_scf_iters),
-            "change_of_charge": np.zeros(n_scf_iters),
-            "change_of_charge_spin_density": np.zeros(n_scf_iters),
-            "change_of_sum_eigenvalues": np.zeros(n_scf_iters),
-            "change_of_total_energy": np.zeros(n_scf_iters),
-            # "change_of_forces": np.zeros(n_relax_steps),
-            "forces_on_atoms": np.zeros(n_relax_steps),
-        }
-
-        current_scf_iter = 0
-        current_relax_step = 0
-        # new_scf_iter = True
-
-        for i, line in enumerate(self.file_contents["aims_out"]):
-            spl = line.split()
-            if len(spl) > 1:
-                if "Begin self-consistency iteration #" in line:
-                    # save the scf iteration number
-                    self.scf_conv_acc_params["scf_iter"][current_scf_iter] = int(
-                        spl[-1]
-                    )
-                    # use a counter rather than reading the SCF iteration number as it
-                    # resets upon re-initialisation and for each geometry opt step
-                    current_scf_iter += 1
-
-                # Use spin density if spin polarised calculation
-                if "Change of charge/spin density" in line:
-
-                    self.scf_conv_acc_params["change_of_charge"][
-                        current_scf_iter - 1
-                    ] = float(spl[-2])
-                    self.scf_conv_acc_params["change_of_charge_spin_density"][
-                        current_scf_iter - 1
-                    ] = float(spl[-1])
-
-                # Otherwise just use change of charge
-                elif "Change of charge" in line:
-                    self.scf_conv_acc_params["change_of_charge"][
-                        current_scf_iter - 1
-                    ] = float(spl[-1])
-
-                if "Change of sum of eigenvalues" in line:
-                    self.scf_conv_acc_params["change_of_sum_eigenvalues"][
-                        current_scf_iter - 1
-                    ] = float(spl[-2])
-
-                if "Change of total energy" in line:
-                    self.scf_conv_acc_params["change_of_total_energy"][
-                        current_scf_iter - 1
-                    ] = float(spl[-2])
-
-                # NOTE
-                # In the current aims compilation I'm using to test this, there is
-                # something wrong with printing the change of forces. It happens
-                # multiple times per relaxation and is clearly wrong so I am removing
-                # this functionality for now
-
-                # if "Change of forces" in line:
-                #     # Only save the smallest change of forces for each geometry
-                #     # relaxation step. I have no idea why it prints multiple times but
-                #     # I assume it's a data race of some sort
-                #     if new_scf_iter:
-                #         self.scf_conv_acc_params["change_of_forces"][
-                #             current_relax_step - 1
-                #         ] = float(spl[-2])
-
-                #         new_scf_iter = False
-
-                #     elif (
-                #         float(spl[-2])
-                #         < self.scf_conv_acc_params["change_of_forces"][-1]
-                #     ):
-                #         self.scf_conv_acc_params["change_of_forces"][
-                #             current_relax_step - 1
-                #         ] = float(spl[-2])
-
-                if "Forces on atoms" in line:
-                    self.scf_conv_acc_params["forces_on_atoms"][
-                        current_relax_step - 1
-                    ] = float(spl[-2])
-
-                if line.strip() == "Self-consistency cycle converged.":
-                    # new_scf_iter = True
-                    current_relax_step += 1
-
-        return self.scf_conv_acc_params
-
-    def get_n_initial_ks_states(self) -> int:
-        """Get the number of Kohn-Sham states from the first SCF step.
-
-        Returns
-        -------
-        int
-            the number of kohn-sham states
-        """
-
-        target_line = "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
-
-        init_ev_start = 0
-        n_ks_states = 0
-        # Find the first time the KS states are printed
-        while target_line not in self.file_contents["aims_out"][init_ev_start]:
-            init_ev_start += 1
-
-        # Then count the number of lines until the next empty line
-        else:
-            init_ev_end = init_ev_start + 1
-            while len(self.file_contents["aims_out"][init_ev_end]) > 1:
-                init_ev_end += 1
-                n_ks_states += 1
-
-        return n_ks_states
-
-    def get_n_relaxation_steps(self) -> int:
-        """
-        Get the number of relaxation steps from the aims.out file.
-
-        Returns
-        -------
-        int
-            the number of relaxation steps
-        """
-
-        n_relax_steps = 0
-        for line in reversed(self.file_contents["aims_out"]):
-            if "Number of relaxation steps" in line:
-                return int(line.split()[-1])
-
-            # If the calculation did not finish normally, the number of relaxation steps
-            # will not be printed. In this case, count each relaxation step as they were
-            # calculated by checking when the SCF cycle converged.
-            if "Self-consistency cycle converged." == line.strip():
-                n_relax_steps += 1
-
-        return n_relax_steps
-
-    def get_n_scf_iters(self) -> int:
-        """
-        Get the number of SCF iterations from the aims.out file.
-
-        Returns
-        -------
-        int
-            the number of scf iterations
-        """
-
-        n_scf_iters = 0
-        for line in reversed(self.file_contents["aims_out"]):
-            if "Number of self-consistency cycles" in line:
-                return int(line.split()[-1])
-
-            # If the calculation did not finish normally, the number of SCF iterations
-            # will not be printed. In this case, count each SCF iteration as they were
-            # calculated
-            if "Begin self-consistency iteration #" in line:
-                n_scf_iters += 1
-
-        return n_scf_iters
+        # Get the number of KS states
+        n_ks_states = self.get_n_initial_ks_states()
