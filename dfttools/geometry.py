@@ -17,16 +17,6 @@ import networkx as nx
 
 import os.path
 
-# from aimstools.Utilities import PERIODIC_TABLE, \
-#         SLATER_EFFECTIVE_CHARGES, ATOMIC_MASSES, \
-#         COVALENT_RADII, getSpeciesColor, C6_COEFFICIENTS, R0_COEFFICIENTS, \
-#         getCovalentRadius, getAtomicNumber
-# from aimstools import Units
-# from aimstools import Utilities as ut
-# from aimstools.ControlFile import CubeFileSettings
-# import aimstools.ZMatrixUtils as ZMatrixUtils
-
-
 import dfttools.utils.math_utils as utils
 
 
@@ -2349,7 +2339,7 @@ class Geometry:
         substrate_indices = self.getSubstrateIndices(primitive_substrate=primitive_substrate)
         self.removeAtoms(substrate_indices)
 
-    @ut.deprecated      # use removeAdsorbates instead
+    
     def removeMolecules(self):
         "Removes all atoms that are not metal"
         mol_inds = self.getIndicesOfMolecules()
@@ -2397,7 +2387,7 @@ class Geometry:
         atom_indices = np.where(L)[0]
         return self.getAtomsByIndices(atom_indices)
     
-    @ut.deprecated      # use getAdsorbates (which is more general) instead
+    
     def getMolecules(self):
         mol_inds = self.getIndicesOfMolecules()
         return self.getAtomsByIndices(mol_inds)
@@ -3078,80 +3068,6 @@ class Geometry:
 ###############################################################################
 #                        ControlFile Helpers                                  #
 ###############################################################################
-    def getCubeFileGrid(self, divisions, origin = None, verbose=True):
-        """EXPERIMENTAL!
-           creates cube file grid with given number of divisions in each direction.
-           If only one division is given, this will be used in all directions.
-           If origin is given the vectors will be aligned around this value
-           
-           Returns a CubeFileSettings object which can be used for the ControlFile class
-           To get text simply use CubeFileSettings.getText()
-           """
-        
-        if origin is None:
-            origin = self.lattice_vectors[0,:]/2 + self.lattice_vectors[1,:]/2 +self.lattice_vectors[2,:]/2
-        
-        # calculate dx_i
-        divs = np.zeros(3)
-        divs[0] = np.linalg.norm(self.lattice_vectors[0,:])/divisions[0]
-        divs[1] = np.linalg.norm(self.lattice_vectors[1,:])/divisions[1]
-        divs[2] = np.linalg.norm(self.lattice_vectors[1,:])/divisions[2]
-        
-        # calculate vectors
-        vecs = np.zeros([3,3])
-        vecs[0,:] = self.lattice_vectors[0,:]/divisions[0]
-        vecs[1,:] = self.lattice_vectors[1,:]/divisions[1]
-        vecs[2,:] = self.lattice_vectors[2,:]/divisions[2]
-        
-        cube_settings = CubeFileSettings()
-        
-        cube_settings.setOrigin(origin)
-        cube_settings.setEdges(divisions,vecs)
-        print('Divisions in directions: \n x: {0:.8f}, y: {1:.8f}, z: {2:.8f}\n'.format(divs[0],divs[1],divs[2]))
-        return cube_settings
-
-    def getCubeFileGridBySpacing(self, spacing, origin=None, verbose=True):
-        """EXPERIMENTAL! and ugly as hell! <aj, 10.4.19>
-           creates cube file grid with given spacing in each direction.
-           If only one division is given, this will be used in all directions.
-           If origin is given the vectors will be aligned around this value
-
-           Returns a CubeFileSettings object which can be used for the ControlFile class
-           To get text simply use CubeFileSettings.getText()
-           """
-
-        if origin is None:
-            origin = self.lattice_vectors[0, :] / 2 + self.lattice_vectors[1, :] / 2 + self.lattice_vectors[2, :] / 2
-        # make numeric value a list if necessary
-        if not isinstance(spacing, Iterable):
-            spacing = [spacing]
-        # check that spacing is given for all three dimensions
-        if len(spacing) == 1:
-            spacing = [spacing, spacing, spacing]
-        assert len(spacing) == 3, 'Either one spacing or a separate one for each dimension must be given'
-
-        # calculate n points
-        n_points = np.zeros(3)
-        n_points[0] = np.ceil(np.linalg.norm(self.lattice_vectors[0, :]) / spacing[0])
-        n_points[1] = np.ceil(np.linalg.norm(self.lattice_vectors[1, :]) / spacing[1])
-        n_points[2] = np.ceil(np.linalg.norm(self.lattice_vectors[2, :]) / spacing[2])
-
-        # calculate vectors
-        vecs = np.zeros([3, 3])
-        vecs[0, :] = self.lattice_vectors[0, :] / np.linalg.norm(self.lattice_vectors[0, :]) * spacing[0]
-        vecs[1, :] = self.lattice_vectors[1, :] / np.linalg.norm(self.lattice_vectors[1, :]) * spacing[1]
-        vecs[2, :] = self.lattice_vectors[2, :] / np.linalg.norm(self.lattice_vectors[2, :]) * spacing[2]
-
-        cube_settings = CubeFileSettings()
-
-        cube_settings.setOrigin(origin)
-        cube_settings.setEdges(n_points, vecs)
-        print('Divisions in directions: \n x: {0:.8f}, y: {1:.8f}, z: {2:.8f}\n'.format(n_points[0], n_points[1], n_points[2]))
-        return cube_settings
-
-
-
-
     def getKPoints(self, k_per_atom, slab_geom,get_as_array=False):
         """ Calculate K-Point density for a supercell, given the 
         primitive unit cell (slab_geom) and the K-Point density per primitive unit cell
