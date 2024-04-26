@@ -53,7 +53,6 @@ def get_rotation_matrix_around_axis(axis: np.array, phi: float) -> np.array:
         Rotation matrix
 
     """
-
     axis_vec = np.array(axis, dtype=np.float64)
     axis_vec /= np.linalg.norm(axis_vec)
 
@@ -66,6 +65,52 @@ def get_rotation_matrix_around_axis(axis: np.array, phi: float) -> np.array:
 
     R = ddt + np.cos(phi) * (eye - ddt) + np.sin(phi) * skew
     return R
+
+
+def get_rotation_matrix_around_z_axis(phi: float) -> np.array:
+    """
+    Generates a rotation matrix around the z axis.
+    
+    Parameters
+    ----------
+    phi : float
+        Angle of rotation around axis in radiants.
+    
+    Returns
+    -------
+    np.array
+        Rotation matrix
+    
+    """
+    return get_rotation_matrix_around_axis(np.array([0.0, 0.0, 1.0]), phi)
+
+
+def get_mirror_matrix(normal_vector: np.array) -> np.array:
+    """
+    Generates a transformation matrix for mirroring through plane given by the
+    normal vector.
+
+    Parameters
+    ----------
+    normal_vector : np.array
+        Normal vector of the mirror plane.
+
+    Returns
+    -------
+    M : np.array
+        Mirror matrix
+
+    """
+    n_vec = normal_vector /np.linalg.norm(normal_vector)
+    eps = np.finfo(np.float64).eps
+    a = n_vec[0]
+    b = n_vec[1]
+    c = n_vec[2]
+    M = np.array([[1-2*a**2,-2*a*b,-2*a*c],
+                  [-2*a*b,1-2*b**2,-2*b*c],
+                  [-2*a*c,-2*b*c,1-2*c**2]])
+    M[np.abs(M)<eps*10] = 0
+    return M
 
 
 def get_fractional_coords(cartesian_coords: np.array, lattice_vectors: np.array) -> np.array:
