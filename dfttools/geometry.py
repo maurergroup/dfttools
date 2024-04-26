@@ -17,14 +17,14 @@ import networkx as nx
 
 import os.path
 
-from aimstools.Utilities import PERIODIC_TABLE, \
-        SLATER_EFFECTIVE_CHARGES, ATOMIC_MASSES, \
-        COVALENT_RADII, getSpeciesColor, C6_COEFFICIENTS, R0_COEFFICIENTS, \
-        getCovalentRadius, getAtomicNumber
-from aimstools import Units
-from aimstools import Utilities as ut
-from aimstools.ControlFile import CubeFileSettings
-import aimstools.ZMatrixUtils as ZMatrixUtils
+# from aimstools.Utilities import PERIODIC_TABLE, \
+#         SLATER_EFFECTIVE_CHARGES, ATOMIC_MASSES, \
+#         COVALENT_RADII, getSpeciesColor, C6_COEFFICIENTS, R0_COEFFICIENTS, \
+#         getCovalentRadius, getAtomicNumber
+# from aimstools import Units
+# from aimstools import Utilities as ut
+# from aimstools.ControlFile import CubeFileSettings
+# import aimstools.ZMatrixUtils as ZMatrixUtils
 
 
 import dfttools.utils.math_utils as utils
@@ -90,6 +90,8 @@ class Geometry:
         self.initial_charge = []
         self.name = filename
         self.center = None
+        self.energy = None
+        self.forces = None
         self.hessian = None
         self.geometry_parts = []                # list of lists: indices of each geometry part
         self.geometry_part_descriptions = []    # list of strings:  name of each geometry part
@@ -237,8 +239,8 @@ class Geometry:
                     A string to be added to the header of the file
                 wrap: bool
                     Wrap atom positions to cell before writing
+                    
         """
-    
         from ase.constraints import FixAtoms
         if isinstance(atoms, (list, tuple)):
             if len(atoms) > 1:
@@ -260,15 +262,15 @@ class Geometry:
         constrain_relax=fix_cart
     
         coords=[]
-        species=[]
+        species_list=[]
         for i, atom in enumerate(atoms):
-            specie = atom.symbol
-            if isinstance(specie,int):
-                specie = PERIODIC_TABLE[specie]
-            species.append(specie)
+            species = atom.symbol
+            if isinstance(species, int):
+                species = PERIODIC_TABLE[species]
+            species_list.append(species)
             coords.append(atom.position)
         coords = np.array(coords)
-        self.add_atoms(coords,species,constrain_relax)
+        self.add_atoms(coords, species_list, constrain_relax)
     
     
     def get_as_ase(self):
@@ -497,7 +499,7 @@ class Geometry:
         
         frac_coords = utils.get_fractional_coords(self.coords, lattice_vectors)
         frac_coords[:,dimensions] = frac_coords[:,dimensions] % 1 # modulo 1 maps all coordinates to first unit cell
-        new_coords = ut.getCartesianCoords(frac_coords, lattice_vectors)
+        new_coords = utils.get_cartesian_coords(frac_coords, lattice_vectors)
         self.coords = new_coords
 
 
@@ -538,7 +540,7 @@ class Geometry:
         if lattice_vectors is None:
             lattice_vectors = self.lattice_vectors
             
-        self.coords += ut.getCartesianCoords(frac_shift, lattice_vectors)
+        self.coords += utils.get_cartesian_coords(frac_shift, lattice_vectors)
     
     
     def move_adsorbates(self, shift, primitive_substrate=None):
@@ -552,7 +554,7 @@ class Geometry:
         self += adsorbates
         
     
-    def rotate_lattice_around_Z_axis(self, angle_in_degree):
+    def rotate_lattice_around_z_axis(self, angle_in_degree):
         """
         Rotates lattice around z axis
 
@@ -565,11 +567,11 @@ class Geometry:
         -------
         None.
         """
-        R = ut.getCartesianRotationMatrix(angle_in_degree * np.pi / 180, get_3x3_matrix=True)
+        R = utils.get_rotation_matrix_around_z_axis(angle_in_degree * np.pi / 180)
         self.lattice_vectors = np.dot(self.lattice_vectors, R)
 
     
-    def rotate_around_Z_axis(self, angle_in_degree, center=None, indices=None):
+    def rotate_around_z_axis(self, angle_in_degree, center=None, indices=None):
         """Rotates structure COUNTERCLOCKWISE around a point defined by <center>.
 
         If center == None, the geometric center of the structure (as defined by self.getGeometricCenter())
@@ -582,7 +584,7 @@ class Geometry:
         if center is None:
             center = self.getGeometricCenter(indices=indices)
 
-        R = ut.getCartesianRotationMatrix(angle_in_degree * np.pi / 180, get_3x3_matrix=True)
+        R = utils.get_rotation_matrix_around_z_axis(angle_in_degree * np.pi / 180, get_3x3_matrix=True)
         temp_coords = copy.deepcopy(self.coords[indices])
         temp_coords -= center
         temp_coords = np.dot(temp_coords,R)
@@ -594,7 +596,7 @@ class Geometry:
         """
         Mirrors the geometry through the plane defined by the normal vector.
         """
-        mirror_matrix = ut.getMirrorMatrix(normal_vector=normal_vector)
+        mirror_matrix = utils.get_mirror_matrix(normal_vector=normal_vector)
         self.transform(mirror_matrix)
         
 
@@ -760,7 +762,7 @@ class Geometry:
         The transformation is applied as x_new[3x1] = x_old[3x1] x R[3x3] + t[3x1]"""
         coords_frac = utils.get_fractional_coords(self.lattice_vectors, lattice)
         coords_frac = np.dot(coords_frac, R.T) + t.reshape([1,3])
-        self.lattice_vectors = ut.getCartesianCoords(coords_frac, lattice)
+        self.lattice_vectors = utils.get_cartesian_coords(coords_frac, lattice)
 
 
     def swap_lattice_vectors(self, axis_1=0, axis_2=1):
@@ -787,7 +789,7 @@ class Geometry:
             lattice=self.lattice_vectors
         coords_frac = utils.get_fractional_coords(self.coords, lattice)
         coords_frac = np.dot(coords_frac, R.T) + t.reshape([1,3])
-        self.coords = ut.getCartesianCoords(coords_frac, lattice)
+        self.coords = utils.get_cartesian_coords(coords_frac, lattice)
     
     
     def symmetrize(self, symmetry_operations, center=None):
@@ -1053,7 +1055,7 @@ class Geometry:
         lattice_vectors[1]*=scaling_factors[1]
         lattice_vectors[2]*=scaling_factors[2]
 
-        new_coords = ut.getCartesianCoords(self.get_fractional_coords(), lattice_vectors)
+        new_coords = utils.get_cartesian_coords(self.get_fractional_coords(), lattice_vectors)
         scaled_geom.lattice_vectors = lattice_vectors
         scaled_geom.coords = new_coords
 
