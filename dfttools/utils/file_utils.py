@@ -1,3 +1,6 @@
+import yaml
+
+
 def check_required_files(files: list, *args: str, any=False) -> None:
     """
     Raise an error if a necessary file was not given.
@@ -28,3 +31,21 @@ def check_required_files(files: list, *args: str, any=False) -> None:
         for arg in args:
             if arg not in files:
                 raise ValueError(f"{arg} was not provided in the constructor.")
+
+
+class PeriodicTable:
+    """
+    Create a periodic table object
+
+    Returns
+    -------
+    dict
+        a dictionary representing the periodic table
+    """
+
+    def __init__(self):
+        pass
+
+    def __new__(cls):
+        with open("periodic_table.yml", "r") as pt:
+            return yaml.safe_load(pt)
