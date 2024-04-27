@@ -126,6 +126,18 @@ class Geometry:
         self.add_geometry(other_geometry)
         return self
     
+    
+    def get_file_format_from_ending(self, geometry_type):
+        if geometry_type == 'aims':
+            new_geometry = AimsGeometry()
+        if geometry_type == 'vasp':
+            new_geometry = VaspGeometry()
+        if geometry_type == 'xyz':
+            new_geometry = XYZGeometry()
+        
+        new_geometry.__dict__ = self.__dict__
+        return new_geometry
+    
 
     @property
     def homogenous_field(self):
@@ -442,6 +454,31 @@ class Geometry:
         L = np.array(self.species) == species
         atom_inds = np.where(L)[0]
         self.removeAtoms(atom_inds)
+        
+
+    def remove_constrained_atoms(self) -> None:
+        """
+        Remove all atoms where all coordinates are constrained.
+        
+        Returns
+        -------
+        None
+        
+        """
+        remove_inds = self.getConstrainededAtoms()
+        self.removeAtoms(remove_inds)
+        
+    def remove_unconstrained_atoms(self):
+        """
+        Remove all atoms where all coordinates are constrained.
+        
+        Returns
+        -------
+        None
+        
+        """
+        remove_inds = self.getUnconstrainededAtoms()
+        self.removeAtoms(remove_inds)
     
     
     def truncate(self, n_atoms: int) -> None:
@@ -660,8 +697,8 @@ class Geometry:
         
         lattice_vector_index : int
             index of the lattice vector that should be aligned
+            
         """
-
         lattice_vector_normed = \
             self.lattice_vectors[lattice_vector_index] / \
                 np.linalg.norm(self.lattice_vectors[lattice_vector_index])
@@ -948,7 +985,7 @@ class Geometry:
         self.vacuum_level = vacuum_level
 
 
-    def setMultipolesCharge(self,charge):
+    def set_multipoles_charge(self, charge: np.array) -> None:
         """
         Sets the charge of all multipoles
         :param charge: list or float or int
@@ -962,6 +999,18 @@ class Geometry:
             for i, m in enumerate(self.multipoles):
                 m[4] = charge
 
+
+    def free_all_constraints(self) -> None:
+        """
+        Frees all constraints.
+
+        Returns
+        -------
+        None
+
+        """
+        self.constrain_relax=np.zeros([len(self.species), 3], bool)
+        
 
 ###############################################################################
 #                      Get Properties of the Geometry                         #
@@ -1427,6 +1476,222 @@ class Geometry:
         max_dist = max(distances)
         return max_dist
     
+    
+    def get_area(self) -> float:
+        """
+        Returns the area of the surface described by lattice_vectors 0 and 1 of
+        the geometry, assuming that the lattice_vector 2 is orthogonal to both.
+
+        Returns
+        -------
+        float
+            Area of the unit cell.
+
+        """
+        a=deepcopy(self.lattice_vectors[0,:-1])
+        b=deepcopy(self.lattice_vectors[1,:-1])
+        area = np.abs(np.cross(a,b))
+        return area
+
+
+    def get_area_in_atom_numbers(self,
+                                 substrate_indices: Union[np.array, None]=None,
+                                 substrate=None) -> float:
+        """
+        Returns the area of the unit cell in terms of substrate atoms in the
+        topmost substrate layer. The substrate is determined by
+        default by the function self.getSubstrate(). For avoiding a faulty
+        substrate determination it can be either given through indices or
+        through the substrate geometry itself
+
+        Parameters
+        ----------
+        substrate_indices : Union[np.array, None], optional
+            List of indices of substrate atoms. The default is None.
+        substrate : TYPE, optional
+            Geometry of substrate. The default is None.
+
+        Returns
+        -------
+        float
+            Area of the unit cell in units of the area of the substrate.
+
+        """
+        topmost_sub_layer = self.getSubstrateLayer(
+            layer_indices=[0],
+            substrate_indices=substrate_indices,
+            substrate=substrate
+        )
+        return topmost_sub_layer.n_atoms
+    
+    
+    def get_bond_lengths(self, bond_factor: float=1.5) -> np.array:
+        """
+        Parameters
+        ----------
+        Parameter for bond detection based on atom-distance : float, optional
+            DESCRIPTION. The default is 1.5.
+
+        Returns
+        -------
+        np.array
+            List of bond lengths for neighbouring atoms.
+
+        """
+        neighbouring_atoms = self.getAllNeighbouringAtoms(bond_factor=bond_factor)
+        
+        bond_lengths = []
+        for v in neighbouring_atoms.values():
+            bond_lengths.append(v[1])
+            
+        return np.array(bond_lengths)
+
+
+    def get_number_of_atom_layers(self, threshold: float=1e-2) -> Union[dict, float]:
+        """
+        Return the number of atom layers.
+
+        Parameters
+        ----------
+        threshold : float, optional
+            Threshold to determine the number of layers. The default is 1e-2.
+
+        Returns
+        -------
+        dict
+            Number of layers per atom species.
+        float
+            Total number of layers.
+
+        """
+        layers = self.getAtomLayers(threshold=threshold)
+        
+        total_number_layers = 0
+        for atom_species in layers:
+            layers[atom_species] = len(layers[atom_species])
+            total_number_layers += layers[atom_species]
+    
+        return layers, total_number_layers
+
+
+    def get_unit_cell_parameters(self) -> Union[float, float, float, float, float, float]:
+        """
+        Determines unit cell parameters.
+
+        Returns
+        -------
+        a : float
+            Length of lattice vector 1.
+        b : float
+            Length of lattice vector 2.
+        c : float
+            Length of lattice vector 3.
+        alpha : float
+            Angle between lattice vectors 1 and 2.
+        beta : float
+            Angle between lattice vectors 2 and 3.
+        gamma : float
+            Angle between lattice vectors 1 and 3.
+
+        """
+        cell = self.lattice_vectors
+
+        a = np.linalg.norm(cell[0])
+        b = np.linalg.norm(cell[1])
+        c = np.linalg.norm(cell[2])
+
+        alpha = np.arccos(np.dot(cell[1], cell[2])/(c*b))
+        gamma = np.arccos(np.dot(cell[1], cell[0])/(a*b))
+        beta = np.arccos(np.dot(cell[2], cell[0])/(a*c))
+
+        return a, b, c, alpha, beta, gamma
+
+
+    def get_lammps_unit_cell(self) -> Union[float, float, float, float, float, float]:
+        """
+        
+
+        Returns
+        -------
+        Union[float, float, float, float, float, float]
+            DESCRIPTION.
+
+        """
+        #cell = structure.get_cell(supercell=supercell)
+        cell = self.lattice_vectors
+        
+        # generate lammps oriented lattice vectors
+        ax = np.linalg.norm(cell[0])
+        bx = np.dot(cell[1], cell[0]/np.linalg.norm(cell[0]))
+        by = np.linalg.norm(np.cross(cell[0]/np.linalg.norm(cell[0]), cell[1]))
+        cx = np.dot(cell[2], cell[0]/np.linalg.norm(cell[0]))
+        cy = (np.dot(cell[1], cell[2])- bx*cx)/by
+        cz = np.sqrt(np.dot(cell[2],cell[2])-pow(cx,2)-pow(cy,2))
+        
+        # get rotation matrix (poscar->lammps) from lattice vectors matrix
+        lammps_cell = np.array([[ax, bx, cx],[0, by, cy],[0,0,cz]])
+        # trans_cell = np.dot(np.linalg.inv(cell), lammps_cell.T)
+        
+        # rotate positions to lammps orientation
+        #positions = np.dot(positions, trans_cell)
+        
+        # build lammps lattice vectors
+        a, b, c, alpha, beta, gamma = self.get_cell_parameters()
+        
+        xhi = a
+        xy = b * np.cos(gamma)
+        xz = c * np.cos(beta)
+        yhi = np.sqrt(pow(b,2)-pow(xy,2))
+        yz = (b*c*np.cos(alpha)-xy * xz)/yhi
+        zhi = np.sqrt(pow(c,2)-pow(xz,2)-pow(yz,2))
+        
+        return xhi, yhi, zhi, xy, xz, yz
+
+
+    def get_orientation_0f_main_axis(self) -> float:
+        """
+        Get the orientation of the main axis relative to the x axis
+        the main axis is transformed such that it always points in the upper half of cartesian space
+        
+        Returns:
+        float
+            angle between main axis and x axis in degree
+        """
+        main_ax = self.get_main_axes()[1][:,0]
+        if main_ax[1]<0:
+            main_ax *= -1
+        return (np.arctan2(main_ax[1], main_ax[0])*180/np.pi)
+    
+
+    def get_constraineded_atoms(self) -> np.array:
+        """
+        Returns indice of constrained atoms.
+
+        Returns
+        -------
+        inds : np.array
+            Indice of constrained atoms.
+
+        """
+        constrain = np.any(self.constrain_relax,axis=1)
+        inds = [i for i, c in enumerate(constrain) if c]
+        return inds
+    
+    def get_unconstraineded_atoms(self) -> np.array:
+        """
+        Returns indice of unconstrained atoms.
+
+        Returns
+        -------
+        inds : np.array
+            Indice of unconstrained atoms.
+
+        """
+        all_inds = list(range(len(self)))
+        keep_inds = self.getConstrainededAtoms()
+        inds = list(set(all_inds) - set(keep_inds))
+        return inds
+    
 
 ###############################################################################
 #                          Get Part of a Geometry                             #
@@ -1694,7 +1959,7 @@ class Geometry:
 ###############################################################################
 #                           Evaluation Functions                              #
 ###############################################################################
-    def checkSymmetry(self,transformation,tolerance,return_symmetrical=False):
+    def check_symmetry(self, transformation, tolerance, return_symmetrical=False):
         """Returns True if the geometry is symmetric with respect to the transformation, and False if it is not.
         If the geometry is periodic, transformation can be tuple (rotation, translation) or np.array (only rotation), \
         otherwise it can only be np.array
@@ -1755,20 +2020,6 @@ class Geometry:
 #                             VARIOUS                                         #
 #                          not yet sorted                                     #
 ###############################################################################
-    def getOrientationOfMainAxis(self):
-        """
-        Get the orientation of the main axis relative to the x axis
-        the main axis is transformed such that it always points in the upper half of cartesian space
-        
-        Returns:
-            angle between main axis and x axis in degree
-        """
-        main_ax = self.get_main_axes()[1][:,0]
-        if main_ax[1]<0:
-            main_ax *= -1
-        return (np.arctan2(main_ax[1], main_ax[0])*180/np.pi)
-
-
     def moveMultipoles(self,shift):
         """
         Moves all the multipoles by a shift vector
@@ -1780,35 +2031,7 @@ class Geometry:
             m[0]+=shift[0]
             m[1]+=shift[1]
             m[2]+=shift[2]
-
-
-    def removeAllConstraints(self):
-        self.constrain_relax=np.zeros([len(self.species), 3], bool)
-
-    def removeConstrainedAtoms(self):
-        """
-        remove all atoms where all coordinates are constrained
-        """
-        remove_inds = self.getConstrainededAtoms()
-        self.removeAtoms(remove_inds)
         
-    def removeUnconstrainedAtoms(self):
-        """
-        remove all atoms where all coordinates are constrained
-        """
-        remove_inds = self.getUnconstrainededAtoms()
-        self.removeAtoms(remove_inds)
-        
-    def getConstrainededAtoms(self):
-        constrain = np.any(self.constrain_relax,axis=1)
-        inds = [i for i, c in enumerate(constrain) if c]
-        return inds
-    
-    def getUnconstrainededAtoms(self):
-        all_inds = list(range(len(self)))
-        keep_inds = self.getConstrainededAtoms()
-        inds = list(set(all_inds) - set(keep_inds))
-        return inds
     
     def getCollidingGroups(self, distance_threshold=1E-2, check_3D = False):
         """
@@ -2512,53 +2735,6 @@ class Geometry:
         
         return sub_new
 
-
-    def get_area(self) -> float:
-        """
-        Returns the area of the surface described by lattice_vectors 0 and 1 of
-        the geometry, assuming that the lattice_vector 2 is orthogonal to both.
-
-        Returns
-        -------
-        float
-            Area of the unit cell.
-
-        """
-        a=deepcopy(self.lattice_vectors[0,:-1])
-        b=deepcopy(self.lattice_vectors[1,:-1])
-        area = np.abs(np.cross(a,b))
-        return area
-
-
-    def getAreaInAtomNumbers(self,substrate_indices=None,substrate=None):
-        """
-        Returns the area of the unit cell in terms of substrate atoms in the
-        topmost substrate layer. The substrate is determined by
-        default by the function self.getSubstrate(). For avoiding a faulty
-        substrate determination it can be either given through indices or
-        through the substrate geometry itself
-        :param substrate_indices: list of indices of substrate atoms
-        :param substrate: geometry file of substrate
-        """
-        topmost_sub_layer = self.getSubstrateLayer(
-            layer_indices=[0],
-            substrate_indices=substrate_indices,
-            substrate=substrate
-        )
-        return topmost_sub_layer.n_atoms
-
-    def getNumberOfAtomLayers(self, threshold=1e-2):
-        layers = self.getAtomLayers(threshold=threshold)
-        
-        total_number_layers = 0
-        for atom_species in layers:
-            layers[atom_species] = len(layers[atom_species])
-            total_number_layers += layers[atom_species]
-    
-        return layers, total_number_layers
-
-
-
     
     def getAllNeighbouringAtoms(self, bond_factor=1.5):
         coords = self.coords
@@ -2591,28 +2767,6 @@ class Geometry:
         
         return neighbouring_atoms
     
-    
-    def getBondLengths(self, bond_factor=1.5):
-        """
-        Parameters
-        ----------
-        Parameter for bond detection based on atom-distance : float, optional
-            DESCRIPTION. The default is 1.5.
-
-        Returns
-        -------
-        list
-            List of bond lengths for neighbouring atoms.
-
-        """
-        neighbouring_atoms = self.getAllNeighbouringAtoms(bond_factor=bond_factor)
-        
-        bond_lengths = []
-        for v in neighbouring_atoms.values():
-            bond_lengths.append(v[1])
-            
-        return np.array(bond_lengths)
-
 
     def removeCollisions(self, keep_latest: Union[bool, slice] = True):
         """Removes all atoms that are in a collision group as given by GeometryFile.getCollidingGroups.
@@ -2717,7 +2871,7 @@ class Geometry:
         for frac_offset in itertools.product(*rep):
             frac_shift = np.zeros([1,3])
             frac_shift[0,:len(frac_offset)] = frac_offset
-            offset = ut.getCartesianCoords(frac_shift, lattice)
+            offset = utils.get_cartesian_coords(frac_shift, lattice)
             new_coords[insert_pos:insert_pos+self.n_atoms, :] = self.coords + offset
             insert_pos += self.n_atoms
             
@@ -3330,7 +3484,7 @@ class AimsGeometry(Geometry):
 
         # convert to cartesian coordinates
         if is_fractional:
-            self.coords = ut.getCartesianCoords(self.coords, self.lattice_vectors)
+            self.coords = utils.get_cartesian_coords(self.coords, self.lattice_vectors)
             self.readAsFractionalCoords=True
 
         self.constrain_relax = np.array(self.constrain_relax)
@@ -3504,33 +3658,6 @@ class AimsGeometry(Geometry):
         for m in self.multipoles:
             text+='multipole {}   {}   {}   {}   {}\n'.format(*m)
         return text
-        
-    
-class ZMatrixGeometry(Geometry):
-    def parse(self, text):
-        species, coords = ZMatrixUtils.convertZMatrixToCartesian(*ZMatrixUtils.parseZMatrix(text))
-        print(species, coords)
-        self.add_atoms(coords, species)
-    
-    
-    def get_text(self, distance_variables=False, angle_variables=False, dihedral_variables=False):
-        """
-        get ZMatrix representation of current geometry.
-
-        Parameters:
-        distance_variables: bool
-            If true, define variables for the atom distances
-        angle_variables : bool
-            If true, define variables for the angles
-        dihedral_variables:
-            If true, define variables for the dihedral angles
-        """
-
-        return ZMatrixUtils.getTextZMatrix(self.coords,
-                                           self.species,
-                                           rvar=distance_variables,
-                                           avar=angle_variables,
-                                           dvar=dihedral_variables)
     
     
 class VaspGeometry(Geometry):
