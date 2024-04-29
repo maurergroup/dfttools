@@ -15,11 +15,11 @@ class Output(BaseParser):
     Attributes
     ----------
     _supported_files : list
-        the supported file types that can be parsed
+        The supported file types that can be parsed
     file_paths : dict
-        the paths to the files to be parsed
+        The paths to the files to be parsed
     file_contents : dict
-        the contents of the files to be parsed
+        The contents of the files to be parsed
     """
 
     # FHI-aims, ...
@@ -34,14 +34,15 @@ class Output(BaseParser):
 
 
 class AimsOutput(Output):
-    """FHI-aims output file parser.
+    """
+    FHI-aims output file parser.
 
     ...
 
     Attributes
     ----------
     aims_out : str
-        the path to the aims.out file
+        The path to the aims.out file
     """
 
     def __init__(self, aims_out="aims.out"):
@@ -67,12 +68,13 @@ class AimsOutput(Output):
         return exit_normal
 
     def check_spin_polarised(self) -> bool:
-        """Check if the FHI-aims calculation was spin polarised.
+        """
+        Check if the FHI-aims calculation was spin polarised.
 
         Returns
         -------
         bool
-            whether the calculation was spin polarised or not
+            Whether the calculation was spin polarised or not
         """
 
         spin_polarised = False
@@ -91,12 +93,13 @@ class AimsOutput(Output):
         return spin_polarised
 
     def get_conv_params(self) -> dict:
-        """Get the convergence parameters from the aims.out file.
+        """
+        Get the convergence parameters from the aims.out file.
 
         Returns
         -------
         dict
-            the convergence parameters from the aims.out file
+            The convergence parameters from the aims.out file
         """
 
         # Setup dictionary to store convergence parameters
@@ -110,13 +113,13 @@ class AimsOutput(Output):
         for line in self.file_contents["aims_out"]:
             spl = line.split()
             if len(spl) > 1:
-                if "accuracy" in spl and "charge density" in line:
+                if "accuracy" == spl[1] and "charge density" in line:
                     self.convergence_params["charge_density"] = float(spl[-1])
-                if "accuracy" in spl and "sum of eigenvalues" in line:
+                if "accuracy" == spl[1] and "sum of eigenvalues" in line:
                     self.convergence_params["sum_eigenvalues"] = float(spl[-1])
-                if "accuracy" in spl and "total energy" in line:
+                if "accuracy" == spl[1] and "total energy" in line:
                     self.convergence_params["total_energy"] = float(spl[-1])
-                if "accuracy" in spl and "forces" in line:
+                if "accuracy" == spl[1] and "forces" == spl[3]:
                     self.convergence_params["total_force"] = float(spl[-1])
                 if "Defaulting to 'sc_accuracy_forces not checked'." in line:
                     self.convergence_params["total_force"] = None
@@ -128,12 +131,13 @@ class AimsOutput(Output):
         return self.convergence_params
 
     def get_final_energy(self) -> Union[float, None]:
-        """Get the final energy from a FHI-aims calculation.
+        """
+        Get the final energy from a FHI-aims calculation.
 
         Returns
         -------
         Union[float, None]
-            the final energy of the calculation
+            The final energy of the calculation
         """
 
         for line in self.file_contents["aims_out"]:
@@ -170,7 +174,7 @@ class AimsOutput(Output):
         Returns
         -------
         int
-            the number of scf iterations
+            The number of scf iterations
         """
 
         n_scf_iters = 0
@@ -187,12 +191,13 @@ class AimsOutput(Output):
         return n_scf_iters
 
     def get_i_scf_conv_acc(self) -> dict:
-        """Get SCF convergence accuracy values from the aims.out file.
+        """
+        Get SCF convergence accuracy values from the aims.out file.
 
         Returns
         -------
         dict
-            the scf convergence accuracy values from the aims.out file
+            The scf convergence accuracy values from the aims.out file
         """
 
         # Read the total number of SCF iterations
@@ -215,7 +220,7 @@ class AimsOutput(Output):
         current_relax_step = 0
         # new_scf_iter = True
 
-        for i, line in enumerate(self.file_contents["aims_out"]):
+        for line in self.file_contents["aims_out"]:
             spl = line.split()
             if len(spl) > 1:
                 if "Begin self-consistency iteration #" in line:
@@ -289,29 +294,51 @@ class AimsOutput(Output):
 
         return self.scf_conv_acc_params
 
-    def get_n_initial_ks_states(self) -> int:
-        """Get the number of Kohn-Sham states from the first SCF step.
+    def get_n_initial_ks_states(self, include_spin_polarised=True) -> int:
+        """
+        Get the number of Kohn-Sham states from the first SCF step.
+
+        Parameters
+        ----------
+        include_spin_polarised : bool, optional
+            Whether to include the spin-down states in the count if the calculation is
+            spin polarised (the default is True).
 
         Returns
         -------
         int
-            the number of kohn-sham states
+            The number of kohn-sham states
         """
 
         target_line = "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
 
         init_ev_start = 0
         n_ks_states = 0
+
         # Find the first time the KS states are printed
-        while target_line not in self.file_contents["aims_out"][init_ev_start]:
-            init_ev_start += 1
+        for init_ev_start, line in enumerate(self.file_contents["aims_out"]):
+            if target_line == line.strip():
+                break
 
         # Then count the number of lines until the next empty line
-        else:
-            init_ev_end = init_ev_start + 1
-            while len(self.file_contents["aims_out"][init_ev_end]) > 1:
-                init_ev_end += 1
+        init_ev_end = init_ev_start
+        for init_ev_end, line in enumerate(
+            self.file_contents["aims_out"][init_ev_start:]
+        ):
+            if len(line) > 1:
                 n_ks_states += 1
+            else:
+                break
+
+        if include_spin_polarised:
+            # Count the spin-down eigenvalues if the calculation is spin polarised
+            if target_line == self.file_contents["aims_out"][init_ev_end + 4].strip():
+                init_ev_end += 4
+                for line in self.file_contents["aims_out"][init_ev_end:]:
+                    if len(line) > 1:
+                        n_ks_states += 1
+                    else:
+                        break
 
         return n_ks_states
 
@@ -344,7 +371,7 @@ class AimsOutput(Output):
         # Add 2 to SCF iters as if output_level full is specified, FHI-aims prints the
         # KS states once before the SCF starts and once after it finishes
         n_scf_iters = self.get_n_scf_iters() + 2
-        n_ks_states = self.get_n_initial_ks_states()
+        n_ks_states = self.get_n_initial_ks_states(include_spin_polarised=False)
 
         # Parse line to find the start of the KS eigenvalues
         target_line = "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
@@ -458,15 +485,16 @@ class AimsOutput(Output):
         spin_polarised = self.check_spin_polarised()
 
         # Get the number of KS states
-        n_ks_states = self.get_n_initial_ks_states()
+        n_ks_states = self.get_n_initial_ks_states(include_spin_polarised=False)
 
         # Parse line to find the start of the KS eigenvalues
         target_line = "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
 
         # Iterate backwards from end of aims.out to find the final KS eigenvalues
-        final_ev_start = -1
-        while target_line not in aims_out[final_ev_start]:
-            final_ev_start -= 1
+        for i, line in enumerate(reversed(aims_out)):
+            if target_line == line.strip():
+                final_ev_start = -i
+                break
 
         if not spin_polarised:
             eigenvalues = {
@@ -505,8 +533,10 @@ class AimsOutput(Output):
                     break
 
             # Go back one more target line to get the spin-up states
-            while target_line not in aims_out[final_ev_start]:
-                final_ev_start -= 1
+            for i, line in enumerate(reversed(aims_out[: final_ev_start + 1])):
+                if target_line == line.strip():
+                    final_ev_start = -i
+                    break
 
             for i, line in enumerate(aims_out[final_ev_start + 1 :]):
                 if len(line) > 1:
@@ -523,10 +553,44 @@ class AimsOutput(Output):
             raise ValueError("Could not determine if calculation was spin polarised.")
 
     def get_pert_soc_ks_eigenvalues(self) -> dict:
+        """
+        Get the perturbative SOC Kohn-Sham eigenvalues from a calculation.
 
-        raise NotImplementedError
+        Returns
+        -------
+        dict
+            The perturbative SOC kohn-sham eigenvalues
+        """
 
         aims_out = self.file_contents["aims_out"]
 
         # Get the number of KS states
         n_ks_states = self.get_n_initial_ks_states()
+
+        target_line = (
+            "State    Occupation    Unperturbed Eigenvalue [eV]"
+            "    Eigenvalue [eV]    Level Spacing [eV]"
+        )
+
+        # Iterate backwards from end of aims.out to find the perturbative SOC eigenvalues
+        for final_ev_start, line in enumerate(reversed(aims_out)):
+            if target_line == line.strip():
+                break
+
+        eigenvalues = {
+            "state": np.zeros(n_ks_states, dtype=int),
+            "occupation": np.zeros(n_ks_states, dtype=float),
+            "unperturbed_eigenvalue_eV": np.zeros(n_ks_states, dtype=float),
+            "eigenvalue_eV": np.zeros(n_ks_states, dtype=float),
+            "level_spacing_eV": np.zeros(n_ks_states, dtype=float),
+        }
+
+        for i, line in enumerate(aims_out[final_ev_start + 1 :]):
+            spl = line.split()
+            eigenvalues["state"][i] = int(spl[0])
+            eigenvalues["occupation"][i] = float(spl[1])
+            eigenvalues["unperturbed_eigenvalue_eV"][i] = float(spl[2])
+            eigenvalues["eigenvalue_eV"][i] = float(spl[3])
+            eigenvalues["level_spacing_eV"][i] = float(spl[4])
+
+        return eigenvalues
