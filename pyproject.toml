@@ -22,7 +22,15 @@ optional = true
 [tool.poetry.group.dev.dependencies]
 black = "^24.3.0"
 ruff = "^0.3.5"
+pytest = "^8.2.0"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+pythonpath = "dfttools"
+testpaths = ["tests"]
+addopts = [
+    "--import-mode=importlib",
+]
