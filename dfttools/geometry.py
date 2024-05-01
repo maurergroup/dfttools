@@ -18,6 +18,7 @@ import networkx as nx
 import os.path
 
 import dfttools.utils.math_utils as utils
+from dfttools.utils.periodic_table import PeriodicTable
 
 
 
@@ -100,6 +101,8 @@ class Geometry:
             self.coords = np.zeros([self.n_atoms, 3])
         else:
             self.read_from_file(filename)
+            
+        self.periodic_table = PeriodicTable()
             
 
     def __eq__(self, other):
@@ -288,7 +291,7 @@ class Geometry:
             # Do not export 'emptium" atoms
             if self.species[i] != 'Em':
                 atom_coords.append(self.coords[i,:])
-                atom_numbers.append(get_atomic_number(self.species[i]))
+                atom_numbers.append(self.periodic_table.get_atomic_number(self.species[i]))
                 
         ase_system = ase.Atoms(numbers=atom_numbers, positions=atom_coords)
         ase_system.cell = self.lattice_vectors
@@ -465,8 +468,9 @@ class Geometry:
         None
         
         """
-        remove_inds = self.getConstrainededAtoms()
-        self.removeAtoms(remove_inds)
+        remove_inds = self.get_constrained_atoms()
+        self.remove_atoms(remove_inds)
+        
         
     def remove_unconstrained_atoms(self):
         """
@@ -477,8 +481,8 @@ class Geometry:
         None
         
         """
-        remove_inds = self.getUnconstrainededAtoms()
-        self.removeAtoms(remove_inds)
+        remove_inds = self.get_unconstrained_atoms()
+        self.remove_atoms(remove_inds)
     
     
     def truncate(self, n_atoms: int) -> None:
@@ -1648,7 +1652,7 @@ class Geometry:
         return xhi, yhi, zhi, xy, xz, yz
 
 
-    def get_orientation_0f_main_axis(self) -> float:
+    def get_orientation_of_main_axis(self) -> float:
         """
         Get the orientation of the main axis relative to the x axis
         the main axis is transformed such that it always points in the upper half of cartesian space
@@ -1663,7 +1667,7 @@ class Geometry:
         return (np.arctan2(main_ax[1], main_ax[0])*180/np.pi)
     
 
-    def get_constraineded_atoms(self) -> np.array:
+    def get_constrained_atoms(self) -> np.array:
         """
         Returns indice of constrained atoms.
 
@@ -1677,7 +1681,7 @@ class Geometry:
         inds = [i for i, c in enumerate(constrain) if c]
         return inds
     
-    def get_unconstraineded_atoms(self) -> np.array:
+    def get_unconstrained_atoms(self) -> np.array:
         """
         Returns indice of unconstrained atoms.
 
@@ -1688,7 +1692,7 @@ class Geometry:
 
         """
         all_inds = list(range(len(self)))
-        keep_inds = self.getConstrainededAtoms()
+        keep_inds = self.get_constrained_atoms()
         inds = list(set(all_inds) - set(keep_inds))
         return inds
     
