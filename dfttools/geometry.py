@@ -127,7 +127,7 @@ class Geometry:
         return self
     
     
-    def get_file_format_from_ending(self, geometry_type):
+    def convert_to_other_tpye(self, geometry_type):
         if geometry_type == 'aims':
             new_geometry = AimsGeometry()
         if geometry_type == 'vasp':
@@ -288,7 +288,7 @@ class Geometry:
             # Do not export 'emptium" atoms
             if self.species[i] != 'Em':
                 atom_coords.append(self.coords[i,:])
-                atom_numbers.append(getAtomicNumber(self.species[i]))
+                atom_numbers.append(get_atomic_number(self.species[i]))
                 
         ase_system = ase.Atoms(numbers=atom_numbers, positions=atom_coords)
         ase_system.cell = self.lattice_vectors
@@ -1901,61 +1901,6 @@ class Geometry:
         return slab_new
 
 
-    def getSurroundingBox(self, on_atoms=False, on_both=False, correct_ratio=True, max_atom_radius=2.5, fixed_ratio=None):
-        """ returns coordinates [min_x,max_x,min_y,max_y] such that the unit cell is well surrounded
-            on_atoms: surrounds the atoms and not the unit cell
-            on_both: surrounds atoms and unit cell"""
-        vecs = self.lattice_vectors
-        if on_both:
-            x_candidates = np.array([0,vecs[0][0],vecs[1][0],vecs[0][0]+vecs[1][0],np.min(self.coords[:,0]),np.max(self.coords[:,0])])
-            y_candidates = np.array([0, vecs[0][1], vecs[1][1], vecs[0][1] + vecs[1][1],np.min(self.coords[:,1]),np.max(self.coords[:,1])])
-        else:
-            if on_atoms:
-                x_candidates = np.array([np.min(self.coords[:,0]),np.max(self.coords[:,0])])
-                y_candidates = np.array([np.min(self.coords[:,1]),np.max(self.coords[:,1])])
-
-            else:
-                x_candidates = np.array([0,vecs[0][0],vecs[1][0],vecs[0][0]+vecs[1][0]])
-                y_candidates = np.array([0, vecs[0][1], vecs[1][1], vecs[0][1] + vecs[1][1]])
-
-        x_min = np.min(x_candidates)-max_atom_radius
-        x_max = np.max(x_candidates)+max_atom_radius
-        y_min = np.min(y_candidates)-max_atom_radius
-        y_max = np.max(y_candidates)+max_atom_radius
-        x_range = x_max-x_min
-        y_range = y_max-y_min
-        ratio = y_range/x_range
-        if correct_ratio and fixed_ratio is None:
-            if ratio > 1.7:
-                mod = (ratio-1.7)+1
-                x_max += mod*x_range/2
-                x_min -= mod*x_range/2
-            elif ratio < 0.58:
-                mod = (ratio - 0.58)+1
-                y_max += mod*y_range/2
-                y_min -= mod*y_range/2
-        if fixed_ratio is not None:
-            assert isinstance(fixed_ratio,float) or isinstance(fixed_ratio,int)
-            if ratio > fixed_ratio:
-                # ratio is defined as y/x
-                # y is bigger than it should be, x is smaller than it should be
-                # we don't want to crop, only expand: x must grow
-                new_x_range = y_range/fixed_ratio
-                range_increase = new_x_range - x_range
-                x_max += range_increase/2
-                x_min -= range_increase/2
-            elif ratio <= fixed_ratio:
-                # ratio is defined as y/x
-                # y is smaller than it should be, x is bigger than it should be
-                # we have to increase y
-                new_y_range = x_range*fixed_ratio
-                range_increase = new_y_range - y_range
-                y_max += range_increase/2
-                y_min -= range_increase/2
-
-        return x_min,x_max,y_min,y_max
-
-
 ###############################################################################
 #                           Evaluation Functions                              #
 ###############################################################################
@@ -2020,7 +1965,7 @@ class Geometry:
 #                             VARIOUS                                         #
 #                          not yet sorted                                     #
 ###############################################################################
-    def moveMultipoles(self,shift):
+    def move_multipoles(self, shift: np.array) -> None:
         """
         Moves all the multipoles by a shift vector
         :param shift: list or array, len==3
@@ -3719,7 +3664,7 @@ class VaspGeometry(Geometry):
             line = line.strip()
 
             if lino == 1:
-                self.addTopComment(line)
+                self.add_top_comment(line)
             if lino == 2:
                 scaling = float(line)
                 # RB: now the scaling should be taken account for below when the lattice vectors and coordinates
