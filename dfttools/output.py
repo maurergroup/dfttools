@@ -107,7 +107,7 @@ class AimsOutput(Output):
             "charge_density": 0.0,
             "sum_eigenvalues": 0.0,
             "total_energy": 0.0,
-            "total_force": None,
+            "total_force": 0.0,
         }
 
         for line in self.file_contents["aims_out"]:
@@ -119,10 +119,8 @@ class AimsOutput(Output):
                     self.convergence_params["sum_eigenvalues"] = float(spl[-1])
                 if "accuracy" == spl[1] and "total energy" in line:
                     self.convergence_params["total_energy"] = float(spl[-1])
-                if "accuracy" == spl[1] and "forces" == spl[3]:
+                if "accuracy" == spl[1] and "forces:" == spl[3]:
                     self.convergence_params["total_force"] = float(spl[-1])
-                if "Defaulting to 'sc_accuracy_forces not checked'." in line:
-                    self.convergence_params["total_force"] = None
 
                 # No more values to get after SCF starts
                 if "Begin self-consistency loop" in line:

@@ -14,14 +14,10 @@ def aims_out_1():
 
     Parameters
     ----------
-    sc_iter_limit=200
-    sc_accuracy_rho=1e-5
-    sc_accuracy_eev=1e-3
-    sc_accuracy_etot=1e-6
-    sc_accuracy_forces=1e-4
+    xc=pbe
     """
 
-    return AimsOutput(aims_out="fixtures/1_aims.out")
+    return AimsOutput(aims_out="fixtures/aims_calculations/1/aims.out")
 
 
 @pytest.fixture
@@ -35,15 +31,12 @@ def aims_out_2():
 
     Parameters
     ----------
+    xc=pbe
     spin=collinear
-    sc_iter_limit=200
-    sc_accuracy_rho=1e-5
-    sc_accuracy_eev=1e-3
-    sc_accuracy_etot=1e-6
-    sc_accuracy_forces=1e-4
+    default_initial_moment=1
     """
 
-    return AimsOutput(aims_out="fixtures/2_aims.out")
+    return AimsOutput(aims_out="fixtures/aims_calculations/2/aims.out")
 
 
 @pytest.fixture
@@ -57,16 +50,13 @@ def aims_out_3():
 
     Parameters
     ----------
+    xc=pbe
     spin=collinear
+    default_initial_moment=1
     include_spin_orbit=non_self_consistent
-    sc_iter_limit=200
-    sc_accuracy_rho=1e-5
-    sc_accuracy_eev=1e-3
-    sc_accuracy_etot=1e-6
-    sc_accuracy_forces=1e-4
     """
 
-    return AimsOutput(aims_out="fixtures/3_aims.out")
+    return AimsOutput(aims_out="fixtures/aims_calculations/3/aims.out")
 
 
 @pytest.fixture
@@ -80,14 +70,11 @@ def aims_out_4():
 
     Parameters
     ----------
+    xc=pbe
     k_grid=(1, 1, 1)
-    sc_accuracy_rho=1e-5
-    sc_accuracy_eev=1e-3
-    sc_accuracy_etot=1e-6
-    sc_accuracy_forces=1e-4
     """
 
-    return AimsOutput(aims_out="fixtures/4_aims.out")
+    return AimsOutput(aims_out="fixtures/aims_calculations/4/aims.out")
 
 
 @pytest.fixture
@@ -101,14 +88,11 @@ def aims_out_5():
 
     Parameters
     ----------
+    xc=pbe
     relax_geometry=bfgs 5e-3
-    sc_accuracy_rho=1e-5
-    sc_accuracy_eev=1e-3
-    sc_accuracy_etot=1e-6
-    sc_accuracy_forces=1e-4
     """
 
-    return AimsOutput(aims_out="fixtures/5_aims.out")
+    return AimsOutput(aims_out="fixtures/aims_calculations/5/aims.out")
 
 
 @pytest.fixture
@@ -125,13 +109,9 @@ def aims_out_6():
     relax_geometry=bfgs 5e-3
     relax_unit_cell=full
     k_grid=(8, 8, 8)
-    sc_accuracy_rho=1e-5
-    sc_accuracy_eev=1e-3
-    sc_accuracy_etot=1e-6
-    sc_accuracy_forces=1e-4
     """
 
-    return AimsOutput(aims_out="fixtures/6_aims.out")
+    return AimsOutput(aims_out="fixtures/aims_calculations/6/aims.out")
 
 
 @pytest.fixture
@@ -145,14 +125,14 @@ def aims_out_7():
 
     Parameters
     ----------
-    sc_iter_limit=100
+    sc_iter_limit=10
     sc_accuracy_rho=1e-10
     sc_accuracy_eev=1e-6
     sc_accuracy_etot=1e-12
     sc_accuracy_forces=1e-8
     """
 
-    return AimsOutput(aims_out="fixtures/7_aims.out")
+    return AimsOutput(aims_out="fixtures/aims_calculations/7/aims.out")
 
 
 @pytest.fixture
@@ -167,14 +147,14 @@ def aims_out_8():
     Parameters
     ----------
     k_grid=(1, 1, 1)
-    sc_iter_limit=100
+    sc_iter_limit=10
     sc_accuracy_rho=1e-10
     sc_accuracy_eev=1e-6
     sc_accuracy_etot=1e-12
     sc_accuracy_forces=1e-8
     """
 
-    return AimsOutput(aims_out="fixtures/8_aims.out")
+    return AimsOutput(aims_out="fixtures/aims_calculations/8/aims.out")
 
 
 @pytest.fixture
@@ -195,7 +175,7 @@ def aims_out_9():
     sc_accuracy_forces=1e-4
     """
 
-    return AimsOutput(aims_out="fixtures/9_aims.out")
+    return AimsOutput(aims_out="fixtures/aims_calculations/9/aims.out")
 
 
 @pytest.fixture
@@ -209,7 +189,7 @@ def aims_out_10():
 
     Parameters
     ----------
-    xc=hse06
+    xc=hse06 0.11
     k_grid=(8, 8, 8)
     sc_accuracy_rho=1e-5
     sc_accuracy_eev=1e-3
@@ -217,7 +197,7 @@ def aims_out_10():
     sc_accuracy_forces=1e-4
     """
 
-    return AimsOutput(aims_out="fixtures/10_aims.out")
+    return AimsOutput(aims_out="fixtures/aims_calculations/10/aims.out")
 
 
 @pytest.mark.parametrize(
@@ -244,8 +224,8 @@ def check_exit_normal_test(aims_out, expected):
     [
         (aims_out_1, False),
         (aims_out_2, True),
-        (aims_out_3, False),
-        (aims_out_4, True),
+        (aims_out_3, True),
+        (aims_out_4, False),
         (aims_out_5, False),
         (aims_out_6, False),
         (aims_out_7, False),
@@ -261,11 +241,96 @@ def check_spin_polarised_test(aims_out, expected):
 @pytest.mark.parametrize(
     "aims_out, expected",
     [
-        (aims_out_1, None),
-        (aims_out_2, None),
-        (aims_out_3, None),
-        (aims_out_4, None),
-        (aims_out_5, None),
+        (
+            aims_out_1,
+            {
+                "charge_density": 0.0,
+                "sum_eigenvalues": 0.0,
+                "total_energy": 0.0,
+                "total_force": 0.0,
+            },
+        ),
+        (
+            aims_out_2,
+            {
+                "charge_density": 0.0,
+                "sum_eigenvalues": 0.0,
+                "total_energy": 0.0,
+                "total_force": 0.0,
+            },
+        ),
+        (
+            aims_out_3,
+            {
+                "charge_density": 0.0,
+                "sum_eigenvalues": 0.0,
+                "total_energy": 0.0,
+                "total_force": 0.0,
+            },
+        ),
+        (
+            aims_out_4,
+            {
+                "charge_density": 0.0,
+                "sum_eigenvalues": 0.0,
+                "total_energy": 0.0,
+                "total_force": 0.0,
+            },
+        ),
+        (
+            aims_out_5,
+            {
+                "charge_density": 0.0,
+                "sum_eigenvalues": 0.0,
+                "total_energy": 0.0,
+                "total_force": 0.0,
+            },
+        ),
+        (
+            aims_out_6,
+            {
+                "charge_density": 0.0,
+                "sum_eigenvalues": 0.0,
+                "total_energy": 0.0,
+                "total_force": 0.0,
+            },
+        ),
+        (
+            aims_out_7,
+            {
+                "charge_density": 1e-10,
+                "sum_eigenvalues": 1e-06,
+                "total_energy": 1e-12,
+                "total_force": 1e-08,
+            },
+        ),
+        (
+            aims_out_8,
+            {
+                "charge_density": 1e-10,
+                "sum_eigenvalues": 1e-06,
+                "total_energy": 1e-12,
+                "total_force": 1e-08,
+            },
+        ),
+        (
+            aims_out_9,
+            {
+                "charge_density": 0.0,
+                "sum_eigenvalues": 0.0,
+                "total_energy": 0.0,
+                "total_force": 0.0,
+            },
+        ),
+        (
+            aims_out_10,
+            {
+                "charge_density": 0.0,
+                "sum_eigenvalues": 0.0,
+                "total_energy": 0.0,
+                "total_force": 0.0,
+            },
+        ),
     ],
 )
 def get_conv_params_test(aims_out, expected):
@@ -275,10 +340,16 @@ def get_conv_params_test(aims_out, expected):
 @pytest.mark.parametrize(
     "aims_out, expected",
     [
-        (aims_out_1, None),
-        (aims_out_2, None),
-        (aims_out_4, None),
-        (aims_out_5, None),
+        (aims_out_1, -2080.832254505),
+        (aims_out_2, -2080.832254498),
+        (aims_out_3, -2080.832254498),
+        (aims_out_4, -15785.832821011),
+        (aims_out_5, -2080.832254506),
+        (aims_out_6, -15802.654211961),
+        (aims_out_7, None),
+        (aims_out_8, None),
+        (aims_out_9, -2081.000809207),
+        (aims_out_10, -15804.824029071),
     ],
 )
 def get_final_energy_test(aims_out, expected):
@@ -288,15 +359,39 @@ def get_final_energy_test(aims_out, expected):
 @pytest.mark.parametrize(
     "aims_out, expected",
     [
-        (aims_out_1, None),
-        (aims_out_2, None),
-        (aims_out_3, None),
-        (aims_out_4, None),
-        (aims_out_5, None),
+        (aims_out_1, 1),
+        (aims_out_2, 1),
+        (aims_out_3, 1),
+        (aims_out_4, 1),
+        (aims_out_5, 4),
+        (aims_out_6, 2),
+        (aims_out_7, 3),
+        (aims_out_8, 0),
+        (aims_out_9, 1),
+        (aims_out_10, 1),
     ],
 )
 def get_n_relaxation_steps_test(aims_out, expected):
     assert aims_out.get_n_relaxation_steps == expected
+
+
+@pytest.mark.parametrize(
+    "aims_out, expected",
+    [
+        (aims_out_1, 12),
+        (aims_out_2, 13),
+        (aims_out_3, 13),
+        (aims_out_4, 10),
+        (aims_out_5, 42),
+        (aims_out_6, 27),
+        (aims_out_7, 56),
+        (aims_out_8, 8),
+        (aims_out_9, 14),
+        (aims_out_10, 11),
+    ],
+)
+def get_n_scf_iters_test(aims_out, expected):
+    assert aims_out.get_n_scf_iters() == expected
 
 
 @pytest.mark.parametrize(

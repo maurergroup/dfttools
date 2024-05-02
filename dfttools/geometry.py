@@ -2121,7 +2121,7 @@ class Geometry:
         # The indices of the atoms of relevance to us are all that are NOT
         # outside of the cuboid
         indices_inside = [
-            i for i in range(len(self)) if not i in indices_outside
+            i for i in range(len(self)) if i not in indices_outside
         ]
         #---
 
@@ -2186,7 +2186,7 @@ class Geometry:
         self.lattice_vectors = lattice
         
         #In the following all redundant atoms, i.e. atoms that are multiplied at the same position when the unitcell is repeated periodically, are removed from the new unit cell
-        epsilon = 0.1; # Distance in Angstrom for which two atoms are assumed to be in the same position
+        epsilon = 0.1 # Distance in Angstrom for which two atoms are assumed to be in the same position
         init_geom = self
         allcoords = init_geom.coords
         allindices = init_geom.getIndicesOfAllAtoms()
@@ -2603,7 +2603,7 @@ class Geometry:
         
         for ind, atom_coord in enumerate(self.coords):
             atom_species = self.species[ind]
-            if not atom_species in layers:
+            if atom_species not in layers:
                 layers[atom_species] = {}
             
             add_new_z_coord = True
@@ -2706,7 +2706,7 @@ class Geometry:
                 
                 pair_index = (i, j)
                 
-                if not pair_index in neighbouring_atoms:
+                if pair_index not in neighbouring_atoms:
                     dist = np.linalg.norm(coord - coord_test)
                     
                     pair_species = (species[i], species[j])
@@ -3105,11 +3105,11 @@ class Geometry:
 
 
         for OriginAtom in range (0,self.n_atoms):   #Loop over all atoms
-            if (not (self.species[OriginAtom] in AllowedSpecies)  ): continue
+            if (self.species[OriginAtom] not in AllowedSpecies  ): continue
             OriginCoord=self.coords[OriginAtom]
             
             for TargetAtom in range(OriginAtom,self.n_atoms): #Loop over all other atoms in the list.
-                if (not (self.species[TargetAtom] in AllowedSpecies)  ): continue
+                if (self.species[TargetAtom] not in AllowedSpecies  ): continue
                 
                 for Lat1 in range(-5,6): #Loop over all unit cells defined by lattice 1
                     for Lat2 in range(-5,6): #Loop over all unit cells defined by lattice 2
@@ -3521,7 +3521,7 @@ class AimsGeometry(Geometry):
                             text += f"{cr}z\n"
 
         # write down the homogeneous field if any is present
-        if not self.homogenous_field is None:
+        if self.homogenous_field is not None:
             text += "homogeneous_field {} {} {}\n".format(*self.homogenous_field)
 
         if is_fractional:
