@@ -1,5 +1,6 @@
-import pytest
+import pathlib
 
+import pytest
 from dfttools.output import AimsOutput
 
 
@@ -197,273 +198,281 @@ def aims_out_10():
     sc_accuracy_forces=1e-4
     """
 
-    return AimsOutput(aims_out="fixtures/aims_calculations/10/aims.out")
+    ao = AimsOutput(
+        f"{pathlib.Path(__file__).parent.resolve()}/fixtures/aims_calculations/10/"
+        "aims.out"
+    )
+    return ao.check_exit_normal()
 
 
-@pytest.mark.parametrize(
-    "aims_out, expected",
-    [
-        (aims_out_1, True),
-        (aims_out_2, True),
-        (aims_out_3, True),
-        (aims_out_4, True),
-        (aims_out_5, True),
-        (aims_out_6, True),
-        (aims_out_7, False),
-        (aims_out_8, False),
-        (aims_out_9, True),
-        (aims_out_10, True),
-    ],
-)
-def check_exit_normal_test(aims_out, expected):
-    assert aims_out.check_exit_normal() == expected
+def test_check_exit_normal(aims_out_10):
+    assert aims_out_10 is True
 
 
-@pytest.mark.parametrize(
-    "aims_out, expected",
-    [
-        (aims_out_1, False),
-        (aims_out_2, True),
-        (aims_out_3, True),
-        (aims_out_4, False),
-        (aims_out_5, False),
-        (aims_out_6, False),
-        (aims_out_7, False),
-        (aims_out_8, False),
-        (aims_out_9, False),
-        (aims_out_10, False),
-    ],
-)
-def check_spin_polarised_test(aims_out, expected):
-    assert aims_out.check_spin_polarised() == expected
+# @pytest.mark.parametrize(
+#     "aims_out, expected",
+#     [
+#         (aims_out_1, True),
+#         (aims_out_2, True),
+#         (aims_out_3, True),
+#         (aims_out_4, True),
+#         (aims_out_5, True),
+#         (aims_out_6, True),
+#         (aims_out_7, False),
+#         (aims_out_8, False),
+#         (aims_out_9, True),
+#         (aims_out_10, True),
+#     ],
+# )
+# def test_check_exit_normal(aims_out, expected):
+#     assert aims_out is expected
 
 
-@pytest.mark.parametrize(
-    "aims_out, expected",
-    [
-        (
-            aims_out_1,
-            {
-                "charge_density": 0.0,
-                "sum_eigenvalues": 0.0,
-                "total_energy": 0.0,
-                "total_force": 0.0,
-            },
-        ),
-        (
-            aims_out_2,
-            {
-                "charge_density": 0.0,
-                "sum_eigenvalues": 0.0,
-                "total_energy": 0.0,
-                "total_force": 0.0,
-            },
-        ),
-        (
-            aims_out_3,
-            {
-                "charge_density": 0.0,
-                "sum_eigenvalues": 0.0,
-                "total_energy": 0.0,
-                "total_force": 0.0,
-            },
-        ),
-        (
-            aims_out_4,
-            {
-                "charge_density": 0.0,
-                "sum_eigenvalues": 0.0,
-                "total_energy": 0.0,
-                "total_force": 0.0,
-            },
-        ),
-        (
-            aims_out_5,
-            {
-                "charge_density": 0.0,
-                "sum_eigenvalues": 0.0,
-                "total_energy": 0.0,
-                "total_force": 0.0,
-            },
-        ),
-        (
-            aims_out_6,
-            {
-                "charge_density": 0.0,
-                "sum_eigenvalues": 0.0,
-                "total_energy": 0.0,
-                "total_force": 0.0,
-            },
-        ),
-        (
-            aims_out_7,
-            {
-                "charge_density": 1e-10,
-                "sum_eigenvalues": 1e-06,
-                "total_energy": 1e-12,
-                "total_force": 1e-08,
-            },
-        ),
-        (
-            aims_out_8,
-            {
-                "charge_density": 1e-10,
-                "sum_eigenvalues": 1e-06,
-                "total_energy": 1e-12,
-                "total_force": 1e-08,
-            },
-        ),
-        (
-            aims_out_9,
-            {
-                "charge_density": 0.0,
-                "sum_eigenvalues": 0.0,
-                "total_energy": 0.0,
-                "total_force": 0.0,
-            },
-        ),
-        (
-            aims_out_10,
-            {
-                "charge_density": 0.0,
-                "sum_eigenvalues": 0.0,
-                "total_energy": 0.0,
-                "total_force": 0.0,
-            },
-        ),
-    ],
-)
-def get_conv_params_test(aims_out, expected):
-    assert aims_out.get_conv_params() == expected
+# @pytest.mark.parametrize(
+#     "aims_out, expected",
+#     [
+#         (aims_out_1, False),
+#         (aims_out_2, True),
+#         (aims_out_3, True),
+#         (aims_out_4, False),
+#         (aims_out_5, False),
+#         (aims_out_6, False),
+#         (aims_out_7, False),
+#         (aims_out_8, False),
+#         (aims_out_9, False),
+#         (aims_out_10, False),
+#     ],
+# )
+# def test_check_spin_polarised(aims_out, expected):
+#     assert aims_out.check_spin_polarised() == expected
 
 
-@pytest.mark.parametrize(
-    "aims_out, expected",
-    [
-        (aims_out_1, -2080.832254505),
-        (aims_out_2, -2080.832254498),
-        (aims_out_3, -2080.832254498),
-        (aims_out_4, -15785.832821011),
-        (aims_out_5, -2080.832254506),
-        (aims_out_6, -15802.654211961),
-        (aims_out_7, None),
-        (aims_out_8, None),
-        (aims_out_9, -2081.000809207),
-        (aims_out_10, -15804.824029071),
-    ],
-)
-def get_final_energy_test(aims_out, expected):
-    assert aims_out.get_final_energy() == expected
+# @pytest.mark.parametrize(
+#     "aims_out, expected",
+#     [
+#         (
+#             aims_out_1,
+#             {
+#                 "charge_density": 0.0,
+#                 "sum_eigenvalues": 0.0,
+#                 "total_energy": 0.0,
+#                 "total_force": 0.0,
+#             },
+#         ),
+#         (
+#             aims_out_2,
+#             {
+#                 "charge_density": 0.0,
+#                 "sum_eigenvalues": 0.0,
+#                 "total_energy": 0.0,
+#                 "total_force": 0.0,
+#             },
+#         ),
+#         (
+#             aims_out_3,
+#             {
+#                 "charge_density": 0.0,
+#                 "sum_eigenvalues": 0.0,
+#                 "total_energy": 0.0,
+#                 "total_force": 0.0,
+#             },
+#         ),
+#         (
+#             aims_out_4,
+#             {
+#                 "charge_density": 0.0,
+#                 "sum_eigenvalues": 0.0,
+#                 "total_energy": 0.0,
+#                 "total_force": 0.0,
+#             },
+#         ),
+#         (
+#             aims_out_5,
+#             {
+#                 "charge_density": 0.0,
+#                 "sum_eigenvalues": 0.0,
+#                 "total_energy": 0.0,
+#                 "total_force": 0.0,
+#             },
+#         ),
+#         (
+#             aims_out_6,
+#             {
+#                 "charge_density": 0.0,
+#                 "sum_eigenvalues": 0.0,
+#                 "total_energy": 0.0,
+#                 "total_force": 0.0,
+#             },
+#         ),
+#         (
+#             aims_out_7,
+#             {
+#                 "charge_density": 1e-10,
+#                 "sum_eigenvalues": 1e-06,
+#                 "total_energy": 1e-12,
+#                 "total_force": 1e-08,
+#             },
+#         ),
+#         (
+#             aims_out_8,
+#             {
+#                 "charge_density": 1e-10,
+#                 "sum_eigenvalues": 1e-06,
+#                 "total_energy": 1e-12,
+#                 "total_force": 1e-08,
+#             },
+#         ),
+#         (
+#             aims_out_9,
+#             {
+#                 "charge_density": 0.0,
+#                 "sum_eigenvalues": 0.0,
+#                 "total_energy": 0.0,
+#                 "total_force": 0.0,
+#             },
+#         ),
+#         (
+#             aims_out_10,
+#             {
+#                 "charge_density": 0.0,
+#                 "sum_eigenvalues": 0.0,
+#                 "total_energy": 0.0,
+#                 "total_force": 0.0,
+#             },
+#         ),
+#     ],
+# )
+# def test_get_conv_params(aims_out, expected):
+#     assert aims_out.get_conv_params() == expected
 
 
-@pytest.mark.parametrize(
-    "aims_out, expected",
-    [
-        (aims_out_1, 1),
-        (aims_out_2, 1),
-        (aims_out_3, 1),
-        (aims_out_4, 1),
-        (aims_out_5, 4),
-        (aims_out_6, 2),
-        (aims_out_7, 3),
-        (aims_out_8, 0),
-        (aims_out_9, 1),
-        (aims_out_10, 1),
-    ],
-)
-def get_n_relaxation_steps_test(aims_out, expected):
-    assert aims_out.get_n_relaxation_steps == expected
+# @pytest.mark.parametrize(
+#     "aims_out, expected",
+#     [
+#         (aims_out_1, -2080.832254505),
+#         (aims_out_2, -2080.832254498),
+#         (aims_out_3, -2080.832254498),
+#         (aims_out_4, -15785.832821011),
+#         (aims_out_5, -2080.832254506),
+#         (aims_out_6, -15802.654211961),
+#         (aims_out_7, None),
+#         (aims_out_8, None),
+#         (aims_out_9, -2081.000809207),
+#         (aims_out_10, -15804.824029071),
+#     ],
+# )
+# def test_get_final_energy(aims_out, expected):
+#     assert aims_out.get_final_energy() == expected
 
 
-@pytest.mark.parametrize(
-    "aims_out, expected",
-    [
-        (aims_out_1, 12),
-        (aims_out_2, 13),
-        (aims_out_3, 13),
-        (aims_out_4, 10),
-        (aims_out_5, 42),
-        (aims_out_6, 27),
-        (aims_out_7, 56),
-        (aims_out_8, 8),
-        (aims_out_9, 14),
-        (aims_out_10, 11),
-    ],
-)
-def get_n_scf_iters_test(aims_out, expected):
-    assert aims_out.get_n_scf_iters() == expected
+# @pytest.mark.parametrize(
+#     "aims_out, expected",
+#     [
+#         (aims_out_1, 1),
+#         (aims_out_2, 1),
+#         (aims_out_3, 1),
+#         (aims_out_4, 1),
+#         (aims_out_5, 4),
+#         (aims_out_6, 2),
+#         (aims_out_7, 3),
+#         (aims_out_8, 0),
+#         (aims_out_9, 1),
+#         (aims_out_10, 1),
+#     ],
+# )
+# def get_n_relaxation_steps_test(aims_out, expected):
+#     assert aims_out.get_n_relaxation_steps == expected
 
 
-@pytest.mark.parametrize(
-    "aims_out, expected",
-    [
-        (aims_out_1, None),
-        (aims_out_2, None),
-        (aims_out_3, None),
-        (aims_out_4, None),
-        (aims_out_5, None),
-        (aims_out_6, None),
-        (aims_out_7, None),
-        (aims_out_8, None),
-        (aims_out_9, None),
-        (aims_out_10, None),
-    ],
-)
-def get_i_scf_conv_acc_test(aims_out, expected):
-    assert aims_out.get_i_scf_conv_acc() == expected
+# @pytest.mark.parametrize(
+#     "aims_out, expected",
+#     [
+#         (aims_out_1, 12),
+#         (aims_out_2, 13),
+#         (aims_out_3, 13),
+#         (aims_out_4, 10),
+#         (aims_out_5, 42),
+#         (aims_out_6, 27),
+#         (aims_out_7, 56),
+#         (aims_out_8, 8),
+#         (aims_out_9, 14),
+#         (aims_out_10, 11),
+#     ],
+# )
+# def test_get_n_scf_iters(aims_out, expected):
+#     assert aims_out.get_n_scf_iters() == expected
 
 
-@pytest.mark.parametrize(
-    "aims_out, expected",
-    [
-        (aims_out_1, None),
-        (aims_out_2, None),
-        (aims_out_3, None),
-        (aims_out_4, None),
-        (aims_out_7, None),
-    ],
-)
-def get_n_initial_ks_states_test(aims_out, expected):
-    assert aims_out.get_n_initial_ks_states() == expected
+# @pytest.mark.parametrize(
+#     "aims_out, expected",
+#     [
+#         (aims_out_1, None),
+#         (aims_out_2, None),
+#         (aims_out_3, None),
+#         (aims_out_4, None),
+#         (aims_out_5, None),
+#         (aims_out_6, None),
+#         (aims_out_7, None),
+#         (aims_out_8, None),
+#         (aims_out_9, None),
+#         (aims_out_10, None),
+#     ],
+# )
+# def get_i_scf_conv_acc_test(aims_out, expected):
+#     assert aims_out.get_i_scf_conv_acc() == expected
 
 
-@pytest.mark.parametrize(
-    "aims_out, expected",
-    [
-        (aims_out_1, None),
-        (aims_out_2, None),
-        (aims_out_3, None),
-        (aims_out_4, None),
-        (aims_out_7, None),
-    ],
-)
-def get_all_ks_eigenvalues_test(aims_out, expected):
-    assert aims_out.get_all_ks_eigenvalues() == expected
+# @pytest.mark.parametrize(
+#     "aims_out, expected",
+#     [
+#         (aims_out_1, None),
+#         (aims_out_2, None),
+#         (aims_out_3, None),
+#         (aims_out_4, None),
+#         (aims_out_7, None),
+#     ],
+# )
+# def get_n_initial_ks_states_test(aims_out, expected):
+#     assert aims_out.get_n_initial_ks_states() == expected
 
 
-@pytest.mark.parametrize(
-    "aims_out, expected",
-    [
-        (aims_out_1, None),
-        (aims_out_2, None),
-        (aims_out_3, None),
-        (aims_out_4, None),
-        (aims_out_7, None),
-    ],
-)
-def get_final_ks_eigenvalues_test(aims_out, expected):
-    assert aims_out.get_final_ks_eigenvalues() == expected
+# @pytest.mark.parametrize(
+#     "aims_out, expected",
+#     [
+#         (aims_out_1, None),
+#         (aims_out_2, None),
+#         (aims_out_3, None),
+#         (aims_out_4, None),
+#         (aims_out_7, None),
+#     ],
+# )
+# def get_all_ks_eigenvalues_test(aims_out, expected):
+#     assert aims_out.get_all_ks_eigenvalues() == expected
 
 
-@pytest.mark.parametrize(
-    "aims_out, expected",
-    [
-        (aims_out_1, None),
-        (aims_out_2, None),
-        (aims_out_3, None),
-        (aims_out_4, None),
-        (aims_out_7, None),
-    ],
-)
-def get_pert_soc_ks_eigenvalues_test(aims_out, expected):
-    assert aims_out.get_pert_soc_ks_eigenvalues() == expected
+# @pytest.mark.parametrize(
+#     "aims_out, expected",
+#     [
+#         (aims_out_1, None),
+#         (aims_out_2, None),
+#         (aims_out_3, None),
+#         (aims_out_4, None),
+#         (aims_out_7, None),
+#     ],
+# )
+# def get_final_ks_eigenvalues_test(aims_out, expected):
+#     assert aims_out.get_final_ks_eigenvalues() == expected
+
+
+# @pytest.mark.parametrize(
+#     "aims_out, expected",
+#     [
+#         (aims_out_1, None),
+#         (aims_out_2, None),
+#         (aims_out_3, None),
+#         (aims_out_4, None),
+#         (aims_out_7, None),
+#     ],
+# )
+# def get_pert_soc_ks_eigenvalues_test(aims_out, expected):
+#     assert aims_out.get_pert_soc_ks_eigenvalues() == expected

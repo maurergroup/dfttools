@@ -14,7 +14,7 @@ class BenchmarkAims(AimsOutput):
     Attributes
     ----------
     benchmark_dirs : List[str]
-        The directories containing the aims.out files.
+        The paths to the aims.out files.
     """
 
     def __init__(self, benchmark_dirs: List[str]):
@@ -22,8 +22,7 @@ class BenchmarkAims(AimsOutput):
         self.benchmarks = []
 
         # Get the aims.out files from the provided directories
-        for directory in benchmark_dirs:
-            aims_out = f"{directory}/aims.out"
+        for aims_out in benchmark_dirs:
             ao = AimsOutput(aims_out=aims_out)
             self.benchmarks.append(ao)
 
