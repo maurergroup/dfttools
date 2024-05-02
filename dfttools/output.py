@@ -14,8 +14,7 @@ class Output(BaseParser):
 
     Attributes
     ----------
-    _supported_files : list
-        The supported file types that can be parsed
+    supported_files
     file_paths : dict
         The paths to the files to be parsed
     file_contents : dict
@@ -25,7 +24,7 @@ class Output(BaseParser):
     # FHI-aims, ...
     _supported_files = ["aims_out"]
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: str):
         super().__init__(self._supported_files, **kwargs)
 
     @property
@@ -41,14 +40,25 @@ class AimsOutput(Output):
 
     Attributes
     ----------
+    lines
     aims_out : str
         The path to the aims.out file
     """
 
-    def __init__(self, aims_out="aims.out"):
+    def __init__(self, aims_out: str = "aims.out"):
         super().__init__(aims_out=aims_out)
+        self.lines = self._file_contents["aims_out"]
+
         # Check if the aims.out file was provided
         fu.check_required_files(self._supported_files, "aims_out")
+
+    @property
+    def lines(self):
+        return self._lines
+
+    @lines.setter
+    def lines(self, value):
+        self._lines = value
 
     def check_exit_normal(self) -> bool:
         """
@@ -60,7 +70,7 @@ class AimsOutput(Output):
             whether the calculation exited normally or not
         """
 
-        if "Have a nice day." == self.file_contents["aims_out"][-2].strip():
+        if "Have a nice day." == self.lines[-2].strip():
             exit_normal = True
         else:
             exit_normal = False
@@ -79,7 +89,7 @@ class AimsOutput(Output):
 
         spin_polarised = False
 
-        for line in self.file_contents["aims_out"]:
+        for line in self.lines:
             spl = line.split()
             if len(spl) == 2:
                 # Don't break the loop if spin polarised calculation is found as if the
@@ -110,7 +120,7 @@ class AimsOutput(Output):
             "total_force": 0.0,
         }
 
-        for line in self.file_contents["aims_out"]:
+        for line in self.lines:
             spl = line.split()
             if len(spl) > 1:
                 if "accuracy" == spl[1] and "charge density" in line:
@@ -138,7 +148,7 @@ class AimsOutput(Output):
             The final energy of the calculation
         """
 
-        for line in self.file_contents["aims_out"]:
+        for line in self.lines:
             if "s.c.f. calculation      :" in line:
                 return float(line.split()[-2])
 
@@ -153,7 +163,7 @@ class AimsOutput(Output):
         """
 
         n_relax_steps = 0
-        for line in reversed(self.file_contents["aims_out"]):
+        for line in reversed(self.lines):
             if "Number of relaxation steps" in line:
                 return int(line.split()[-1])
 
@@ -176,7 +186,7 @@ class AimsOutput(Output):
         """
 
         n_scf_iters = 0
-        for line in reversed(self.file_contents["aims_out"]):
+        for line in reversed(self.lines):
             if "Number of self-consistency cycles" in line:
                 return int(line.split()[-1])
 
@@ -218,7 +228,7 @@ class AimsOutput(Output):
         current_relax_step = 0
         # new_scf_iter = True
 
-        for line in self.file_contents["aims_out"]:
+        for line in self.lines:
             spl = line.split()
             if len(spl) > 1:
                 if "Begin self-consistency iteration #" in line:
@@ -314,15 +324,13 @@ class AimsOutput(Output):
         n_ks_states = 0
 
         # Find the first time the KS states are printed
-        for init_ev_start, line in enumerate(self.file_contents["aims_out"]):
+        for init_ev_start, line in enumerate(self.lines):
             if target_line == line.strip():
                 break
 
         # Then count the number of lines until the next empty line
         init_ev_end = init_ev_start
-        for init_ev_end, line in enumerate(
-            self.file_contents["aims_out"][init_ev_start:]
-        ):
+        for init_ev_end, line in enumerate(self.lines[init_ev_start:]):
             if len(line) > 1:
                 n_ks_states += 1
             else:
@@ -330,9 +338,9 @@ class AimsOutput(Output):
 
         if include_spin_polarised:
             # Count the spin-down eigenvalues if the calculation is spin polarised
-            if target_line == self.file_contents["aims_out"][init_ev_end + 4].strip():
+            if target_line == self.lines[init_ev_end + 4].strip():
                 init_ev_end += 4
-                for line in self.file_contents["aims_out"][init_ev_end:]:
+                for line in self.lines[init_ev_end:]:
                     if len(line) > 1:
                         n_ks_states += 1
                     else:
@@ -360,8 +368,6 @@ class AimsOutput(Output):
             the calculation was not spin polarised
         """
 
-        aims_out = self.file_contents["aims_out"]
-
         # Check if the calculation was spin polarised
         spin_polarised = self.check_spin_polarised()
 
@@ -382,11 +388,11 @@ class AimsOutput(Output):
             }
 
             n = 0  # Count the current SCF iteration
-            for i, line in enumerate(aims_out):
+            for i, line in enumerate(self.lines):
                 if target_line in line:
                     n += 1
                     # Get the KS states from this line until the next empty line
-                    for j, line in enumerate(aims_out[i:]):
+                    for j, line in enumerate(self.lines[i:]):
                         if len(line) > 1:
                             values = line.split()
                             eigenvalues["state"][n][j] = int(values[0])
@@ -412,7 +418,7 @@ class AimsOutput(Output):
             # Count the number of SCF iterations for each spin channels
             up_n = 0
             down_n = 0
-            for i, line in enumerate(aims_out):
+            for i, line in enumerate(self.lines):
 
                 # Printing of KS states is weird in aims.out. Ensure that we don't add
                 # more KS states than the array is long
@@ -421,9 +427,9 @@ class AimsOutput(Output):
 
                 if target_line in line:
                     # The spin-up line is two lines above the target line
-                    if aims_out[i - 2].strip() == "Spin-up eigenvalues:":
+                    if self.lines[i - 2].strip() == "Spin-up eigenvalues:":
                         # Get the KS states from this line until the next empty line
-                        for j, line in enumerate(aims_out[i + 1 :]):
+                        for j, line in enumerate(self.lines[i + 1 :]):
                             if len(line) > 1:
                                 values = line.split()
                                 su_eigenvalues["state"][up_n][j] = int(values[0])
@@ -436,9 +442,9 @@ class AimsOutput(Output):
                                 break
 
                     # The spin-down line is two lines above the target line
-                    if aims_out[i - 2].strip() == "Spin-down eigenvalues:":
+                    if self.lines[i - 2].strip() == "Spin-down eigenvalues:":
                         # Get the KS states from this line until the next empty line
-                        for j, line in enumerate(aims_out[i + 1 :]):
+                        for j, line in enumerate(self.lines[i + 1 :]):
                             if len(line) > 1:
                                 values = line.split()
                                 sd_eigenvalues["state"][down_n][j] = int(values[0])
@@ -477,8 +483,6 @@ class AimsOutput(Output):
             the calculation was not spin polarised
         """
 
-        aims_out = self.file_contents["aims_out"]
-
         # Check if the calculation was spin polarised
         spin_polarised = self.check_spin_polarised()
 
@@ -489,7 +493,7 @@ class AimsOutput(Output):
         target_line = "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
 
         # Iterate backwards from end of aims.out to find the final KS eigenvalues
-        for i, line in enumerate(reversed(aims_out)):
+        for i, line in enumerate(reversed(self.lines)):
             if target_line == line.strip():
                 final_ev_start = -i
                 break
@@ -501,7 +505,7 @@ class AimsOutput(Output):
                 "eigenvalue_eV": np.zeros(n_ks_states, dtype=float),
             }
             # Get the KS states from this line until the next empty line
-            for i, line in enumerate(aims_out[final_ev_start:]):
+            for i, line in enumerate(self.lines[final_ev_start:]):
                 if len(line) > 1:
                     values = line.split()
                     eigenvalues["state"][i] = int(values[0])
@@ -521,7 +525,7 @@ class AimsOutput(Output):
             sd_eigenvalues = su_eigenvalues.copy()
 
             # The spin-down states start from here
-            for i, line in enumerate(aims_out[final_ev_start + 1 :]):
+            for i, line in enumerate(self.lines[final_ev_start + 1 :]):
                 if len(line) > 1:
                     values = line.split()
                     sd_eigenvalues["state"][i] = int(values[0])
@@ -531,12 +535,12 @@ class AimsOutput(Output):
                     break
 
             # Go back one more target line to get the spin-up states
-            for i, line in enumerate(reversed(aims_out[: final_ev_start + 1])):
+            for i, line in enumerate(reversed(self.lines[: final_ev_start + 1])):
                 if target_line == line.strip():
                     final_ev_start = -i
                     break
 
-            for i, line in enumerate(aims_out[final_ev_start + 1 :]):
+            for i, line in enumerate(self.lines[final_ev_start + 1 :]):
                 if len(line) > 1:
                     values = line.split()
                     su_eigenvalues["state"][i] = int(values[0])
@@ -560,8 +564,6 @@ class AimsOutput(Output):
             The perturbative SOC kohn-sham eigenvalues
         """
 
-        aims_out = self.file_contents["aims_out"]
-
         # Get the number of KS states
         n_ks_states = self.get_n_initial_ks_states()
 
@@ -571,7 +573,7 @@ class AimsOutput(Output):
         )
 
         # Iterate backwards from end of aims.out to find the perturbative SOC eigenvalues
-        for final_ev_start, line in enumerate(reversed(aims_out)):
+        for final_ev_start, line in enumerate(reversed(self.lines)):
             if target_line == line.strip():
                 break
 
@@ -583,7 +585,7 @@ class AimsOutput(Output):
             "level_spacing_eV": np.zeros(n_ks_states, dtype=float),
         }
 
-        for i, line in enumerate(aims_out[final_ev_start + 1 :]):
+        for i, line in enumerate(self.lines[final_ev_start + 1 :]):
             spl = line.split()
             eigenvalues["state"][i] = int(spl[0])
             eigenvalues["occupation"][i] = float(spl[1])
