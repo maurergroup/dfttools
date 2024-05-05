@@ -19,6 +19,7 @@ import os.path
 
 import dfttools.utils.math_utils as utils
 from dfttools.utils.periodic_table import PeriodicTable
+import dfttools.utils.units as units
 
 
 
@@ -62,7 +63,7 @@ class Geometry:
     In practice it has only been fully implemented for FHI-aims geometry.in files.
     """
 
-    def __init__(self, filename=None, file_format=None):
+    def __init__(self, filename=None):
         """
             
         center: dict
@@ -130,53 +131,22 @@ class Geometry:
         return self
     
     
-    def convert_to_other_tpye(self, geometry_type):
+    def get_instance_of_other_type(self, geometry_type):
         if geometry_type == 'aims':
             new_geometry = AimsGeometry()
-        if geometry_type == 'vasp':
+        elif geometry_type == 'vasp':
             new_geometry = VaspGeometry()
-        if geometry_type == 'xyz':
+        elif geometry_type == 'xyz':
             new_geometry = XYZGeometry()
+        elif geometry_type == 'molden':
+            new_geometry = MoldenGeometry()
+        elif geometry_type == 'xsf':
+            new_geometry = XSFGeometry()
+        else:
+            raise ValueError(f'Type "{geometry_type}" is not availlable.')
         
         new_geometry.__dict__ = self.__dict__
         return new_geometry
-    
-
-    @property
-    def homogenous_field(self):
-        """Field is a numpy array (Ex, Ey, Ez) with the Field in V/A"""
-        if not hasattr(self, "_homogeneous_field"):
-            self._homogeneous_field = None
-            
-        return self._homogeneous_field
-
-
-    @homogenous_field.setter
-    def homogenous_field(self, E):
-        """Field should be a numpy array (Ex, Ey, Ez) with the Field in V/A"""
-        assert len(E) == 3, "Expected E-field components [Ex, Ey, Ez], but got " + str(E)
-        self._homogeneous_field = np.asarray(E)
-
-
-    def add_multipoles(self, multipoles):
-        """
-        Adds multipoles to the the geometry.
-        Each multipole is defined as a list: [x, y, z, order, charge]
-        With: x,y,z: cartesian coordinates
-              order: 0 for monopoles, 1 for dipoles
-              charge: charge
-        :param multipoles: list of float, or list of lists
-        :return:
-        """
-        # if multiple multipoles are given: indented lists
-        if len(multipoles)==0:
-            return
-        if isinstance(multipoles[0],list):
-            for x in multipoles:
-                self.multipoles.append(x)
-        # else: one list
-        else:
-            self.multipoles.append(multipoles)
 
 
 ###############################################################################
@@ -213,8 +183,12 @@ class Geometry:
 #                             OUTPUT PARSER                                   #
 ###############################################################################
     def save_to_file(self, filename, **kwargs):
-        # TODO: add file format handeling
-        text = self.get_text(**kwargs)
+        
+        geometry_type = get_file_format_from_ending(filename)
+        
+        new_geometry = self.get_instance_of_other_type(geometry_type)
+        
+        text = new_geometry.get_text(**kwargs)
 
         # Enforce linux file ending, even if running on windows machine by
         # using binary mode
@@ -227,7 +201,7 @@ class Geometry:
 
 
 ###############################################################################
-#                         Data exchange with ASE                              #
+#                            Data exchange with ASE                           #
 ###############################################################################
     def get_from_ase_atoms_object(self,
                                   atoms,
@@ -271,7 +245,7 @@ class Geometry:
         for i, atom in enumerate(atoms):
             species = atom.symbol
             if isinstance(species, int):
-                species = PERIODIC_TABLE[species]
+                species = self.periodic_table.get_chemical_symbol(species)
             species_list.append(species)
             coords.append(atom.position)
         coords = np.array(coords)
@@ -397,7 +371,28 @@ class Geometry:
             # both have a center:
             elif self.center is not None and geometry.center is not None:
                 warnings.warn('Caution: The center of the first file will be used!')
-
+    
+    
+    def add_multipoles(self, multipoles):
+        """
+        Adds multipoles to the the geometry.
+        Each multipole is defined as a list: [x, y, z, order, charge]
+        With: x,y,z: cartesian coordinates
+              order: 0 for monopoles, 1 for dipoles
+              charge: charge
+        :param multipoles: list of float, or list of lists
+        :return:
+        """
+        # if multiple multipoles are given: indented lists
+        if len(multipoles)==0:
+            return
+        if isinstance(multipoles[0],list):
+            for x in multipoles:
+                self.multipoles.append(x)
+        # else: one list
+        else:
+            self.multipoles.append(multipoles)
+    
 
     def remove_atoms(self, atom_inds: np.array) -> None:
         """
@@ -456,7 +451,7 @@ class Geometry:
         """
         L = np.array(self.species) == species
         atom_inds = np.where(L)[0]
-        self.removeAtoms(atom_inds)
+        self.remove_atoms(atom_inds)
         
 
     def remove_constrained_atoms(self) -> None:
@@ -505,7 +500,208 @@ class Geometry:
         self.calculate_friction= self.calculate_friction[:n_atoms]
         self.coords = self.coords[:n_atoms,:]
         self.n_atoms = n_atoms
+    
+    
+    def crop(
+        self, 
+        xlim=(-np.inf, np.inf), 
+        ylim=(-np.inf, np.inf), 
+        zlim=(-np.inf, np.inf), 
+        auto_margin=False
+    ) -> None:
+        """
+        Removes all atoms that are outside specified bounds.
+        If auto_margin == True then an additional margin of the maximum covalent radius
+        is added to all borders
+        
+        """
+        indices_to_remove = self.getCroppingIndices(xlim, ylim, zlim, auto_margin)
+        self.remove_atoms(indices_to_remove)
+    
+    
+    def crop_inverse(
+        self, 
+        xlim=(-np.inf, np.inf), 
+        ylim=(-np.inf, np.inf), 
+        zlim=(-np.inf, np.inf), 
+        auto_margin=False
+    ) -> None:
+        """Removes all atoms that are inside specified bounds.
+        If auto_margin == True then an additional margin of the maximum covalent radius
+        is added to all borders"""
+        indices_to_keep = self.getCroppingIndices(xlim, ylim, zlim, auto_margin)
+        indices_to_remove = [i for i in range(self.n_atoms) if i not in indices_to_keep]
+        self.remove_atoms(indices_to_remove)
+    
+    
+    def crop_to_unit_cell(self, lattice=None, frac_coord_factors=[0,1]):
+        ''' Removes all atoms that are outside the given unit cell. Similar to self.crop() but allows for arbitrary unit cells'''
+        # Atoms that have fractional coordinates outside the defined frac_coord_factors are removed. Per default frac_coord_factors=[0,1] 
+        
+        if lattice is None:
+            lattice = self.lattice_vectors
+        frac_coords = utils.get_fractional_coords(self.coords, lattice)
+        
 
+        
+        remove_inds = []
+        remove_inds += list(np.where(frac_coords[:, 0] >= frac_coord_factors[1])[0])
+        remove_inds += list(np.where(frac_coords[:, 1] >= frac_coord_factors[1])[0])
+        remove_inds += list(np.where(frac_coords[:, 0] < frac_coord_factors[0])[0])
+        remove_inds += list(np.where(frac_coords[:, 1] < frac_coord_factors[0])[0])
+        remove_inds += list(np.where(frac_coords[:, 2] > frac_coord_factors[1])[0])
+        remove_inds += list(np.where(frac_coords[:, 2] < frac_coord_factors[0])[0])
+
+        remove_inds = list(set(remove_inds))
+
+        self.remove_atoms(remove_inds)
+        self.lattice_vectors = lattice
+        
+        #In the following all redundant atoms, i.e. atoms that are multiplied at the same position when the unitcell is repeated periodically, are removed from the new unit cell
+        epsilon = 0.1; # Distance in Angstrom for which two atoms are assumed to be in the same position
+        init_geom = self
+        allcoords = init_geom.coords
+        allindices = init_geom.get_indices_of_all_atoms()
+
+
+        # generate all possible translation vectors that could map an atom of the unit cell into itsself 
+        prim_lat_vec = []
+        for i in range(3):
+            prim_lat_vec.append([init_geom.lattice_vectors[i], -init_geom.lattice_vectors[i]])
+        self_mapping_translation_vectors = []
+
+        for i in prim_lat_vec:
+            for sign in range(2):
+                self_mapping_translation_vectors.append(i[sign])
+
+        for i in range(3):
+            for sign0 in range(2):
+                for k in range(3):
+                    for sign1 in range(2):
+                        if i != k:
+                            #print(f'i {i} k {k} sign0 {sign0} sign1 {sign1}')
+                            single_addition_vector = prim_lat_vec[i][sign0]+prim_lat_vec[k][sign1]
+                            self_mapping_translation_vectors.append(single_addition_vector)
+                            
+        for i in range(3):
+            for sign0 in range(2):
+                for k in range(3):
+                    for sign1 in range(2):
+                                for l in range(3):
+                                    for sign2 in range(2):
+                                        if i != k and i != l and k != l :
+                                            single_addition_vector = prim_lat_vec[i][sign0]+prim_lat_vec[k][sign1]+prim_lat_vec[l][sign2]
+                                            self_mapping_translation_vectors.append(single_addition_vector)
+                        
+
+
+
+        ## Find the indices of those atoms that are equivalent, i.e. atoms that are doubled when the unit cell is repeated periodically
+        
+        doubleindices = [] # list of pairs of atom indices that are equivalent
+        for i, coords_i in enumerate(allcoords):
+            for trans_l in self_mapping_translation_vectors:
+                coords_i_shift_l = copy.deepcopy(coords_i)
+                coords_i_shift_l += trans_l
+                for j, coords_j in enumerate(allcoords):
+                    if j != i:
+                        distance_i_shift_l_j = np.linalg.norm(coords_i_shift_l - coords_j)
+                        if distance_i_shift_l_j < epsilon:
+                            doubleindices.append([i,j])
+
+        for i in range(len(doubleindices)):
+               doubleindices[i].sort()
+
+        ###################################################################
+        ##Create a list of redundant atoms according to the atoms that are equivalent 
+        # according to all the pairs in doubleindices
+
+        liste = doubleindices 
+        to_be_killed = [] # List of all atom indicess that are redundant
+        for i, liste_i in enumerate(liste):
+            replacer = liste_i[0]
+            to_be_replaced = liste_i[1]  
+            to_be_killed.append(to_be_replaced)
+            for j, liste_j in enumerate(liste):
+                for k in range(2):
+                    if liste_j[k] == to_be_replaced :
+                        liste[j][k] = replacer
+        remainers = [j[0] for j in liste]                
+        for r in remainers:
+            for k in to_be_killed:
+                if k == r :
+                    to_be_killed.remove(k)
+
+        self.remove_atoms(to_be_killed)
+    
+    
+    def remove_metal_atoms(self) -> None:
+        "Removes all atoms with atomic number > 18 and atomic numbers 3,4,11,12,13,14"
+        metal_atoms = self.get_indices_of_metal()
+        self.remove_atoms(metal_atoms)
+        
+        
+    def remove_non_metallic_atoms(self) -> None:
+        "Removes all atoms that are not metal"
+        mol_inds = self.get_indices_of_molecules()
+        self.remove_atoms(mol_inds)
+
+
+    def remove_substrate(self, primitive_substrate, dimension=2, threshold=0.3) -> None:
+        """
+        Removes all substrate atoms given the primitive substrate by
+        identifying species and height
+        
+        Parameters
+        ----------
+        primitive_substrate: Geometry
+            primitive substrate file of system
+            
+        dimension: int
+            dimension to use as z-axis
+        
+        threshold: float
+            height threshold in A
+        """
+        substrate_indices = self.get_substrate_indices(primitive_substrate=primitive_substrate)
+        self.remove_atoms(substrate_indices)
+
+
+    def remove_adsorbates(self, primitive_substrate=None) -> None:
+        """
+        Removes all atoms that are not part of the substrate
+        
+        """
+        adsorbate_indices = self.get_adsorbate_indices(primitive_substrate=primitive_substrate)
+        self.remove_atoms(adsorbate_indices)
+        
+        
+    def remove_collisions(self, keep_latest: Union[bool, slice]=True) -> None:
+        """Removes all atoms that are in a collision group as given by GeometryFile.getCollidingGroups.
+
+        Args:
+            keep_latest (Union[bool, slice], optional): Whether to keep the earliest or latest added.
+                If a slice object is given, the selection is used to determine which atoms to keep.
+                Defaults to True.
+
+        Raises:
+            ValueError: Raised when keep_latest is neither a bool nor a slice object.
+        """
+        indices = []
+        if isinstance(keep_latest, bool):
+            if keep_latest:
+                selection = slice(None, -1, None)
+            else:
+                selection = slice(1, None, None)
+        elif isinstance(keep_latest, slice):
+            selection = keep_latest
+        else:
+            raise ValueError("keep_latest must be a bool or a slice object")
+        collisions = self.getCollidingGroups()
+        for group in collisions:
+            indices += group[selection]
+        self.remove_atoms(indices)
+        
 
 ###############################################################################
 #                         Transformations (in place)                          #
@@ -578,10 +774,10 @@ class Geometry:
         """
         shifts the adsorbates in Cartesian coordinates
         """
-        adsorbates = self.getAdsorbates(primitive_substrate=primitive_substrate)
+        adsorbates = self.get_adsorbates(primitive_substrate=primitive_substrate)
         adsorbates.coords += shift
         
-        self.removeAdsorbates(primitive_substrate=primitive_substrate)
+        self.remove_adsorbates(primitive_substrate=primitive_substrate)
         self += adsorbates
         
     
@@ -770,7 +966,7 @@ class Geometry:
         Transforms the lattice vectors by rotation and translation.
         The transformation is applied as x_new[3x1] = x_old[3x1] x R[3x3] + t[3x1]
         Notice that this works in cartesian coordinates.
-        Use transformFractional if you got your R and t from getSymmetries
+        Use transformFractional if you got your R and t from get_symmetries
 
         Parameters
         ----------
@@ -841,14 +1037,15 @@ class Geometry:
         for R in symmetry_operations:
             new_geom = copy.deepcopy(self)
             new_geom.transform(R)
-            new_geom.reorder_atoms(self.getTransformationIndices(new_geom))
+            new_geom.reorder_atoms(self.get_transformation_indices(new_geom))
             temp_coords += new_geom.coords
         self.coords = temp_coords / (len(symmetry_operations) + 1) + offset
         
 
     def symmetrize_periodic(self, symmetries):
         """
-        Reliably symmetrizes a periodic structure on a set of symmetries, as received from getSymmetries()
+        Reliably symmetrizes a periodic structure on a set of symmetries, as
+        received from get_symmetries()
         Differently from symmetrize(), symmetries MUST include the identity too
         NOTE: I have not tested this function thoroughly; use it with caution. (fc 13.05.2020)
         
@@ -876,7 +1073,7 @@ class Geometry:
             offset2 = np.mean(new_geom.coords, axis=0)
             new_geom.centerXYCoordinates()
             # reoreder atoms with the centered reference
-            indices = centered.getTransformationIndices(new_geom,periodic_2D=True)
+            indices = centered.get_transformation_indices(new_geom,periodic_2D=True)
             new_geom.reorder_atoms(indices)
             # move back to pre-centered position
             new_geom.move(offset2)
@@ -911,7 +1108,7 @@ class Geometry:
                 # center all other geometries to remove offset
                 geom.centerCoordinates()
                 # all geometries have to be ordered like first geometry in order to sum them
-                geom.reorder_atoms(self.getTransformationIndices(geom))
+                geom.reorder_atoms(self.get_transformation_indices(geom))
                 self.coords += geom.coords
             self.coords /= (len(other_geometries) + 1)    # +1 for this geometry itself
             self.coords += offset
@@ -951,6 +1148,19 @@ class Geometry:
         min_z = np.min(self.coords[:, -1])
         self.coords[:, -1] -= min_z
 
+
+    def move_multipoles(self, shift: np.array) -> None:
+        """
+        Moves all the multipoles by a shift vector
+        :param shift: list or array, len==3
+        :return:
+        """
+        assert len(shift)==3
+        for m in self.multipoles:
+            m[0]+=shift[0]
+            m[1]+=shift[1]
+            m[2]+=shift[2]
+            
 
 ###############################################################################
 #                      Set Properties of the Geometry                         #
@@ -1004,6 +1214,93 @@ class Geometry:
                 m[4] = charge
 
 
+    def set_constraints(
+        self, 
+        indices_of_atoms_to_constrain: list,
+        constrain_dim_flags=None,
+    ):
+        """
+        Sets a constraint for a few atoms in the system (identified by
+        'indices_of_atoms_to_constrain') for a geometry relaxation.
+        Since the relaxation constraint can be in any and/or all dimensions
+        the second parameter, 'constraint_dim_flags', makes it possible to 
+        set which dimension(s) should be constrained for which molecule.
+        By default all dimensions are to be constrained for all atoms are
+        constrained. If the dimension to constrain should be set individually
+        for different atoms, you need to provide a list of booleans of the shape
+        len(indices_of_atoms_to_constrain) x 3, which contains the constrain
+        flags for each dimension for each atom.
+    
+        Parameters
+        ----------
+        indices_of_atoms_to_constrain : list
+            List of atoms to constrain.
+        constrain_dim_flags : list[boolean]
+            The default is: [True, True, True].
+            
+        Returns
+        -------
+        None
+
+        """
+        if constrain_dim_flags is None:
+            constrain_dim_flags = [True, True, True]
+    
+        self.constrain_relax[indices_of_atoms_to_constrain,:] = constrain_dim_flags
+    
+    
+    def set_constraints_based_on_space(
+        self,
+        xlim=(-np.inf, np.inf),
+        ylim=(-np.inf, np.inf),
+        zlim=(-np.inf, np.inf),
+        constrain_dim_flags=None
+    ):
+        """
+        Constrain all atoms that are within a cuboid (defined by
+        limits in all dimensions: xlim, etc.) for a geometry relaxation.
+    
+        It is possible to define which dimension will be constrained, but since
+        the number of atoms in the cuboid is only calculated at runtime
+        the dimensions may only be set for all atoms at once. If you need to
+        set them individually please use constrainAtomsBasedOnIndex.
+    
+        Parameters
+        ----------
+        zlim
+        xlim
+        ylim
+        constrain_dim_flags : list[boolean]
+            The default is: [True, True, True].
+            
+        Returns
+        -------
+        None
+
+        """
+        if constrain_dim_flags is None:
+            constrain_dim_flags = [True, True, True]
+    
+        #--- get indices of all atoms outside the required interval ---
+        indices_outside = self.getCroppingIndices(
+            xlim=xlim,
+            ylim=ylim,
+            zlim=zlim,
+            auto_margin=False
+        )
+        #---
+    
+        #--- Filter all that are outside ---
+        # The indices of the atoms of relevance to us are all that are NOT
+        # outside of the cuboid
+        indices_inside = [
+            i for i in range(len(self)) if not i in indices_outside
+        ]
+        #---
+    
+        self.constrainAtomsBasedOnIndex(indices_inside, constrain_dim_flags)
+    
+    
     def free_all_constraints(self) -> None:
         """
         Frees all constraints.
@@ -1015,6 +1312,99 @@ class Geometry:
         """
         self.constrain_relax=np.zeros([len(self.species), 3], bool)
         
+        
+    def set_calculate_friction(
+        self, 
+        indices_of_atoms: list,
+        calculate_friction: bool=True
+    ) -> None:
+        """
+        Sets to calculate electronic friction for atoms specified by the given
+        list of indices.
+
+        Parameters
+        ----------
+        indices_of_atoms : list
+            List of atoms from which electronic friction should be calculated.
+        calculate_friction : bool, optional
+            Calculate friction for these atims. The default is True.
+
+        Returns
+        -------
+        None
+
+        """
+        self.calculate_friction[indices_of_atoms] = calculate_friction
+        
+        
+    def free_all_calculate_friction(self) -> None:
+        """
+        Set calculate electronic friction to false on all atoms.
+
+        Returns
+        -------
+        None
+
+        """
+        self.calculate_friction = np.array([False]*len(self))
+        
+    
+    def set_external_forces(
+        self, 
+        indices_of_atoms: Union[int, np.array],
+        external_force: np.array,
+    ) -> None:
+        """
+        Sets a constraint for a few atoms in the system (identified by
+        'indices_of_atoms_to_constrain') for a geometry relaxation.
+        Since the relaxation constraint can be in any and/or all dimensions
+        the second parameter, 'constraint_dim_flags', makes it possible to 
+        set which dimension(s) should be constrained for which molecule.
+        By default all dimensions are to be constrained for all atoms are
+        constrained. If the dimension to constrain should be set individually
+        for different atoms, you need to provide a list of booleans of the shape
+        len(indices_of_atoms_to_constrain) x 3, which contains the constrain
+        flags for each dimension for each atom.
+
+        Parameters
+        ----------
+        indices_of_atoms_to_constrain : int or np.array
+            Index of atoms to which atoms should should be applied.
+        constrain_dim_flags : np.array
+            Force that should act on a given atom.
+        """
+        
+        self.external_force[indices_of_atoms,:] = external_force
+
+
+    def free_all_external_forces(self) -> None:
+        """
+        Set calculate electronic friction to false on all atoms.
+
+        Returns
+        -------
+        None
+
+        """
+        self.external_force = np.zeros((len(self), 3))
+        
+        
+    def remove_periodicity(self):
+        """
+        Makes geometry non-periodic by setting its lattice vectors to zero
+        
+        """
+        self.lattice_vectors = np.zeros((3,3), dtype=float)
+        
+        
+    def set_homogenous_field(self, E):
+        """Field should be a numpy array (Ex, Ey, Ez) with the Field in V/A"""
+        assert len(E) == 3, "Expected E-field components [Ex, Ey, Ez], but got " + str(E)
+        self._homogeneous_field = np.asarray(E)
+        
+    
+    def free_homogenous_field(self):
+        self._homogeneous_field = np.zeros([0.0, 0.0, 0.0])
 
 ###############################################################################
 #                      Get Properties of the Geometry                         #
@@ -1065,7 +1455,7 @@ class Geometry:
                 
         for index_array in pairs:
             if len(index_array) == len(self):
-                final_geom = geom_replica.getAtomsByIndices( np.sort( np.array(list(index_array), dtype=np.int32) ) )
+                final_geom = geom_replica.get_atoms_by_indices( np.sort( np.array(list(index_array), dtype=np.int32) ) )
                 final_geom.lattice_vectors = self.lattice_vectors
                 final_geom.mapCenterOfAtomsClosestToOrigin()
                     
@@ -1126,7 +1516,7 @@ class Geometry:
         return fractional_coords.T
     
     
-    def get_reciprocal_lattice(self) -> np.array:
+    def get_reciprocal_lattice_vectors(self) -> np.array:
         """
         Calculate the reciprocal lattice of the Geometry lattice_vectors in standard form
         For convention see en.wikipedia.org/wiki/Reciprocal_lattice
@@ -1176,7 +1566,7 @@ class Geometry:
         if weights == 'unity':
             weights = np.ones(self.n_atoms)
         elif weights == 'Z':
-            weights = np.array([ut.PERIODIC_TABLE[s] for s in self.species])
+            weights = np.array([self.periodic_table.get_atomic_mass(s) for s in self.species])
 
         coords = self.coords - np.mean(self.coords,axis=0)
         diag_entry = np.sum(np.sum(coords**2, axis=1) * weights)
@@ -1266,64 +1656,8 @@ class Geometry:
         dist = np.linalg.norm(vec)
 
         return dist
-
-
-###############################################################################
-#               Get Properties in comparison to other Geometry                #
-###############################################################################
-    def get_distance_to_equivalent_atoms(self, other_geometry) -> float:
-        """
-        Calculate the maximum distance that atoms of geom would have to be moved,
-        to coincide with the atoms of self.
-        
-        """
-        trans,dist = self.getTransformationIndices(other_geometry,
-                                                   get_distances=True)
-        return np.max(dist)
     
     
-    def getTransformationIndices(self, other_geometry, norm_threshold=0.5, get_distances=False, periodic_2D=False):
-        """Associates every atom in self to the closest atom of the same specie in other_geometry,
-        :returns transformation_indices : np.array. The positions on the array correspond to the atoms in self;
-            the values of the array correspond to the atoms in other_geometry"""
-            
-        assert len(self) == len(other_geometry), \
-               "Geometries have different number of atoms {0} != {1}".format(len(self), len(other_geometry))
-
-        # Replicate other geometry to also search in neighbouring cells
-        if periodic_2D:
-            other_geometry = other_geometry.getPeriodicReplica((3,3,1))
-            other_geometry.moveByFractionalCoords([-1/3.0, -1/3.0, 0])
-
-        # Get the atomic numbers of each geometry file: Later only compare matching atom types
-        Z_values_1 = np.array([ut.PERIODIC_TABLE[s] for s in self.species], np.int64)
-        Z_values_2 = np.array([ut.PERIODIC_TABLE[s] for s in other_geometry.species], np.int64)
-        unique_Z = set(Z_values_1)
-
-        # Allocate output arrays
-        transformation_indices = np.zeros(len(self), np.int64)
-        distances = np.zeros(len(self))
-        atom2_indices = np.arange(len(other_geometry)) % len(self)
-
-        # Loop over all types of atoms
-        for Z in unique_Z:
-            # Select all the coordinates that belong to that species
-            select1 = (Z_values_1 == Z)
-            select2 = (Z_values_2 == Z)
-            # Calculate all distances between the geometries
-            dist_matrix = scipy.spatial.distance_matrix(self.coords[select1, :], other_geometry.coords[select2, :])
-            # For each row (= atom in self with species Z) find the index of the other_geometry (with species Z) that is closest
-            index_of_smallest_mismatch = np.argmin(dist_matrix, axis=1)
-            transformation_indices[select1] = atom2_indices[select2][index_of_smallest_mismatch]
-            if get_distances:
-                distances[select1] = [dist_matrix[i,index_of_smallest_mismatch[i]] for i in range(len(dist_matrix))]
-
-        if get_distances:
-            return transformation_indices, distances
-        else:
-            return transformation_indices
-
-
     def get_volume_of_unit_cell(self) -> float:
         """
         Calcualtes the volume of the unit cell.
@@ -1389,9 +1723,50 @@ class Geometry:
             si_new = si.split('_')[0]
             species_helper.append(si_new)
         
-        masses_np = np.array([ATOMIC_MASSES[PERIODIC_TABLE[s]] for s in species_helper], dtype=np.float64)       
+        masses_np = np.array([self.periodic_table.get_atomic_mass(s) for s in species_helper], dtype=np.float64)       
         center_of_mass = self.coords.T.dot(masses_np) / masses_np.sum()
         return center_of_mass
+    
+    
+    def get_symmetries(self, save_directory=None,symmetry_precision=1e-05):
+        """
+        Returns symmetries (rotation and translation matrices) from spglig.
+        works only for unitcell and supercell geometries (lattice vecotrs must not be 0)
+
+        Beware: The returned symmetry matrices are given with respect to fractional coordinates, not Cartesian ones!
+
+        See https://atztogo.github.io/spglib/python-spglib.html#get-symmetry for details
+
+        Parameters:
+        -----------
+        save_directory : str
+            save directory in string format, file will be name symmetry.pickle (default = None --> symmetry is not saved)
+        """
+        import spglib
+        import pickle
+        import os
+        
+        if np.count_nonzero(self.lattice_vectors) == 0:
+            print('Lattice vectors must not be 0! getSymmetry requires a unitcell-like geometry file!')
+            raise ValueError(self.lattice_vectors)
+        
+        unit_cell = self.get_spglib_cell()
+        symmetry = spglib.get_symmetry(unit_cell, symprec=symmetry_precision)
+        
+        if not save_directory == None:
+            if not os.path.exists(save_directory):
+                print('symmetry not saved; save_directory does not exist')
+            else:
+                save_directory = os.path.join(save_directory, 'symmetry.pickle')
+                pickle.dump( symmetry, open( save_directory, "wb" ),  protocol=pickle.HIGHEST_PROTOCOL)
+        
+        return symmetry
+    
+    
+    def get_atomic_numbers_of_atoms(self) -> np.array:
+        """Get the atomic numbers of all atoms in the geometry file"""
+        species = [self.periodic_table.get_atomic_number(s) for s in self.species]
+        return np.array(species)
     
     
     def get_number_of_electrons(self) -> float:
@@ -1411,20 +1786,20 @@ class Geometry:
                     curr_species = s.split('_')[0]
                 else:
                     curr_species = s
-                electrons.append(PERIODIC_TABLE[curr_species])
+                electrons.append(self.periodic_table.get_atomic_number(curr_species))
 
             except KeyError:
                 KeyError('Species {} is not known'.format(s))
         return np.sum(electrons)
     
     
-    def get_mass_of_all_atoms(self) -> list:
+    def get_mass_of_all_atoms(self) -> np.array:
         """
         Determines the atomic mass for all atoms.
 
         Returns
         -------
-        list
+        masses : np.array
             List of atomic masses for all atoms in the same order as
             the atoms.
 
@@ -1436,11 +1811,13 @@ class Geometry:
                     curr_species = s.split('_')[0]
                 else:
                     curr_species = s
-                masses.append(ATOMIC_MASSES[PERIODIC_TABLE[curr_species]])
+                    
+                mass = self.periodic_table.get_atomic_mass(curr_species)
+                masses.append(mass)
 
             except KeyError:
                 KeyError('Atomic mass for species {} is not known'.format(s))
-        return masses
+        return np.array(masses)
 
 
     def get_atomic_mass(self) -> float:
@@ -1456,29 +1833,37 @@ class Geometry:
         atomic_mass = 0
         
         for s in self.species:
-            atomic_mass += ATOMIC_MASSES[PERIODIC_TABLE[s]]
+            atomic_mass += self.periodic_table.get_atomic_mass(s)
         
         return atomic_mass
-
-
-    def get_max_size(self) -> float:
+    
+    
+    def get_largest_atom_distance(self, dims_to_consider = (0,1,2)) -> float:
         """
-        Determine the maximum distance between two atoms of the geometry.
-
+        Find largest distance between atoms in geometry.
+        #search tags; molecule length, maximum size
+        
+        Parameters
+        ----------
+        dims_to_consider : list
+            Dimensions along which largest distance should be calculated.
+        
         Returns
         -------
-        max_dist : float
-            Maximum distance between atoms.
-
+        geometry_size : float
+            Largest distance between two atoms in the unit cell.
+            
         """
-        coords = copy.deepcopy(self.coords)
-        coords[:, :2] -= np.mean(coords[:, :2], axis=0)
-        # self.centerXYCoordinates()
-        distances=[]
-        for atom in coords:
-            distances += [np.linalg.norm(atom[:2])]
-        max_dist = max(distances)
-        return max_dist
+        mask = np.array([i in dims_to_consider for i in range(3)],dtype = bool)
+        geometry_size = 0
+        for ind1 in range(self.n_atoms):
+            for ind2 in range(ind1, self.n_atoms):
+                geometry_size_test = np.linalg.norm(self.coords[ind1][mask] - self.coords[ind2][mask])
+                
+                if geometry_size_test > geometry_size:
+                    geometry_size = geometry_size_test
+                    
+        return geometry_size
     
     
     def get_area(self) -> float:
@@ -1538,17 +1923,18 @@ class Geometry:
 
         Returns
         -------
-        np.array
+        bond_lengths : np.array
             List of bond lengths for neighbouring atoms.
 
         """
-        neighbouring_atoms = self.getAllNeighbouringAtoms(bond_factor=bond_factor)
+        neighbouring_atoms = self.get_all_neighbouring_atoms(bond_factor=bond_factor)
         
         bond_lengths = []
         for v in neighbouring_atoms.values():
             bond_lengths.append(v[1])
-            
-        return np.array(bond_lengths)
+        
+        bond_lengths = np.array(bond_lengths)
+        return bond_lengths
 
 
     def get_number_of_atom_layers(self, threshold: float=1e-2) -> Union[dict, float]:
@@ -1568,7 +1954,7 @@ class Geometry:
             Total number of layers.
 
         """
-        layers = self.getAtomLayers(threshold=threshold)
+        layers = self.get_atom_layers_indices(threshold=threshold)
         
         total_number_layers = 0
         for atom_species in layers:
@@ -1609,47 +1995,22 @@ class Geometry:
         beta = np.arccos(np.dot(cell[2], cell[0])/(a*c))
 
         return a, b, c, alpha, beta, gamma
-
-
-    def get_lammps_unit_cell(self) -> Union[float, float, float, float, float, float]:
+    
+    
+    def get_spglib_cell(self):
         """
+        Returns the unit cell in a format that can be used in spglib (to find symmetries)
         
-
-        Returns
-        -------
-        Union[float, float, float, float, float, float]
-            DESCRIPTION.
-
+        return : tuple
+            (lattice vectors, frac coordinates of atoms, atomic numbers)
         """
-        #cell = structure.get_cell(supercell=supercell)
-        cell = self.lattice_vectors
+        coordinates = utils.get_fractional_coords(self.coords, self.lattice_vectors)
         
-        # generate lammps oriented lattice vectors
-        ax = np.linalg.norm(cell[0])
-        bx = np.dot(cell[1], cell[0]/np.linalg.norm(cell[0]))
-        by = np.linalg.norm(np.cross(cell[0]/np.linalg.norm(cell[0]), cell[1]))
-        cx = np.dot(cell[2], cell[0]/np.linalg.norm(cell[0]))
-        cy = (np.dot(cell[1], cell[2])- bx*cx)/by
-        cz = np.sqrt(np.dot(cell[2],cell[2])-pow(cx,2)-pow(cy,2))
+        atom_number = []
+        for atom_name in self.species:
+            atom_number.append( self.periodic_table.get_atomic_number(atom_name) )
         
-        # get rotation matrix (poscar->lammps) from lattice vectors matrix
-        lammps_cell = np.array([[ax, bx, cx],[0, by, cy],[0,0,cz]])
-        # trans_cell = np.dot(np.linalg.inv(cell), lammps_cell.T)
-        
-        # rotate positions to lammps orientation
-        #positions = np.dot(positions, trans_cell)
-        
-        # build lammps lattice vectors
-        a, b, c, alpha, beta, gamma = self.get_cell_parameters()
-        
-        xhi = a
-        xy = b * np.cos(gamma)
-        xz = c * np.cos(beta)
-        yhi = np.sqrt(pow(b,2)-pow(xy,2))
-        yz = (b*c*np.cos(alpha)-xy * xz)/yhi
-        zhi = np.sqrt(pow(c,2)-pow(xz,2)-pow(yz,2))
-        
-        return xhi, yhi, zhi, xy, xz, yz
+        return (self.lattice_vectors, coordinates, atom_number)
 
 
     def get_orientation_of_main_axis(self) -> float:
@@ -1679,7 +2040,9 @@ class Geometry:
         """
         constrain = np.any(self.constrain_relax,axis=1)
         inds = [i for i, c in enumerate(constrain) if c]
+        inds = np.array(inds)
         return inds
+    
     
     def get_unconstrained_atoms(self) -> np.array:
         """
@@ -1693,13 +2056,580 @@ class Geometry:
         """
         all_inds = list(range(len(self)))
         keep_inds = self.get_constrained_atoms()
-        inds = list(set(all_inds) - set(keep_inds))
+        inds = np.array(set(all_inds) - set(keep_inds))
         return inds
     
+
+    def get_cropping_indices(
+        self,
+        xlim=(-np.inf, np.inf),
+        ylim=(-np.inf, np.inf),
+        zlim=(-np.inf, np.inf),
+        auto_margin=False,
+        inverse=False
+    ) -> np.array:
+        """
+        Gets indices of all atoms that are outside specified bounds.
+        If auto_margin == True then an additional margin of the maximum covalent radius
+        is added to all borders
+        :param inverse : if True, gets indices of all atoms INSIDE specified bounds
+        
+        """
+        assert len(xlim) == 2, "xlim must have a lower and an upper bound"
+        assert len(ylim) == 2, "ylim must have a lower and an upper bound"
+        assert len(zlim) == 2, "zlim must have a lower and an upper bound"
+        if auto_margin:
+            margin = max([self.periodic_table.get_covalent_radius(s) for s in self.species])
+            xlim = xlim[0] - margin, xlim[1] + margin
+            ylim = ylim[0] - margin, ylim[1] + margin
+            zlim = zlim[0] - margin, zlim[1] + margin
+
+        remove = np.zeros(len(self), bool)
+        remove = remove | (self.coords[:, 0] < xlim[0])
+        remove = remove | (self.coords[:, 0] > xlim[1])
+        remove = remove | (self.coords[:, 1] < ylim[0])
+        remove = remove | (self.coords[:, 1] > ylim[1])
+        remove = remove | (self.coords[:, 2] < zlim[0])
+        remove = remove | (self.coords[:, 2] > zlim[1])
+        indices_to_remove = np.arange(len(self))[remove]
+        if inverse:
+            indices_to_remove = [i for i in range(self.n_atoms) if i not in indices_to_remove]
+        
+        indices_to_remove = np.array(indices_to_remove)
+        
+        return indices_to_remove
+    
+    
+    def get_substrate_indices_from_parts(self, do_warn=True) -> np.array:
+        """
+        Returns indices of those atoms that a part of the substrate. The
+        definition of the substrate does NOT rely of it being a metal or the
+        height or something like that. Instead a geometry part named
+        'substrate' must be defined.
+        
+        Parameters
+        ----------
+        do_warn : boolean
+            Can be set to False to suppress warnings
+
+        Returns
+        -------
+        substrate_indices : np.array
+        
+        """
+        substrate_key = 'substrate'     # should probably moved to a class variable, but first finished folder-read-write
+
+        if not hasattr(self, 'geometry_parts') or not hasattr(self, 'geometry_part_descriptions'):
+            if do_warn:
+                print("getSubstrate: geometry parts not defined")
+            return None
+
+        if substrate_key not in self.geometry_part_descriptions:
+            if do_warn:
+                print("getSubstrate: geometry parts are defined, "
+                      "but part '{}' not found" .format(substrate_key))
+            return None
+
+        index_of_geometry_parts_substrate = self.geometry_part_descriptions.index(substrate_key)
+        substrate_indices = self.geometry_parts[index_of_geometry_parts_substrate]
+        substrate_indices = np.array(substrate_indices)
+        return substrate_indices
+    
+
+    def get_indices_of_metal(self) -> np.array:
+        """
+        Gets indices of all atoms with atomic number > 18 and atomic numbers
+        3,4,11,12,13,14
+        
+        Returns
+        -------
+        metal_atoms : np.array
+            Inidices of metallic atoms.
+
+        """
+        atom_inds = [self.periodic_table.get_atomic_number(s) for s in self.species]
+        metal_atoms = []
+        for i,ind in enumerate(atom_inds):
+            if (ind> 18) or (ind in [3,4,11,12,13,14]):
+                metal_atoms.append(i)
+                
+        metal_atoms = np.array(metal_atoms)
+        return metal_atoms
+    
+    
+    def get_indices_of_molecules(self, substrate_species=None) -> np.array:
+        """
+        Fetches the indices of the substrate atoms, but it defaults to 
+        just returning all non-metal atom's indices!
+        
+        If substrate_species is given indices of all atoms that are not of the 
+        substrate species are returned.
+        
+        """
+        if substrate_species:
+            substrate_indices = self.get_indices_of_species(substrate_species)
+        else:
+            substrate_indices = self.get_indices_of_metal()
+        
+        molecules = [i for i in range(self.n_atoms) if i not in substrate_indices]
+        molecules = np.array(molecules)
+        return molecules
+
+
+    def get_indices_of_species(self, species) -> np.array:
+        """
+        Returns all indices of atoms the are of species defined in the input.
+        species can be a string of a list
+        
+        """
+        # make sure species is a list
+        if isinstance(species, str):
+            species = [species]
+        
+        species_indices = [i for i in range(self.n_atoms) if self.species[i] in species]
+        species_indices = np.array(species_indices)
+        return species_indices
+    
+    
+    def get_substrate_indices(
+        self, 
+        primitive_substrate=None, 
+        dimension=2,
+        threshold=0.3
+    ) -> np.array:
+        """
+        This method returns the indices of all atoms that are part of the substrate.
+        Often these are simply all metal atoms of the geometry.
+        But the substrate can also be organic in which case it can't be picked by being a metal.
+        And there might be multiple adsorbate layers in which case only the molecules of the highest layer
+        shall be counted as adsorbates and the others are part of the substrate.
+
+        dimension: int      only used if primitive_substrate is not None
+        threshold: float    only used if primitive_substrate is not None
+
+        Returns
+        -------
+        indices of all substrate atoms: list[int]
+        
+        """
+        # case 1: if a primitive_substrate was passed, use that one for the decision
+        # (copied from self.removeSubstrate)
+        if primitive_substrate is not None:
+            substrate_species = set(primitive_substrate.species)
+            substrate_heights = primitive_substrate.coords[:,dimension]
+            substrate_candidate_indices = [i for i,s in enumerate(self.species) if s in substrate_species]
+            substrate_indices = []
+            for c in substrate_candidate_indices:
+                if np.any(np.absolute(substrate_heights - self.coords[c,dimension]) < threshold):
+                    substrate_indices.append(c)
+            return substrate_indices
+
+        # case 2: if no substrate was passed but a geometry_parts "substrate" is defined in geometry_parts, use that one
+        substrate_indices_from_parts = self.get_substrate_indices_from_parts(do_warn=False)
+        if substrate_indices_from_parts is not None:
+            return substrate_indices_from_parts
+            
+        # case 3: if neither a substrate was passed, nor a geometry_parts "substrate" is defined,
+        #            use a fallback solution: assume that the substrate (and nothing else) is a metal
+        warnings.warn("Geometry.getIndicesOfAdsorbates: Substrate is not explicitly defined. "
+                      "Using fallback solution of counting all metal atoms as substrate.")
+        substrate_indices_from_metal = self.get_indices_of_metal()
+        return substrate_indices_from_metal
+
+
+    def get_adsorbate_indices(self, primitive_substrate=None):
+        """
+        This method returns the indices of all atoms that are NOT part of the substrate.
+        In a classical organic monolayer on a metal substrate these are simply all molecules.
+        But the substrate can also be organic in which case it can't be picked by being a metal.
+        And there might be multiple adsorbate layers in which case only the molecules of the highest layer
+        shall be counted as adsorbates.
+
+        Returns
+        -------
+        indices of all adsorbate atoms: list[int]
+        """
+
+        substrate_indices = self.get_substrate_indices(primitive_substrate=primitive_substrate)
+        # invert:
+        return [i for i in self.get_indices_of_all_atoms() if i not in substrate_indices]
+
+    
+    def get_indices_of_all_atoms(self, species=None):
+        if species is None:
+            return [i for i in range(self.n_atoms)]
+        else:
+            return [i for i in range(self.n_atoms) if self.species[i] == species]
+    
+    
+    def get_atom_layers_indices(self, threshold: float=1e-2) -> dict:
+        """
+        Returns a dict of the following form.
+
+        Parameters
+        ----------
+        threshold : float, optional
+            Treshold within which atoms are considered to be in the same layer.
+            The default is 1e-2.
+
+        Returns
+        -------
+        layers : dict
+            {<Element symbol>: {height: [indices of atoms of element at height]}}.
+
+        """
+        layers = {}
+        
+        for ind, atom_coord in enumerate(self.coords):
+            atom_species = self.species[ind]
+            if not atom_species in layers:
+                layers[atom_species] = {}
+            
+            add_new_z_coord = True
+            for z_coord in layers[atom_species].keys():
+                if abs(atom_coord[2] - z_coord) < threshold:
+                    layers[atom_species][z_coord].append(ind)
+                    add_new_z_coord = False
+            
+            if add_new_z_coord:
+                layers[atom_species][atom_coord[2]] = [ind]
+        
+        return layers
+    
+    
+    def get_atom_layers_indices_by_height(self, threshold: float=1e-2) -> dict:
+        """
+        Similarly to get_atom_layers_indices this function returns a dict
+        continaing info about height and the indices of atoms at that height.
+
+        Parameters
+        ----------
+        threshold : float, optional
+            reshold within which atoms are considered to be in the same layer.
+            The default is 1e-2.
+
+        Returns
+        -------
+        layers_by_height : dict
+            {height: [indices of atoms at that height]}.
+
+        """
+        layers_by_species = self.get_atom_layers_indices(threshold=threshold)
+
+        layers_by_height = defaultdict(list)
+
+        #--- merge height-indices dicts ---
+        for data in layers_by_species.values():
+
+            for height, indices in data.items():
+                new=True
+                for new_height in layers_by_height.keys():
+                    if abs(height-new_height) < threshold:
+                        layers_by_height[new_height] += indices
+                        new=False
+                if new:
+                    layers_by_height[height] += indices
+
+        # sort dictionary by descending height
+        layers_by_height = dict(sorted(layers_by_height.items(),reverse=True))
+        return layers_by_height
+    
+    
+    def get_list_of_neighbouring_atoms(self, bond_factor:float=1.5) -> dict:
+        """
+        Get a dictionary of neighbouring atoms.
+
+        Parameters
+        ----------
+        bond_factor : float, optional
+            Multiply for covelent radius. If the distance between two atoms is
+            smaller thand (r_0+r_1)*bond_factor, the atoms are considered
+            neighbours. The default is 1.5.
+
+        Returns
+        -------
+        neighbouring_atoms : dict
+            {(index_0, index_1) : [(element_0, element_1), atom distance]}.
+
+        """
+        coords = self.coords
+        species = self.species
+
+        all_species = set(species)
+        all_species_pairs = itertools.product(all_species, repeat=2)
+        
+        bond_thresholds = {}
+        for pair in all_species_pairs:
+            bond_thresholds[pair] = (self.periodic_table.get_covalent_radius(pair[0]) \
+                                     + self.periodic_table.get_covalent_radius(pair[1]))*bond_factor
+
+        neighbouring_atoms = {}
+
+        for i, coord in enumerate(coords):
+            for j, coord_test in enumerate(coords):
+                if i >= j:
+                    continue
+                
+                pair_index = (i, j)
+                
+                if not pair_index in neighbouring_atoms:
+                    dist = np.linalg.norm(coord - coord_test)
+                    
+                    pair_species = (species[i], species[j])
+                    
+                    if dist < bond_thresholds[pair_species]:
+                        neighbouring_atoms[pair_index] = [pair_species, dist]
+        
+        return neighbouring_atoms
+    
+
+    def get_principal_moments_of_inertia(self) -> np.array:
+        """
+        Calculates the eigenvalues of the moments of inertia matrix
+
+        Returns
+        -------
+        moments : np.array, shape=(3,), dtype=np.float64
+            principal moments of inertia in kg * m**2
+            
+        """
+        masses_kg = [units.ATOMIC_MASS_IN_KG * self.periodic_table.get_atomic_mass(s) for s in self.species]
+
+        center_of_mass = self.getCenterOfMass()
+        r_to_center_in_m = units.ANGSTROM_IN_METER * (self.coords - center_of_mass)
+
+        ###########
+        # begin: code based on ase/atoms.py: get_moments_of_inertia
+        # (GNU Lesser General Public License)
+        # Initialize elements of the inertial tensor
+        I11 = I22 = I33 = I12 = I13 = I23 = 0.0
+        for i in range(len(self)):
+            x, y, z = r_to_center_in_m[i]
+            m = masses_kg[i]
+
+            I11 += m * (y ** 2 + z ** 2)
+            I22 += m * (x ** 2 + z ** 2)
+            I33 += m * (x ** 2 + y ** 2)
+            I12 += -m * x * y
+            I13 += -m * x * z
+            I23 += -m * y * z
+
+        I = np.array([[I11, I12, I13],
+                      [I12, I22, I23],
+                      [I13, I23, I33]], dtype=np.float64)
+
+        moments, evecs = np.linalg.eigh(I)
+        return moments
+    
+    
+    def get_homogenous_field(self):
+        """Field is a numpy array (Ex, Ey, Ez) with the Field in V/A"""
+        if not hasattr(self, "_homogeneous_field"):
+            self._homogeneous_field = None
+            
+        return self._homogeneous_field
+    
+
+###############################################################################
+#               Get Properties in comparison to other Geometry                #
+###############################################################################
+    def get_distance_to_equivalent_atoms(self, other_geometry) -> float:
+        """
+        Calculate the maximum distance that atoms of geom would have to be moved,
+        to coincide with the atoms of self.
+        
+        """
+        trans,dist = self.get_transformation_indices(other_geometry,
+                                                     get_distances=True)
+        return np.max(dist)
+    
+    
+    def get_transformation_indices(
+        self,
+        other_geometry,
+        norm_threshold: float=0.5,
+        get_distances=False,
+        periodic_2D=False
+    ):
+        """
+        Associates every atom in self to the closest atom of the same specie in
+        other_geometry.
+        
+        Parameters
+        ----------
+        other_geometry: geometry
+        norm_threshold : float
+        get_distances : bool
+            The default is False.
+        periodic_2D : bool
+            The default is False.
+
+        Returns
+        -------
+        transformation_indices : np.array.
+            The positions on the array correspond to the atoms in self;
+            the values of the array correspond to the atoms in other_geometry
+        
+        """
+        assert len(self) == len(other_geometry), \
+               "Geometries have different number of atoms {0} != {1}".format(len(self), len(other_geometry))
+
+        # Replicate other geometry to also search in neighbouring cells
+        if periodic_2D:
+            other_geometry = other_geometry.getPeriodicReplica((3,3,1))
+            other_geometry.moveByFractionalCoords([-1/3.0, -1/3.0, 0])
+
+        # Get the atomic numbers of each geometry file: Later only compare matching atom types
+        Z_values_1 = np.array([self.periodic_table.get_atomic_number(s) for s in self.species], np.int64)
+        Z_values_2 = np.array([self.periodic_table.get_atomic_number(s) for s in other_geometry.species], np.int64)
+        unique_Z = set(Z_values_1)
+
+        # Allocate output arrays
+        transformation_indices = np.zeros(len(self), np.int64)
+        distances = np.zeros(len(self))
+        atom2_indices = np.arange(len(other_geometry)) % len(self)
+
+        # Loop over all types of atoms
+        for Z in unique_Z:
+            # Select all the coordinates that belong to that species
+            select1 = (Z_values_1 == Z)
+            select2 = (Z_values_2 == Z)
+            # Calculate all distances between the geometries
+            dist_matrix = scipy.spatial.distance_matrix(self.coords[select1, :], other_geometry.coords[select2, :])
+            # For each row (= atom in self with species Z) find the index of the other_geometry (with species Z) that is closest
+            index_of_smallest_mismatch = np.argmin(dist_matrix, axis=1)
+            transformation_indices[select1] = atom2_indices[select2][index_of_smallest_mismatch]
+            if get_distances:
+                distances[select1] = [dist_matrix[i,index_of_smallest_mismatch[i]] for i in range(len(dist_matrix))]
+
+        if get_distances:
+            return transformation_indices, distances
+        else:
+            return transformation_indices
+
+
+    def is_equivalent(
+        self, 
+        geom, 
+        tolerance=0.01,
+        check_neightbouring_cells=False
+    ) -> bool:
+        """
+        Check if this geometry is equivalent to another given geometry.
+        The function checks that the same atoms sit on the same positions 
+        (but possibly in some permutation)
+
+        :param check_neightbouring_cells: for periodic structures, recognizes two structures as equivalent, even if one\
+         of them has its atoms distributed in different unit cells compared to the other. More complete, but slower.  """
+
+
+
+
+        # Check that both geometries have same number of atoms
+        # If not, they cannot be equivalent
+        if geom.n_atoms != self.n_atoms:
+            return False
+
+        # check in neighbouring cells, to account for geometries 'broken' around the cell border
+        if check_neightbouring_cells:
+            if self.lattice_vectors is not None:
+                geom = geom.getPeriodicReplica((3,3),explicit_replications=[[-1,0,1],[-1,0,1]])
+            else:
+                print('Non periodic structure. Ignoring check_neighbouring_cells')
+
+
+        n_atoms = self.n_atoms
+        n_atoms_geom = geom.n_atoms
+        # Check for each atom in coords1 that is has a matching atom in coords2
+        for n1 in range(n_atoms):
+            is_ok = False
+            for n2 in range(n_atoms_geom):
+                if self.species[n1] == geom.species[n2]:
+                    d = np.linalg.norm(self.coords[n1,:] - geom.coords[n2,:])
+                    if d < tolerance:
+                        # Same atom and same position
+                        is_ok = True
+                        break
+                    
+            if not is_ok:
+                return False
+        return True
+        
+    
+    def is_equivalent_up_to_translation(self, geom, get_translation=False, tolerance=0.01, check_neighbouring_cells=False):
+        """
+            returns True if self can be transformed into geom by a translation
+                (= without changing the geometry itself).
+
+        Parameters
+        ----------
+        geom
+        get_translation: additionally return the found translation
+        tolerance
+        check_neightbouring_cells: for periodic structures, recognizes two structures as equivalent, even if one\
+         of them has its atoms distributed in different unit cells compared to the other. More complete, but slower.
+        Returns
+        -------
+
+        """
+        # shift both geometries to origin, get their relative translation.
+        # Ignore center attribute (GeometryFile.center), if defined
+        meanA = self.getGeometricCenter(ignore_center_attribute=True)
+        meanB = geom.getGeometricCenter(ignore_center_attribute=True)
+        translation = meanA - meanB
+        self.centerCoordinates(ignore_center_attribute=True)
+        geom.centerCoordinates(ignore_center_attribute=True)
+
+        # check if they are equivalent (up to permutation)
+        is_equivalent = self.is_equivalent(geom, tolerance, check_neightbouring_cells=check_neighbouring_cells)
+        
+        # undo shifting to origin
+        self.coords += meanA
+        geom.coords += meanB
+        
+        if get_translation:
+            return is_equivalent, translation
+        else:
+            return is_equivalent
+
 
 ###############################################################################
 #                          Get Part of a Geometry                             #
 ###############################################################################
+    def get_atoms_by_indices(self, atom_indices : Union[int, np.array]):
+        """
+        Return a geometry instance with the atoms listed in atom_indices
+        
+        Parameters
+        ----------
+        atom_indices : Union[int, np.array]
+            List of integers, indices of those atoms which should be copied to
+            new geometry
+
+        Returns
+        -------
+        new_geom : Geometry
+        
+        """
+        new_geom = self.__class__()
+        new_geom.add_atoms(self.coords[atom_indices, :], [self.species[i] for i in atom_indices],
+                     constrain_relax=self.constrain_relax[atom_indices],
+                     initial_moment=[self.initial_moment[i] for i in atom_indices],
+                     initial_charge=[self.initial_charge[i] for i in atom_indices])
+        new_geom.lattice_vectors = self.lattice_vectors
+        return new_geom
+    
+    
+    def get_atoms_by_species(self, species):
+        """
+        get new geometry file with specific atom species
+        """
+        
+        L = np.array(self.species) == species
+        atom_indices = np.where(L)[0]
+        return self.get_atoms_by_indices(atom_indices)
+
+
     def get_primitive_slab(self, surface, threshold=1e-6):
         """
         Generates a primitive slab unit cell with the z-direction perpendicular
@@ -1718,7 +2648,7 @@ class Geometry:
         primitive_slab : Geometry
         """
         import spglib
-        lattice, scaled_positions, atomic_numbers = spglib.standardize_cell(self.getSPGlibCell())
+        lattice, scaled_positions, atomic_numbers = spglib.standardize_cell(self.get_spglib_cell())
         
         surface_vector = surface[0]*lattice[0,:] + surface[1]*lattice[1,:] + surface[2]*lattice[2,:]
         
@@ -1790,7 +2720,7 @@ class Geometry:
                             L2 = np.sum( frac_new_coord < -threshold )
                             
                             if not L1 and not L2:
-                                slab.add_atoms([new_coord], [PERIODIC_TABLE[new_species]])
+                                slab.add_atoms([new_coord], [self.periodic_table.get_chemical_symbol(new_species)])
                                 add_next_shell = True
                         
                         
@@ -1800,19 +2730,19 @@ class Geometry:
             if shell == 100:
                 warnings.warn('<Geometry.get_primitive_slab> could not build a correct slab.')
         
-        slab.alignLatticeVectorToVector(np.array([0,0,1]),2)
-        slab.alignLatticeVectorToVector(np.array([1,0,0]),0)
+        slab.align_lattice_vector_to_vector(np.array([0,0,1]),2)
+        slab.align_lattice_vector_to_vector(np.array([1,0,0]),0)
         
         scaled_slab_lattice = np.array(slab.lattice_vectors)
         # break symmetry in z-direction
         scaled_slab_lattice[2,:] *= 2
         frac_coords = utils.get_fractional_coords(slab.coords, scaled_slab_lattice)
-        species = [PERIODIC_TABLE[s] for s in slab.species]
+        species = [self.periodic_table.get_chemical_symbol(s) for s in slab.species]
         
         (primitive_slab_lattice, primitive_slab_scaled_positions, primitive_slab_atomic_numbers) \
         = spglib.find_primitive((scaled_slab_lattice, frac_coords, species), symprec=1e-5)
         
-        primitive_slab_species = [PERIODIC_TABLE[s] for s in primitive_slab_atomic_numbers]
+        primitive_slab_species = [self.periodic_table.get_chemical_symbol(s) for s in primitive_slab_atomic_numbers]
         primitive_slab_coords = primitive_slab_scaled_positions.dot(primitive_slab_lattice)
         # replace lattice vector in z-direction
         primitive_slab_lattice[2,:] = slab.lattice_vectors[2,:]
@@ -1823,7 +2753,7 @@ class Geometry:
         primitive_slab.moveToFirstUnitCell()
         
         # Sanity check: primitive_slab must be reducable to the standard unit cell 
-        check_lattice, _, _ = spglib.standardize_cell(primitive_slab.getSPGlibCell())
+        check_lattice, _, _ = spglib.standardize_cell(primitive_slab.get_spglib_cell())
         
         assert np.allclose( check_lattice, lattice ), \
         '<Geometry.get_primitive_slab> the slab that was constructed \
@@ -1879,7 +2809,7 @@ class Geometry:
         replica[:2] = surface_replica
         slab_new = primitive_slab.getPeriodicReplica(replica)
         
-        slab_new_layers = slab_new.getAtomLayers()
+        slab_new_layers = slab_new.get_atom_layers_indices()
         
         for atom_species in slab_new_layers:
             z_coords = list(slab_new_layers[atom_species])
@@ -1891,7 +2821,7 @@ class Geometry:
             for ind in range(n_layers_to_remove):
                 atom_indices_to_remove += slab_new_layers[atom_species][z_coords[ind]]
             
-            slab_new.removeAtoms( np.array(atom_indices_to_remove, dtype=np.int32) )
+            slab_new.remove_atoms( np.array(atom_indices_to_remove, dtype=np.int32) )
 
             if vacuum_height is not None:
                 slab_new.setVacuumheight(
@@ -1905,84 +2835,7 @@ class Geometry:
         return slab_new
 
 
-###############################################################################
-#                           Evaluation Functions                              #
-###############################################################################
-    def check_symmetry(self, transformation, tolerance, return_symmetrical=False):
-        """Returns True if the geometry is symmetric with respect to the transformation, and False if it is not.
-        If the geometry is periodic, transformation can be tuple (rotation, translation) or np.array (only rotation), \
-        otherwise it can only be np.array
-        :param return_symmetrical: return the corresponding transformed geometry together with the result"""
-        if isinstance(transformation,np.ndarray):
-            R = transformation
-            t=np.array([0,0,0])
-        elif isinstance(transformation,tuple):
-            if self.lattice_vectors is None:
-                raise AttributeError('Can not check translational symmetries in a non periodic structure')
-            else:
-                R,t=transformation
-
-        # original structure with all atoms in the first unit cell
-        self_1UC = copy.deepcopy(self)
-        self_1UC.moveToFirstUnitCell()
-        # original structure centered for reordering
-        centered_geometry = copy.deepcopy(self)
-        centered_geometry.centerCoordinates()
-        #apply transformation
-        symm_geometry = copy.deepcopy(self)
-        symm_geometry.transformFractional(R,np.array([0,0,0]),self.lattice_vectors)
-        symm_geometry.moveByFractionalCoords(t)
-        #prevent problems if the center is very close to the edge
-        center = utils.get_fractional_coords(symm_geometry.getGeometricCenter(),symm_geometry.lattice_vectors)
-        center[:2] %= 1.0
-        if 1-center[0]<0.001:
-            adjust = -(center[0]-0.0001)
-            symm_geometry.moveByFractionalCoords([adjust,0,0])
-        if 1-center[1]<0.001:
-            adjust = -(center[1]-0.0001)
-            symm_geometry.moveByFractionalCoords([0,adjust,0])
-
-        symm_geometry.moveCenterOfAtomsToFirstUnitCell(lattice=self.lattice_vectors)
-
-        #reorder atoms
-        offset_symm = np.mean(symm_geometry.coords,axis=0)
-        symm_geometry.centerCoordinates()
-        indices = centered_geometry.getTransformationIndices(symm_geometry)
-        symm_geometry.reorder_atoms(indices)
-        symm_geometry.move(offset_symm)
-        # compare in first unit cell
-        symm_geometry_1UC = copy.deepcopy(symm_geometry)
-        symm_geometry_1UC.moveToFirstUnitCell()
-        is_symmetric = symm_geometry_1UC.isEquivalent(self_1UC,tolerance=tolerance,check_neightbouring_cells=True)
-        # the simultaneous use of: 1)The moveToFirstUnitCell() function
-        #                          2)The check_neighbouring_cells flag
-        # is somehow redundant, but it works correctly.
-
-        if return_symmetrical:
-            return is_symmetric,symm_geometry
-        else:
-            return is_symmetric
-
-    
-
-###############################################################################
-#                             VARIOUS                                         #
-#                          not yet sorted                                     #
-###############################################################################
-    def move_multipoles(self, shift: np.array) -> None:
-        """
-        Moves all the multipoles by a shift vector
-        :param shift: list or array, len==3
-        :return:
-        """
-        assert len(shift)==3
-        for m in self.multipoles:
-            m[0]+=shift[0]
-            m[1]+=shift[1]
-            m[2]+=shift[2]
-        
-    
-    def getCollidingGroups(self, distance_threshold=1E-2, check_3D = False):
+    def get_colliding_groups(self, distance_threshold=1e-2, check_3D = False):
         """
         Remove atoms that are too close too each other from the geometry file.
         This approach is useful if one maps back atoms into a different cell and then needs to get rid
@@ -2016,760 +2869,32 @@ class Geometry:
             return [sorted(list(s)) for s in atoms_to_remove]
         else:
             return []
-
     
-    def _getCollisionIndices(self, atom_distances, distance_threshold=1E-2):
-        """ helper function for removeDuplicateAtoms
-        
-        Parameters
-        ----------
-        distance_threshold: float
-            maximum distance between atoms below which they are counted as duplicates
-
-        Returns
-        -------
-        
-        atoms_to_remove : list
-            indices of atoms that can be removed due to collision
-        """
-        
-        # get all distances between all atoms
-        is_collision = atom_distances < distance_threshold
-
-        colliding_atoms_dict = {}
-        colliding_atoms_list = []
-
-
-        # loop over all atoms
-        for i in range(self.n_atoms):
-
-            # evaluate only if atom is not already on the black list
-            if i not in colliding_atoms_list:
-                colliding_atoms_dict[i] = []
-                # loop over all distances to other atoms, neglecting the diagonal (thus i+1)
-                for j in range(i + 1, self.n_atoms):
-                    if is_collision[i, j]:
-                        colliding_atoms_dict[i].append(j)
-                        colliding_atoms_list.append(j)
-                        
-        return [(k, ind) for k, value in colliding_atoms_dict.items() for ind in list(value)]
-
-
-    def constrainAtomsBasedOnIndex(
-        self, 
-        indices_of_atoms_to_constrain,
-        constrain_dim_flags=None,
-    ):
-        """Sets a constraint for a few atoms in the system (identified by
-        'indices_of_atoms_to_constrain') for a geometry relaxation.
-        Since the relaxation constraint can be in any and/or all dimensions
-        the second parameter, 'constraint_dim_flags', makes it possible to 
-        set which dimension(s) should be constrained for which molecule.
-        By default all dimensions are to be constrained for all atoms are
-        constrained. If the dimension to constrain should be set individually
-        for different atoms, you need to provide a list of booleans of the shape
-        len(indices_of_atoms_to_constrain) x 3, which contains the constrain
-        flags for each dimension for each atom.
-
-        Parameters
-        ----------
-        indices_of_atoms_to_constrain
-        constrain_dim_flags                 list[boolean]   default: [True, True, True]
-        """
-        if constrain_dim_flags is None:
-            constrain_dim_flags = [True, True, True]
-
-        self.constrain_relax[indices_of_atoms_to_constrain,:] = constrain_dim_flags
-
-
-    def constrainAtomsBasedOnSpaceInterval(
+    
+    def get_cropped_geometry(
         self,
         xlim=(-np.inf, np.inf),
-        ylim=(-np.inf, np.inf),
-        zlim=(-np.inf, np.inf),
-        constrain_dim_flags=None
+        ylim=(-np.inf, np.inf), 
+        zlim=(-np.inf, np.inf), 
+        auto_margin=False
     ):
         """
-        Constrain all atoms that are within a cuboid (defined by
-        limits in all dimensions: xlim, etc.) for a geometry relaxation.
-
-        It is possible to define which dimension will be constrained, but since
-        the number of atoms in the cuboid is only calculated at runtime
-        the dimensions may only be set for all atoms at once. If you need to
-        set them individually please use constrainAtomsBasedOnIndex.
-
-        Parameters
-        ----------
-        zlim
-        xlim
-        ylim
-        constrain_dim_flags                 list[boolean]   default: [True, True, True]
+        Returns a copy of the object to which self.crop has been applied
+        
         """
-        if constrain_dim_flags is None:
-            constrain_dim_flags = [True, True, True]
-
-        #--- get indices of all atoms outside the required interval ---
-        indices_outside = self.getCroppingIndices(
-            xlim=xlim,
-            ylim=ylim,
-            zlim=zlim,
-            auto_margin=False
-        )
-        #---
-
-        #--- Filter all that are outside ---
-        # The indices of the atoms of relevance to us are all that are NOT
-        # outside of the cuboid
-        indices_inside = [
-            i for i in range(len(self)) if not i in indices_outside
-        ]
-        #---
-
-        self.constrainAtomsBasedOnIndex(indices_inside, constrain_dim_flags)
-
-
-    def setExternalForceBasedOnIndex(
-        self, 
-        indices_of_atoms_to_constrain,
-        external_force=np.zeros(3),
-    ):
-        """Sets a constraint for a few atoms in the system (identified by
-        'indices_of_atoms_to_constrain') for a geometry relaxation.
-        Since the relaxation constraint can be in any and/or all dimensions
-        the second parameter, 'constraint_dim_flags', makes it possible to 
-        set which dimension(s) should be constrained for which molecule.
-        By default all dimensions are to be constrained for all atoms are
-        constrained. If the dimension to constrain should be set individually
-        for different atoms, you need to provide a list of booleans of the shape
-        len(indices_of_atoms_to_constrain) x 3, which contains the constrain
-        flags for each dimension for each atom.
-
-        Parameters
-        ----------
-        indices_of_atoms_to_constrain
-        constrain_dim_flags                 list[boolean]   default: [True, True, True]
-        """
-        
-        self.external_force[indices_of_atoms_to_constrain,:] = external_force
-        
-    
-    def setCalculateFrictionBasedOnIndex(
-            self, 
-            indices_of_atoms,
-            calculate_friction=True,
-            ):
-        
-        self.calculate_friction[indices_of_atoms] = calculate_friction
-
-
-    def cropToUnitCell(self, lattice=None, frac_coord_factors=[0,1]):
-        ''' Removes all atoms that are outside the given unit cell. Similar to self.crop() but allows for arbitrary unit cells'''
-        # Atoms that have fractional coordinates outside the defined frac_coord_factors are removed. Per default frac_coord_factors=[0,1] 
-        
-        if lattice is None:
-            lattice = self.lattice_vectors
-        frac_coords = utils.get_fractional_coords(self.coords, lattice)
-        
-
-        
-        remove_inds = []
-        remove_inds += list(np.where(frac_coords[:, 0] >= frac_coord_factors[1])[0])
-        remove_inds += list(np.where(frac_coords[:, 1] >= frac_coord_factors[1])[0])
-        remove_inds += list(np.where(frac_coords[:, 0] < frac_coord_factors[0])[0])
-        remove_inds += list(np.where(frac_coords[:, 1] < frac_coord_factors[0])[0])
-        remove_inds += list(np.where(frac_coords[:, 2] > frac_coord_factors[1])[0])
-        remove_inds += list(np.where(frac_coords[:, 2] < frac_coord_factors[0])[0])
-
-        remove_inds = list(set(remove_inds))
-
-        self.removeAtoms(remove_inds)
-        self.lattice_vectors = lattice
-        
-        #In the following all redundant atoms, i.e. atoms that are multiplied at the same position when the unitcell is repeated periodically, are removed from the new unit cell
-        epsilon = 0.1; # Distance in Angstrom for which two atoms are assumed to be in the same position
-        init_geom = self
-        allcoords = init_geom.coords
-        allindices = init_geom.getIndicesOfAllAtoms()
-
-
-        # generate all possible translation vectors that could map an atom of the unit cell into itsself 
-        prim_lat_vec = []
-        for i in range(3):
-            prim_lat_vec.append([init_geom.lattice_vectors[i], -init_geom.lattice_vectors[i]])
-        self_mapping_translation_vectors = []
-
-        for i in prim_lat_vec:
-            for sign in range(2):
-                self_mapping_translation_vectors.append(i[sign])
-
-        for i in range(3):
-            for sign0 in range(2):
-                for k in range(3):
-                    for sign1 in range(2):
-                        if i != k:
-                            #print(f'i {i} k {k} sign0 {sign0} sign1 {sign1}')
-                            single_addition_vector = prim_lat_vec[i][sign0]+prim_lat_vec[k][sign1]
-                            self_mapping_translation_vectors.append(single_addition_vector)
-                            
-        for i in range(3):
-            for sign0 in range(2):
-                for k in range(3):
-                    for sign1 in range(2):
-                                for l in range(3):
-                                    for sign2 in range(2):
-                                        if i != k and i != l and k != l :
-                                            single_addition_vector = prim_lat_vec[i][sign0]+prim_lat_vec[k][sign1]+prim_lat_vec[l][sign2]
-                                            self_mapping_translation_vectors.append(single_addition_vector)
-                        
-
-
-
-        ## Find the indices of those atoms that are equivalent, i.e. atoms that are doubled when the unit cell is repeated periodically
-        
-        doubleindices = [] # list of pairs of atom indices that are equivalent
-        for i, coords_i in enumerate(allcoords):
-            for trans_l in self_mapping_translation_vectors:
-                coords_i_shift_l = copy.deepcopy(coords_i)
-                coords_i_shift_l += trans_l
-                for j, coords_j in enumerate(allcoords):
-                    if j != i:
-                        distance_i_shift_l_j = np.linalg.norm(coords_i_shift_l - coords_j)
-                        if distance_i_shift_l_j < epsilon:
-                            doubleindices.append([i,j])
-
-        for i in range(len(doubleindices)):
-               doubleindices[i].sort()
-
-        ###################################################################
-        ##Create a list of redundant atoms according to the atoms that are equivalent 
-        # according to all the pairs in doubleindices
-
-        liste = doubleindices 
-        to_be_killed = [] # List of all atom indicess that are redundant
-        for i, liste_i in enumerate(liste):
-            replacer = liste_i[0]
-            to_be_replaced = liste_i[1]  
-            to_be_killed.append(to_be_replaced)
-            for j, liste_j in enumerate(liste):
-                for k in range(2):
-                    if liste_j[k] == to_be_replaced :
-                        liste[j][k] = replacer
-        remainers = [j[0] for j in liste]                
-        for r in remainers:
-            for k in to_be_killed:
-                if k == r :
-                    to_be_killed.remove(k)
-
-        self.removeAtoms(to_be_killed)
-
-
-
-
-    def crop(self, xlim=(-np.inf, np.inf), ylim=(-np.inf, np.inf), zlim=(-np.inf, np.inf), auto_margin=False):
-        """Removes all atoms that are outside specified bounds.
-        If auto_margin == True then an additional margin of the maximum covalent radius
-        is added to all borders"""
-        indices_to_remove = self.getCroppingIndices(xlim, ylim, zlim, auto_margin)
-        self.removeAtoms(indices_to_remove)
-
-    def getCropped(self, xlim=(-np.inf, np.inf), ylim=(-np.inf, np.inf), zlim=(-np.inf, np.inf), auto_margin=False):
-        """Returns a copy of the object to which self.crop has been applied"""
         newgeom = deepcopy(self)
         newgeom.crop(xlim=xlim,ylim=ylim,zlim=zlim,auto_margin=auto_margin)
         return newgeom
-
-    def cropInverse(self, xlim=(-np.inf, np.inf), ylim=(-np.inf, np.inf), zlim=(-np.inf, np.inf), auto_margin=False):
-        """Removes all atoms that are inside specified bounds.
-        If auto_margin == True then an additional margin of the maximum covalent radius
-        is added to all borders"""
-        indices_to_keep = self.getCroppingIndices(xlim, ylim, zlim, auto_margin)
-        indices_to_remove = [i for i in range(self.n_atoms) if i not in indices_to_keep]
-        self.removeAtoms(indices_to_remove)
-    
-    def getCroppingIndices(self,
-                           xlim=(-np.inf, np.inf),
-                           ylim=(-np.inf, np.inf),
-                           zlim=(-np.inf, np.inf),
-                           auto_margin=False,
-                           inverse=False
-                           ):
-        """Gets indices of all atoms that are outside specified bounds.
-        If auto_margin == True then an additional margin of the maximum covalent radius
-        is added to all borders
-        :param inverse : if True, gets indices of all atoms INSIDE specified bounds"""
-
-        assert len(xlim) == 2, "xlim must have a lower and an upper bound"
-        assert len(ylim) == 2, "ylim must have a lower and an upper bound"
-        assert len(zlim) == 2, "zlim must have a lower and an upper bound"
-        if auto_margin:
-            margin = max([ut.getCovalentRadius(s) for s in self.species])
-            xlim = xlim[0] - margin, xlim[1] + margin
-            ylim = ylim[0] - margin, ylim[1] + margin
-            zlim = zlim[0] - margin, zlim[1] + margin
-
-        remove = np.zeros(len(self), bool)
-        remove = remove | (self.coords[:, 0] < xlim[0])
-        remove = remove | (self.coords[:, 0] > xlim[1])
-        remove = remove | (self.coords[:, 1] < ylim[0])
-        remove = remove | (self.coords[:, 1] > ylim[1])
-        remove = remove | (self.coords[:, 2] < zlim[0])
-        remove = remove | (self.coords[:, 2] > zlim[1])
-        indices_to_remove = np.arange(len(self))[remove]
-        if inverse:
-            indices_to_remove = [i for i in range(self.n_atoms) if i not in indices_to_remove]
-
-        return indices_to_remove
-
-
-    def getSubstrateIndicesFromParts(self, do_warn=True):
-        """
-        returns indices of those atoms that a part of the substrate.
-        The definition of the substrate does NOT rely of it being a metal or the height or something like that.
-        Instead a geometry part named 'substrate' must be defined.
-
-        do_warn: boolean    can be set to False to suppress warnings
-
-        Returns
-        -------
-        substrate_indices   list[int]
-        """
-
-        substrate_key = 'substrate'     # should probably moved to a class variable, but first finished folder-read-write
-
-        if not hasattr(self, 'geometry_parts') or not hasattr(self, 'geometry_part_descriptions'):
-            if do_warn:
-                print("getSubstrate: geometry parts not defined")
-            return None
-
-        if substrate_key not in self.geometry_part_descriptions:
-            if do_warn:
-                print("getSubstrate: geometry parts are defined, "
-                      "but part '{}' not found" .format(substrate_key))
-            return None
-
-        index_of_geometry_parts_substrate = self.geometry_part_descriptions.index(substrate_key)
-        substrate_indices = self.geometry_parts[index_of_geometry_parts_substrate]
-        return substrate_indices
-
-    def getIndicesOfMetal(self):
-        "Gets indices of all atoms with atomic number > 18 and atomic numbers 3,4,11,12,13,14"
-        atom_inds = [ut.getAtomicNumber(s) for s in self.species]
-        metal_atoms = []
-        for i,ind in enumerate(atom_inds):
-            if (ind> 18) or (ind in [3,4,11,12,13,14]):
-                metal_atoms.append(i)
-        return metal_atoms
-
-    def getIndicesOfSubsection(self,
-                               xlim=(-np.inf, np.inf),
-                               ylim=(-np.inf, np.inf),
-                               zlim=(-np.inf, np.inf),
-                               ):
-        "Gets indices of all atoms contained in the indicated volume of space"
-        indices = self.getCroppingIndices(xlim=xlim,
-                                          ylim=ylim,
-                                          zlim=zlim,
-                                          inverse=True)
-        return indices
-
-
-    
-    def getIndicesOfMolecules(self, substrate_species=None):
-        """WARNING: do not use this function, it is deprecated!
-        It fetches the indices of the substrate atoms, but it defaults to 
-        just returning all non-metal atom's indices!
-        
-        If substrate_species is given indices of all atoms that are not of the 
-        substrate species are returned.
-        """
-        
-        if substrate_species:
-            substrate_indices = self.getIndicesOfSpecies(substrate_species)
-        else:
-            substrate_indices = self.getIndicesOfMetal()
-        
-        return [i for i in range(self.n_atoms) if i not in substrate_indices]
-
-
-    def getIndicesOfSpecies(self, species):
-        """Returns all indices of atoms the are of species defined in the input.
-        species can be a string of a list
-        """
-        # make sure species is a list
-        if isinstance(species, str):
-            species = [species]
-        
-        return [i for i in range(self.n_atoms) if self.species[i] in species]
-
-
-    def getSubstrateIndices(self, primitive_substrate=None, dimension = 2,threshold = .3):
-        """
-        This method returns the indices of all atoms that are part of the substrate.
-        Often these are simply all metal atoms of the geometry.
-        But the substrate can also be organic in which case it can't be picked by being a metal.
-        And there might be multiple adsorbate layers in which case only the molecules of the highest layer
-        shall be counted as adsorbates and the others are part of the substrate.
-
-        dimension: int      only used if primitive_substrate is not None
-        threshold: float    only used if primitive_substrate is not None
-
-        Returns
-        -------
-        indices of all substrate atoms: list[int]
-        """
-
-        # case 1: if a primitive_substrate was passed, use that one for the decision
-        # (copied from self.removeSubstrate)
-        if primitive_substrate is not None:
-            substrate_species = set(primitive_substrate.species)
-            substrate_heights = primitive_substrate.coords[:,dimension]
-            substrate_candidate_indices = [i for i,s in enumerate(self.species) if s in substrate_species]
-            substrate_indices = []
-            for c in substrate_candidate_indices:
-                if np.any(np.absolute(substrate_heights - self.coords[c,dimension]) < threshold):
-                    substrate_indices.append(c)
-            return substrate_indices
-
-        # case 2: if no substrate was passed but a geometry_parts "substrate" is defined in geometry_parts, use that one
-        substrate_indices_from_parts = self.getSubstrateIndicesFromParts(do_warn=False)
-        if substrate_indices_from_parts is not None:
-            return substrate_indices_from_parts
-            # adsorbate_indices = [i for i in self.getIndicesOfAllAtoms() if i not in substrate_indices_from_parts]
-
-        # case 3: if neither a substrate was passed, nor a geometry_parts "substrate" is defined,
-        #            use a fallback solution: assume that the substrate (and nothing else) is a metal
-        warnings.warn("Geometry.getIndicesOfAdsorbates: Substrate is not explicitly defined. "
-                      "Using fallback solution of counting all metal atoms as substrate.")
-        substrate_indices_from_metal = self.getIndicesOfMetal()
-        return substrate_indices_from_metal
-        # adsorbate_indices = [i for i in self.getIndicesOfAllAtoms() if i not in substrate_indices_from_metal]
-
-    def getSubstrate(self, primitive_substrate=None):
-        substrate_indices = self.getSubstrateIndices(primitive_substrate=primitive_substrate)
-        return self.getAtomsByIndices(substrate_indices)
-
-    def getAdsorbateIndices(self, primitive_substrate=None):
-        """
-        This method returns the indices of all atoms that are NOT part of the substrate.
-        In a classical organic monolayer on a metal substrate these are simply all molecules.
-        But the substrate can also be organic in which case it can't be picked by being a metal.
-        And there might be multiple adsorbate layers in which case only the molecules of the highest layer
-        shall be counted as adsorbates.
-
-        Returns
-        -------
-        indices of all adsorbate atoms: list[int]
-        """
-
-        substrate_indices = self.getSubstrateIndices(primitive_substrate=primitive_substrate)
-        # invert:
-        return [i for i in self.getIndicesOfAllAtoms() if i not in substrate_indices]
-
-    def getAdsorbates(self, primitive_substrate=None):
-        adsorbate_indices = self.getAdsorbateIndices(primitive_substrate=primitive_substrate)
-        return self.getAtomsByIndices(adsorbate_indices)
-    
-    def getIndicesOfAllAtoms(self, species=None):
-        if species is None:
-            return [i for i in range(self.n_atoms)]
-        else:
-            return [i for i in range(self.n_atoms) if self.species[i] == species]
-
-    #TODO: Rename this function to removeMetalAtoms to avoid confusion / unexpected results!
-    def removeMetalSubstrate(self):
-        "Removes all atoms with atomic number > 18 and atomic numbers 3,4,11,12,13,14"
-        metal_atoms = self.getIndicesOfMetal()
-        self.removeAtoms(metal_atoms)
-
-    def removeSubstrate(self, primitive_substrate, dimension=2, threshold=0.3):
-        '''Removes all substrate atoms given the primitive substrate by identifying 
-           species and height
-           
-           Parameters
-           ----------
-           primitive_substrate: Geometry
-               primitive substrate file of system
-               
-           dimension: int
-               dimension to use as z-axis
-           
-           threshold: float
-               height threshold in A
-        '''
-        # TODO create species dependent heights and speedup calculations
-
-        # old:
-        # substrate_species = set(primitive_substrate.species)
-        # substrate_heights = primitive_substrate.coords[:,dimension]
-        # candidates = [i for i,s in enumerate(self.species) if s in substrate_species]
-        # remove_atoms = []
-        # for c in candidates:
-        #     if np.any(np.absolute(substrate_heights - self.coords[c,dimension])<threshold):
-        #         remove_atoms.append(c)
-        # self.removeAtoms(remove_atoms)
-
-        substrate_indices = self.getSubstrateIndices(primitive_substrate=primitive_substrate)
-        self.removeAtoms(substrate_indices)
-
-    
-    def removeMolecules(self):
-        "Removes all atoms that are not metal"
-        mol_inds = self.getIndicesOfMolecules()
-        self.removeAtoms(mol_inds)
-
-    def removeAdsorbates(self, primitive_substrate=None):
-        """
-        Removes all atoms that are not part of the substrate (in place!)
-        """
-        adsorbate_indices = self.getAdsorbateIndices(primitive_substrate=primitive_substrate)
-        self.removeAtoms(adsorbate_indices)
-
-    def removePeriodicity(self):
-        """
-        Makes geometry non-periodic by setting its lattice vectors to zero
-        """
-        self.lattice_vectors = np.zeros((3,3), dtype=float)
-
-    def getAtomsByIndices(self, atom_indices):
-        """
-        Return a geometry instance with the atoms listed in atom_indices
-        Parameters
-        ----------
-        atom_indices    list of integers, indices of those atoms which should be copied to new geometry
-
-        Returns
-        -------
-        Geometry
-        """
-        
-        new_geom = self.__class__()
-        new_geom.add_atoms(self.coords[atom_indices, :], [self.species[i] for i in atom_indices],
-                     constrain_relax=self.constrain_relax[atom_indices],
-                     initial_moment=[self.initial_moment[i] for i in atom_indices],
-                     initial_charge=[self.initial_charge[i] for i in atom_indices])
-        new_geom.lattice_vectors = self.lattice_vectors
-        return new_geom
-    
-    def getAtomsBySpecies(self, species):
-        """
-        get new geometry file with specific atom species
-        """
-        
-        L = np.array(self.species) == species
-        atom_indices = np.where(L)[0]
-        return self.getAtomsByIndices(atom_indices)
     
     
-    def getMolecules(self):
-        mol_inds = self.getIndicesOfMolecules()
-        return self.getAtomsByIndices(mol_inds)
+    def get_substrate(self, primitive_substrate=None):
+        substrate_indices = self.get_substrate_indices(primitive_substrate=primitive_substrate)
+        return self.get_atoms_by_indices(substrate_indices)
     
-    def getMetalSubstrate(self):
-        """
-        Returns all atoms with atomic number > 18 and atomic numbers 3,4,11,12,13,14
-        """
-        metal_atoms = self.getIndicesOfMetal()
-        return self.getAtomsByIndices(metal_atoms)
     
-    def getFirstMetalSubstrateLayer(self):
-        sub = self.getMetalSubstrate()
-        max_z = max( sub.coords[:,2] )
-        L1 = sub.coords[:,2] > max_z-1
-        atom_indices = np.nonzero(L1)
-        return sub.getAtomsByIndices(atom_indices[0])
-
-    def getFirstSubstrateLayer(self, primitive_substrate=None, layer_separation = 1.0, only_contains_substrate=False):
-        """
-        Returns a new GeometryFile that contains the top-most layer of the substrate. If the substrate is not purely
-        metallic, the primitive unit cell of the slab ('primitive_substrate') is needed in order to discriminate between
-        substrate and adsorbate molecules.
-        """
-        if only_contains_substrate:
-            sub = self
-        else:
-            sub = self.getSubstrate(primitive_substrate)
-
-        max_z = max( sub.coords[:,2] )
-        L1 = sub.coords[:,2] > max_z - layer_separation
-        atom_indices = np.nonzero(L1)
-        return sub.getAtomsByIndices(atom_indices[0])
-    
-    def getAtomLayers(self, threshold=1e-2):
-        """Returns a dict of the following form:
-        {<Element symbol>: {height: [indices of atoms of element at height]}}
-        """
-
-        layers = {}
-        
-        for ind, atom_coord in enumerate(self.coords):
-            atom_species = self.species[ind]
-            if not atom_species in layers:
-                layers[atom_species] = {}
-            
-            add_new_z_coord = True
-            for z_coord in layers[atom_species].keys():
-                if abs(atom_coord[2] - z_coord) < threshold:
-                    layers[atom_species][z_coord].append(ind)
-                    add_new_z_coord = False
-            
-            if add_new_z_coord:
-                layers[atom_species][atom_coord[2]] = [ind]
-        
-        return layers
-
-    def getAtomLayersByHeight(self, threshold=1e-2):
-        """Similarly to the above method this function returns a dict continaing
-        info about height and the indices of atoms at that height. The
-        dict structure is thus:
-
-        {height: [indices of atoms at that height]}
-
-        The difference to above: in the above case there is another dictionary
-        level, which divides by atomic species.
-        """
-
-        layers_by_species = self.getAtomLayers(threshold=threshold)
-
-        layers_by_height = defaultdict(list)
-
-        #--- merge height-indices dicts ---
-        for data in layers_by_species.values():
-
-            for height, indices in data.items():
-                new=True
-                for new_height in layers_by_height.keys():
-                    if abs(height-new_height) < threshold:
-                        layers_by_height[new_height] += indices
-                        new=False
-                if new:
-                    layers_by_height[height] += indices
-
-        # sort dictionary by descending height
-        layers_by_height = dict(sorted(layers_by_height.items(),reverse=True))
-        return layers_by_height
-
-
-    def getSubstrateLayer(self, layer_indices, substrate_indices=None,
-                          substrate=None, threshold=1e-2,primitive_substrate=None):
-        """
-        get substrate layer by indices. The substrate is determined by
-        default by the function self.getSubstrate(). For avoiding a faulty
-        substrate determination it can be either given through indices or
-        through the substrate geometry itself
-        :param layer_indices: list of indices of layers that shall be returned
-        :param substrate_indices: list of indices of substrate atoms
-        :param substrate: geometry file of substrate
-        :param substrate: geometry file of a primitive unit cell of substrate
-        """
-
-        if substrate is not None:
-            sub = substrate
-        elif substrate_indices is not None:
-            sub = self.getAtomsByIndices(substrate_indices)
-        else:
-            sub = self.getSubstrate(primitive_substrate=primitive_substrate)
-        layers = sub.getAtomLayersByHeight(threshold=threshold)
-        
-        heights = list(layers.keys())
-        heights = np.sort(heights)
-        heights = heights[::-1]
-        # if layer_indices is an empty list, keeps the substrate as a whole
-        if not layer_indices:
-            sub_new = sub
-        else:
-            sub_new = self.__class__()
-            sub_new.lattice_vectors = sub.lattice_vectors
-            for layer_ind in layer_indices:
-                sub_new += sub.getAtomsByIndices(layers[heights[layer_ind]])
-        
-        return sub_new
-
-    
-    def getAllNeighbouringAtoms(self, bond_factor=1.5):
-        coords = self.coords
-        species = self.species
-
-        all_species = set(species)
-        cov_radii = ut.COVALENT_RADII
-        all_species_pairs = itertools.product(all_species, repeat=2)
-        
-        bond_thresholds = {}
-        for pair in all_species_pairs:
-            bond_thresholds[pair] = (cov_radii[pair[0]]+cov_radii[pair[1]])*bond_factor
-
-        neighbouring_atoms = {}
-
-        for i, coord in enumerate(coords):
-            for j, coord_test in enumerate(coords):
-                if i >= j:
-                    continue
-                
-                pair_index = (i, j)
-                
-                if not pair_index in neighbouring_atoms:
-                    dist = np.linalg.norm(coord - coord_test)
-                    
-                    pair_species = (species[i], species[j])
-                    
-                    if dist < bond_thresholds[pair_species]:
-                        neighbouring_atoms[pair_index] = [pair_species, dist]
-        
-        return neighbouring_atoms
-    
-
-    def removeCollisions(self, keep_latest: Union[bool, slice] = True):
-        """Removes all atoms that are in a collision group as given by GeometryFile.getCollidingGroups.
-
-        Args:
-            keep_latest (Union[bool, slice], optional): Whether to keep the earliest or latest added.
-                If a slice object is given, the selection is used to determine which atoms to keep.
-                Defaults to True.
-
-        Raises:
-            ValueError: Raised when keep_latest is neither a bool nor a slice object.
-        """
-        indices = []
-        if isinstance(keep_latest, bool):
-            if keep_latest:
-                selection = slice(None, -1, None)
-            else:
-                selection = slice(1, None, None)
-        elif isinstance(keep_latest, slice):
-            selection = keep_latest
-        else:
-            raise ValueError("keep_latest must be a bool or a slice object")
-        collisions = self.getCollidingGroups()
-        for group in collisions:
-            indices += group[selection]
-        self.removeAtoms(indices)
-
-
-    def removeRemovium(self):
-        indices = []
-        rm_indices = [i for i, s in enumerate(self.species) if s == "Rm"]
-        collisions = self.getCollidingGroups()
-        for group in collisions:
-            if any([i in rm_indices for i in group]):
-                indices += group
-        self.removeAtoms(indices)
-
-    def add_CPs(self, CP_coords):
-        """ Adds CPs for CREST calculations"""
-        self.add_atoms(CP_coords,
-                      ['CP' for n in range(len(CP_coords))],
-                      constrain_relax=[[True,True,True] for n in range(len(CP_coords))])
-
-
-    def remove_CP(self):
-        """ Removes CPs to turn the CREST setting of the calculation off"""
-        CPs = np.array(self.species)=='CP'
-        CP_inds = np.arange(0,len(self.species))[CPs]
-        self.removeAtoms(CP_inds)
-
-    def getSpeciesAtomicNumber(self):
-        """Get the atomic numbers of all atoms in the geometry file"""
-        species = [PERIODIC_TABLE[s] for s in self.species]
-        return species
+    def get_adsorbates(self, primitive_substrate=None):
+        adsorbate_indices = self.get_adsorbate_indices(primitive_substrate=primitive_substrate)
+        return self.get_atoms_by_indices(adsorbate_indices)
 
 
     def get_periodic_replica(self,
@@ -2840,49 +2965,13 @@ class Geometry:
         return new_geom
     
 
-    def getPeriodicReplicaToFillBox(self,
-                                    box_limits
-                                    ):
+    def get_split_into_molecules(self, threshold) -> list:
         """
-        Returns a XY periodic replica of the geometry file of exactly the necessary dimensions to fill the space indicated by box_limits
-        :param box_limits: iterable(min_x, max_x, min_y, max_y)
-        :return: GeometryFile()
+        Splits a structure into individual molecules. Two distinct molecules
+        A and B are defined as two sets of atoms, such that no atom in A is
+        closer than the selected thresold to any atom of B
+        
         """
-        from sample.helpers.trigonometry import getPointsOnSquare
-
-        def any_in_box(coords_2D_array,box):
-            # checks if any of the XY coordiantes in coords_2D_array is included within the boundaries of box
-            atoms_in = (coords_2D_array[:,0]>=box[0]) & (coords_2D_array[:,0]<=box[1]) & (coords_2D_array[:,1]>=box[2]) & (coords_2D_array[:,1]<=box[3])
-            any_in = np.any(atoms_in)
-            return any_in
-
-        original_geom = deepcopy(self)
-        new_geom = deepcopy(self)
-        layer_index = 1
-        while True:
-            # proceeds along squares of increasing size
-            shifts_copies_layer = getPointsOnSquare(layer_index)
-            any_in_radius = False
-            for shift in shifts_copies_layer:
-                shifted_geom = deepcopy(original_geom)
-                shifted_geom.moveByFractionalCoords(np.array([shift[0],shift[1],0]),shifted_geom.lattice_vectors)
-                # if the shifted geometry has an atom within the box, includes it in the box
-                if any_in_box(shifted_geom.coords[:,:-1],box_limits):
-                    new_geom += shifted_geom
-                    any_in_radius = True
-            # if a square layer is completely outside of the box, stops
-            if not any_in_radius:
-                break
-            layer_index += 1
-        return new_geom
-    
-
-    def splitIntoMolecules(self,threshold):
-        """Splits a structure into individual molecules. Two distinct molecules A and B are defined as two sets of atoms,
-        such that no atom in A is closer than the selected thresold to any atom of B"""
-
-
-
         from scipy.spatial import distance_matrix
         coords = deepcopy(self.coords)
         distances = distance_matrix(coords,coords)
@@ -2924,321 +3013,197 @@ class Geometry:
 
         molecules = []
         for molecule_indices in molecules_indices_sets:
-            complementary_indices = [x for x in self.getIndicesOfAllAtoms() if x not in molecule_indices]
+            complementary_indices = [x for x in self.get_indices_of_all_atoms() if x not in molecule_indices]
             g=deepcopy(self)
-            g.removeAtoms(complementary_indices)
+            g.remove_atoms(complementary_indices)
             molecules.append(g)
 
         return molecules
-
-
-    def isEquivalent(self, geom, tolerance=0.01,check_neightbouring_cells=False):
-        """Check if this geometry is equivalent to another given geometry.
-        The function checks that the same atoms sit on the same positions 
-        (but possibly in some permutation)
-
-        :param check_neightbouring_cells: for periodic structures, recognizes two structures as equivalent, even if one\
-         of them has its atoms distributed in different unit cells compared to the other. More complete, but slower.  """
-
-
-
-
-        # Check that both geometries have same number of atoms
-        # If not, they cannot be equivalent
-        if geom.n_atoms != self.n_atoms:
-            return False
-
-        # check in neighbouring cells, to account for geometries 'broken' around the cell border
-        if check_neightbouring_cells:
-            if self.lattice_vectors is not None:
-                geom = geom.getPeriodicReplica((3,3),explicit_replications=[[-1,0,1],[-1,0,1]])
-            else:
-                print('Non periodic structure. Ignoring check_neighbouring_cells')
-
-
-        n_atoms = self.n_atoms
-        n_atoms_geom = geom.n_atoms
-        # Check for each atom in coords1 that is has a matching atom in coords2
-        for n1 in range(n_atoms):
-            is_ok = False
-            for n2 in range(n_atoms_geom):
-                if self.species[n1] == geom.species[n2]:
-                    d = np.linalg.norm(self.coords[n1,:] - geom.coords[n2,:])
-                    if d < tolerance:
-                        # Same atom and same position
-                        is_ok = True
-                        break
-                    
-            if not is_ok:
-                return False
-        return True
-        
-    def isEquivalentUpToTranslation(self, geom, get_translation=False, tolerance=0.01, check_neighbouring_cells=False):
+    
+    
+    def get_layers(
+        self,
+        layer_indices : list,
+        threshold: float=1e-2
+    ):
         """
-            returns True if self can be transformed into geom by a translation
-                (= without changing the geometry itself).
+        Get substrate layer by indices. The substrate is determined by
+        default by the function self.get_substrate. For avoiding a faulty
+        substrate determination it can be either given through indices or
+        through the substrate geometry itself.
 
         Parameters
         ----------
-        geom
-        get_translation: additionally return the found translation
-        tolerance
-        check_neightbouring_cells: for periodic structures, recognizes two structures as equivalent, even if one\
-         of them has its atoms distributed in different unit cells compared to the other. More complete, but slower.
+        layer_indices : list
+            List of indices of layers that shall be returned.
+        substrate_indices : Union[None, list], optional
+            List of indices of substrate atoms. The default is None.
+        substrate : Union[None, Geometry()], optional
+            Geometry of substrate. The default is None.
+        threshold : float, optional
+            DESCRIPTION. The default is 1e-2.
+        primitive_substrate : TYPE, optional
+            DESCRIPTION. The default is None.
+
         Returns
         -------
+        geometry_of_layer : TYPE
+            Geometry of layer.
 
         """
-        # shift both geometries to origin, get their relative translation.
-        # Ignore center attribute (GeometryFile.center), if defined
-        meanA = self.getGeometricCenter(ignore_center_attribute=True)
-        meanB = geom.getGeometricCenter(ignore_center_attribute=True)
-        translation = meanA - meanB
-        self.centerCoordinates(ignore_center_attribute=True)
-        geom.centerCoordinates(ignore_center_attribute=True)
-
-        # check if they are equivalent (up to permutation)
-        is_equivalent = self.isEquivalent(geom, tolerance, check_neightbouring_cells=check_neighbouring_cells)
+        layers = self.get_atom_layers_indices_by_height(threshold=threshold)
         
-        # undo shifting to origin
-        self.coords += meanA
-        geom.coords += meanB
+        heights = list(layers.keys())
+        heights = np.sort(heights)
+        heights = heights[::-1]
         
-        if get_translation:
-            return is_equivalent, translation
+        # if layer_indices is an empty list, keeps the substrate as a whole
+        if not layer_indices:
+            geometry_of_layer = self
         else:
-            return is_equivalent        
-
-
-
-
-    def getSPGlibCell(self):
-        """
-        Returns the unit cell in a format that can be used in spglib (to find symmetries)
+            geometry_of_layer = self.__class__()
+            geometry_of_layer.lattice_vectors = self.lattice_vectors
+            for layer_ind in layer_indices:
+                geometry_of_layer += self.get_atoms_by_indices(layers[heights[layer_ind]])
         
-        return : tuple
-            (lattice vectors, frac coordinates of atoms, atomic numbers)
-        """
-        coordinates = utils.get_fractional_coords(self.coords, self.lattice_vectors)
-        
-        atom_number = []
-        for atom_name in self.species:
-            atom_number.append( PERIODIC_TABLE[atom_name] )
-        
-        return (self.lattice_vectors, coordinates, atom_number)
+        return geometry_of_layer
     
-    def getSymmetries(self, save_directory=None,symmetry_precision=1e-05):
-        """
-        Returns symmetries (rotation and translation matrices) from spglig.
-        works only for unitcell and supercell geometries (lattice vecotrs must not be 0)
-
-        Beware: The returned symmetry matrices are given with respect to fractional coordinates, not Cartesian ones!
-
-        See https://atztogo.github.io/spglib/python-spglib.html#get-symmetry for details
-
-        Parameters:
-        -----------
-        save_directory : str
-            save directory in string format, file will be name symmetry.pickle (default = None --> symmetry is not saved)
-        """
-        import spglib
-        import pickle
-        import os
-        
-        if np.count_nonzero(self.lattice_vectors) == 0:
-            print('Lattice vectors must not be 0! getSymmetry requires a unitcell-like geometry file!')
-            raise ValueError(self.lattice_vectors)
-        
-        unit_cell = self.getSPGlibCell()
-        symmetry = spglib.get_symmetry(unit_cell, symprec=symmetry_precision)
-        
-        if not save_directory == None:
-            if not os.path.exists(save_directory):
-                print('symmetry not saved; save_directory does not exist')
-            else:
-                save_directory = os.path.join(save_directory, 'symmetry.pickle')
-                pickle.dump( symmetry, open( save_directory, "wb" ),  protocol=pickle.HIGHEST_PROTOCOL)
-        
-        return symmetry
     
-    def getLargestAtomDistance(self,dims_to_consider = (0,1,2)):
+    def get_substrate_layers(
+        self,
+        layer_indices : list,
+        threshold: float=1e-2,
+        primitive_substrate=None,
+        substrate_indices: Union[None, list]=None
+    ):
         """
-        find largest distance between atoms in geometry
-        
-        dims_to_consider: dimensions along which largest distance should be calculated
+        Get substrate layer by indices. The substrate is determined by
+        default by the function self.get_substrate. For avoiding a faulty
+        substrate determination it can be either given through indices or
+        through the substrate geometry itself.
 
-        #search tags; molecule length, maximum size
-        """
-        mask = np.array([i in dims_to_consider for i in range(3)],dtype = bool)
-        geometry_size = 0
-        for ind1 in range(self.n_atoms):
-            for ind2 in range(ind1, self.n_atoms):
-                geometry_size_test = np.linalg.norm(self.coords[ind1][mask] - self.coords[ind2][mask])
-                
-                if geometry_size_test > geometry_size:
-                    geometry_size = geometry_size_test
-                    
-        return geometry_size
+        Parameters
+        ----------
+        layer_indices : list
+            List of indices of layers that shall be returned.
+        threshold : float, optional
+            DESCRIPTION. The default is 1e-2.
+        primitive_substrate : TYPE, optional
+            DESCRIPTION. The default is None.
+        substrate_indices : Union[None, list], optional
+            List of indices of substrate atoms. The default is None.
 
-    def getDistanceList(self):
-        """
-        purpose: Return list of distances between atoms
-        including distances to adjacent unit cells
-        currently only returns distances between carbon atoms (denoted C, C1, or C2 in geometry.in)
-        usage: 
-              MyDistances=[]
-              MyDistances=gf.getDistanceList()
-        """
-        
-        #Note: In principle, it would be possible to exclude the interaction of an moleucle with itself
-        #(via its species designation). However, that would require assumptions about the entry 
-        # (e.g. that the molecule is actually connected, even if it goes beyond the borders of the unit cell)
-        #These cannot be easily asserted in this function, therefore I opted not to implement this
-        # functionality. Feel free to change. 
-        
-        
-        AllowedSpecies=('C','C1','C2') #only compute distances between the listed species        
-        DistanceCutOff=25 #Same unit as input. Do not list distances which are further than that. 
-        debug_info=False
-        
-        DistanceSet=[]
-
-
-        for OriginAtom in range (0,self.n_atoms):   #Loop over all atoms
-            if (not (self.species[OriginAtom] in AllowedSpecies)  ): continue
-            OriginCoord=self.coords[OriginAtom]
+        Returns
+        -------
+        geometry_of_layer : TYPE
+            Geometry of substrate layer.
             
-            for TargetAtom in range(OriginAtom,self.n_atoms): #Loop over all other atoms in the list.
-                if (not (self.species[TargetAtom] in AllowedSpecies)  ): continue
-                
-                for Lat1 in range(-5,6): #Loop over all unit cells defined by lattice 1
-                    for Lat2 in range(-5,6): #Loop over all unit cells defined by lattice 2
-                        if (OriginAtom==TargetAtom and Lat1==0 and Lat2==0): continue #No distance between itself
-                        
-                        TargetCoord=self.coords[TargetAtom]+Lat1*self.lattice_vectors[0,:]+Lat2*self.lattice_vectors[1,:]
-                        ThisDistance = ( ((OriginCoord[0]-TargetCoord[0])**2)+((OriginCoord[1]-TargetCoord[1])**2)+((OriginCoord[2]-TargetCoord[2])**2) )**0.5
-                        if (ThisDistance <= DistanceCutOff):
-                            DistanceSet.append(ThisDistance)
-
-                        if (debug_info):
-                            print("Origin: ", OriginAtom, OriginCoord)
-                            print("Target: ", TargetAtom, TargetCoord)
-                            print ("Supercell ", Lat1, Lat2)
-                            print("Distance: ", ThisDistance)
-                            
-        print ("Loop finished")
-        print (len(DistanceSet), " entries found")
-        return DistanceSet
-
-
-    def getPrincipalMomentsOfInertia(self):
         """
-        Calculates the eigenvalues of the moments of inertia matrix
+        if substrate_indices is not None:
+            sub = self.get_atoms_by_indices(substrate_indices)
+        else:
+            sub = self.get_substrate(primitive_substrate=primitive_substrate)
+            
+        return sub.get_layers(layer_indices=layer_indices, threshold=threshold)
+    
+
+###############################################################################
+#                           Evaluation Functions                              #
+###############################################################################
+    def check_symmetry(self, transformation, tolerance, return_symmetrical=False):
+        """Returns True if the geometry is symmetric with respect to the transformation, and False if it is not.
+        If the geometry is periodic, transformation can be tuple (rotation, translation) or np.array (only rotation), \
+        otherwise it can only be np.array
+        :param return_symmetrical: return the corresponding transformed geometry together with the result"""
+        if isinstance(transformation,np.ndarray):
+            R = transformation
+            t=np.array([0,0,0])
+        elif isinstance(transformation,tuple):
+            if self.lattice_vectors is None:
+                raise AttributeError('Can not check translational symmetries in a non periodic structure')
+            else:
+                R,t=transformation
+
+        # original structure with all atoms in the first unit cell
+        self_1UC = copy.deepcopy(self)
+        self_1UC.moveToFirstUnitCell()
+        # original structure centered for reordering
+        centered_geometry = copy.deepcopy(self)
+        centered_geometry.centerCoordinates()
+        #apply transformation
+        symm_geometry = copy.deepcopy(self)
+        symm_geometry.transformFractional(R,np.array([0,0,0]),self.lattice_vectors)
+        symm_geometry.moveByFractionalCoords(t)
+        #prevent problems if the center is very close to the edge
+        center = utils.get_fractional_coords(symm_geometry.getGeometricCenter(),symm_geometry.lattice_vectors)
+        center[:2] %= 1.0
+        if 1-center[0]<0.001:
+            adjust = -(center[0]-0.0001)
+            symm_geometry.moveByFractionalCoords([adjust,0,0])
+        if 1-center[1]<0.001:
+            adjust = -(center[1]-0.0001)
+            symm_geometry.moveByFractionalCoords([0,adjust,0])
+
+        symm_geometry.moveCenterOfAtomsToFirstUnitCell(lattice=self.lattice_vectors)
+
+        #reorder atoms
+        offset_symm = np.mean(symm_geometry.coords,axis=0)
+        symm_geometry.centerCoordinates()
+        indices = centered_geometry.get_transformation_indices(symm_geometry)
+        symm_geometry.reorder_atoms(indices)
+        symm_geometry.move(offset_symm)
+        # compare in first unit cell
+        symm_geometry_1UC = copy.deepcopy(symm_geometry)
+        symm_geometry_1UC.moveToFirstUnitCell()
+        is_symmetric = symm_geometry_1UC.is_equivalent(self_1UC,tolerance=tolerance,check_neightbouring_cells=True)
+        # the simultaneous use of: 1)The moveToFirstUnitCell() function
+        #                          2)The check_neighbouring_cells flag
+        # is somehow redundant, but it works correctly.
+
+        if return_symmetrical:
+            return is_symmetric,symm_geometry
+        else:
+            return is_symmetric
+
+
+###############################################################################
+#                            Protected Functions                              #
+###############################################################################
+    def _get_collision_indices(self, atom_distances, distance_threshold=1E-2):
+        """ helper function for removeDuplicateAtoms
+        
+        Parameters
+        ----------
+        distance_threshold: float
+            maximum distance between atoms below which they are counted as duplicates
 
         Returns
         -------
-        principal moments of inertia in kg * m**2:   numpy.ndarray, shape=(3,), dtype=np.float64
+        
+        atoms_to_remove : list
+            indices of atoms that can be removed due to collision
         """
-        masses_kg = [Units.ATOMIC_MASS_IN_KG * ATOMIC_MASSES[PERIODIC_TABLE[s]] for s in self.species]
+        
+        # get all distances between all atoms
+        is_collision = atom_distances < distance_threshold
 
-        center_of_mass = self.getCenterOfMass()
-        r_to_center_in_m = Units.ANGSTROM_IN_METER * (self.coords - center_of_mass)
-
-        ###########
-        # begin: code based on ase/atoms.py: get_moments_of_inertia
-        # (GNU Lesser General Public License)
-        # Initialize elements of the inertial tensor
-        I11 = I22 = I33 = I12 = I13 = I23 = 0.0
-        for i in range(len(self)):
-            x, y, z = r_to_center_in_m[i]
-            m = masses_kg[i]
-
-            I11 += m * (y ** 2 + z ** 2)
-            I22 += m * (x ** 2 + z ** 2)
-            I33 += m * (x ** 2 + y ** 2)
-            I12 += -m * x * y
-            I13 += -m * x * z
-            I23 += -m * y * z
-
-        I = np.array([[I11, I12, I13],
-                      [I12, I22, I23],
-                      [I13, I23, I33]], dtype=np.float64)
-
-        evals, evecs = np.linalg.eigh(I)
-        return evals
+        colliding_atoms_dict = {}
+        colliding_atoms_list = []
 
 
-###############################################################################
-#                        ControlFile Helpers                                  #
-###############################################################################
-    def getKPoints(self, k_per_atom, slab_geom,get_as_array=False):
-        """ Calculate K-Point density for a supercell, given the 
-        primitive unit cell (slab_geom) and the K-Point density per primitive unit cell
-        (k_per_atom).
+        # loop over all atoms
+        for i in range(self.n_atoms):
 
-        Args:
-        -----
-        k_per_atom: np.array
-            k-grid densities for primitive UC (for x,y and z dimension)
-        slab_geom: GeometryFile
-            geometry file of the primitve slab.
-        get_as_array: bool
-            Flag whether to return the result as np.array or list
-
-
-        Returns:
-        --------
-        list or np.array (shape=(3,)) containing the kgrid density for x,y and z 
-        dimension.
-         """
-        len_vprim_1 = np.linalg.norm(slab_geom.lattice_vectors[0, :])
-        len_vprim_2 = np.linalg.norm(slab_geom.lattice_vectors[1, :])
-        len_vprim_3 = np.linalg.norm(slab_geom.lattice_vectors[2, :])
-        if (len_vprim_1 - len_vprim_2) > 0.1:
-            Warning('k-points per Atom might be a unsuitable unit because of ill-shaped primitive unit cell')
-
-        len_prim = np.min([len_vprim_1, len_vprim_2, len_vprim_3])
-        k_per_ang = k_per_atom * len_prim  # number of k-points per angstrom?
-
-        k_1 = np.ceil(k_per_ang / np.linalg.norm(self.lattice_vectors[0, :]))
-        k_2 = np.ceil(k_per_ang / np.linalg.norm(self.lattice_vectors[1, :]))
-        k_3 = np.ceil(k_per_ang / np.linalg.norm(self.lattice_vectors[2, :]))
-        k_str = '{} {} {}'.format(int(k_1), int(k_2), int(k_3))
-        if get_as_array:
-            return np.array([k_1, k_2, k_3])
-        else:
-            return k_str
-
-
-    def splitForAtomProjectedDOSByIndex(self, groups):
-        """
-            split species of this geometry file according to passed list of integers
-
-        :param groups:  iterable of integers:
-                same length as self.species!
-                if there are atoms of the same species in different groups, they will be distinguished by a counter
-                groups are defined by identical integers in this list
-                0 is used as wildcard, i.e. name of these species won't be changed!
-        :return:
-            species_name_dict       dict(species_old:[list of new species names]), to be passed to control file
-        """
-        assert len(groups) == len(self.species), "groups must have same length as self.species"
-        assert max(groups) <= 1000, "Implement longer zero padding in current_species_new"
-
-        species_name_dict = {s: [] for s in set(self.species)}
-        new_species = []
-        for current_species, group in zip(self.species, groups):
-            if group == 0:
-                # use 0 as wildcard -> don't change those species names where group == 0
-                current_species_new = current_species
-            else:
-                current_species_new = "{}_{:03}".format(current_species, group)
-                species_name_dict[current_species].append(current_species_new)
-            new_species.append(current_species_new)
-        self.species = new_species
-
-        species_name_dict = {s_old: sorted(list(set(s_new))) for s_old, s_new in species_name_dict.items()}
-        return species_name_dict
+            # evaluate only if atom is not already on the black list
+            if i not in colliding_atoms_list:
+                colliding_atoms_dict[i] = []
+                # loop over all distances to other atoms, neglecting the diagonal (thus i+1)
+                for j in range(i + 1, self.n_atoms):
+                    if is_collision[i, j]:
+                        colliding_atoms_dict[i].append(j)
+                        colliding_atoms_list.append(j)
+                        
+        return [(k, ind) for k, value in colliding_atoms_dict.items() for ind in list(value)]
     
         
 class AimsGeometry(Geometry):
@@ -3554,9 +3519,9 @@ class AimsGeometry(Geometry):
                         text += 'constrain_relaxation y\n'
                     if self.constrain_relax[n][2]:
                         text += 'constrain_relaxation z\n'
-            if self.initial_charge[n] != 0.0:
+            if not len(self.initial_charge) == 0 and self.initial_charge[n] != 0.0:
                 text += 'initial_charge {: .6f}\n'.format(self.initial_charge[n])
-            if self.initial_moment[n] != 0.0:
+            if not len(self.initial_moment) == 0 and self.initial_moment[n] != 0.0:
                 text += 'initial_moment {: .6f}\n'.format(self.initial_moment[n])
             if hasattr(self,'external_force') and np.linalg.norm(self.external_force[n]) != 0.0:
                 text += 'external_force {: .6f} {: .6f} {: .6f}\n'.format(self.external_force[n][0],
@@ -3889,7 +3854,7 @@ class XYZGeometry(Geometry):
 class MoldenGeometry(Geometry):
     def get_text(self, title=''):
         # Conversion from Angstrom to Bohr, as all lenghts should be in Bohr for Molden
-        length_conversion = 1 / Units.BOHR_IN_ANGSTROM
+        length_conversion = 1 / units.BOHR_IN_ANGSTROM
 
         # First line
         text = '[Molden Format]\n'
@@ -3964,7 +3929,7 @@ class XSFGeometry(Geometry):
         for i in range(self.n_atoms):
             if self.constrain_relax[i]:
                 raise NotImplementedError('Constrained relaxation not supported for XSF output file')
-            line = str(PERIODIC_TABLE[self.species[i]])
+            line = str(self.periodic_table.get_atomic_number(self.species[i]))
             for j in range(3):
                 line += '    {:.8f}'.format(self.coords[i, j])
             text += line + '\n'
