@@ -2786,7 +2786,7 @@ class Geometry:
         threshold : float, optional
             numerical threshold for symmetry operations
         surface_replica : (int, int), optional
-            Replications of surface. The default is (1,1).
+            DESCRIPTION. The default is (1,1).
         vacuum_height : float | None, optional
             DESCRIPTION. The default is None.
         bool_shift_slab_to_bottom : bool, optional
