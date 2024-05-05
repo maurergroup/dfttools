@@ -1,4 +1,6 @@
 import numpy as np
+import scipy
+from typing import Union
 
 def get_rotation_matrix(vec_start: np.array, vec_end: np.array) -> np.array:
     '''
@@ -152,3 +154,106 @@ def get_cartesian_coords(frac_coords: np.array, lattice_vectors: np.array) -> np
            
     """
     return np.dot(frac_coords, lattice_vectors)
+
+
+def get_autocorrelation_function_1(signal: np.array,
+                                   max_lag: int) -> np.array:
+    """
+    Calculate the autocorrelation function for a given signal.
+
+    Parameters
+    ----------
+    signal : 1D np.array
+        Siganl for which the autocorrelation function should be calculated.
+    max_lag : Union[None, int], optional
+        Autocorrelation will be calculated for a range of 0 to max_lag,
+        where max_lag is the largest lag for the calculation of the
+        autocorrelation function. The default is None.
+
+    Returns
+    -------
+    autocorrelation : np.array
+        Autocorrelation function from 0 to max_lag.
+
+    """
+    lag = np.array(range(max_lag))
+    
+    autocorrelation = np.array([np.nan]*max_lag)
+    
+    for l in lag:
+        if l == 0:
+            corr = 1.0
+        else:
+            corr = np.corrcoef(signal[l:], signal[:-l])[0][1]
+
+        autocorrelation[l] = corr
+    
+    return autocorrelation
+    
+
+def get_autocorrelation_function(signal: np.array) -> np.array:
+    """
+    Calculate the autocorrelation function for a given signal.
+
+    Parameters
+    ----------
+    signal : 1D np.array
+        Siganl for which the autocorrelation function should be calculated.
+
+    Returns
+    -------
+    autocorrelation : np.array
+        Autocorrelation function from 0 to max_lag.
+
+    """
+    autocorrelation = np.correlate(signal, signal, mode='same') / signal.size
+    
+    return autocorrelation[autocorrelation.size//2:]
+
+
+def get_fourier_transform(signal: np.array, time_step: float) -> tuple:
+    """
+    Calculate the fourier transform of a given siganl.
+
+    Parameters
+    ----------
+    signal : 1D np.array
+        Siganl for which the autocorrelation function should be calculated.
+    time_step : float
+        Time step of the signal in seconds.
+
+    Returns
+    -------
+    (np.array, np.array)
+        Frequencs and absolute values of the fourier transform.
+
+    """
+    d = len(signal) * time_step
+    
+    f = scipy.fft.fftfreq(signal.size, d=d)
+    y = scipy.fft.fft(signal)
+    
+    L = f >= 0
+
+    return f[L], np.abs( y[L] )
+
+
+def lorentzian(x, a, b, c):
+    
+    f = c/(np.pi*b*(1.0+((x - a)/b)**2))#+d
+    
+    return f
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
