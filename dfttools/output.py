@@ -326,6 +326,7 @@ class AimsOutput(Output):
         # Find the first time the KS states are printed
         for init_ev_start, line in enumerate(self.lines):
             if target_line == line.strip():
+                init_ev_start += 1
                 break
 
         # Then count the number of lines until the next empty line
@@ -347,6 +348,26 @@ class AimsOutput(Output):
                         break
 
         return n_ks_states
+
+    def _get_ks_states(self, ev_start, eigenvalues):
+        """
+        Get any set of KS states, occupations, and eigenvalues.
+
+        Parameters
+        ----------
+        ev_start : int
+            The line number where the KS states start.
+        eigenvalues : dict
+            The dictionary to store the KS states, occupations, and eigenvalues.
+        """
+        for i, line in enumerate(self.lines[ev_start:]):
+            if len(line) > 1:
+                values = line.split()
+                eigenvalues["state"][i] = int(values[0])
+                eigenvalues["occupation"][i] = float(values[1])
+                eigenvalues["eigenvalue_eV"][i] = float(values[3])
+            else:
+                break
 
     def get_all_ks_eigenvalues(self) -> Union[dict, Tuple[dict, dict]]:
         """Get all Kohn-Sham eigenvalues from a calculation.
@@ -392,14 +413,7 @@ class AimsOutput(Output):
                 if target_line in line:
                     n += 1
                     # Get the KS states from this line until the next empty line
-                    for j, line in enumerate(self.lines[i:]):
-                        if len(line) > 1:
-                            values = line.split()
-                            eigenvalues["state"][n][j] = int(values[0])
-                            eigenvalues["occupation"][n][j] = float(values[1])
-                            eigenvalues["eigenvalue_eV"][n][j] = float(values[3])
-                        else:
-                            break
+                    self._get_ks_states(i, eigenvalues)
 
             return eigenvalues
 
@@ -415,7 +429,7 @@ class AimsOutput(Output):
                 "eigenvalue_eV": np.zeros((n_scf_iters, n_ks_states), dtype=float),
             }
 
-            # Count the number of SCF iterations for each spin channels
+            # Count the number of SCF iterations for each spin channel
             up_n = 0
             down_n = 0
             for i, line in enumerate(self.lines):
@@ -429,34 +443,14 @@ class AimsOutput(Output):
                     # The spin-up line is two lines above the target line
                     if self.lines[i - 2].strip() == "Spin-up eigenvalues:":
                         # Get the KS states from this line until the next empty line
-                        for j, line in enumerate(self.lines[i + 1 :]):
-                            if len(line) > 1:
-                                values = line.split()
-                                su_eigenvalues["state"][up_n][j] = int(values[0])
-                                su_eigenvalues["occupation"][up_n][j] = float(values[1])
-                                su_eigenvalues["eigenvalue_eV"][up_n][j] = float(
-                                    values[3]
-                                )
-                            else:
-                                up_n += 1
-                                break
+                        self._get_ks_states(i + 1, su_eigenvalues)
+                        up_n += 1
 
                     # The spin-down line is two lines above the target line
                     if self.lines[i - 2].strip() == "Spin-down eigenvalues:":
                         # Get the KS states from this line until the next empty line
-                        for j, line in enumerate(self.lines[i + 1 :]):
-                            if len(line) > 1:
-                                values = line.split()
-                                sd_eigenvalues["state"][down_n][j] = int(values[0])
-                                sd_eigenvalues["occupation"][down_n][j] = float(
-                                    values[1]
-                                )
-                                sd_eigenvalues["eigenvalue_eV"][down_n][j] = float(
-                                    values[3]
-                                )
-                            else:
-                                down_n += 1
-                                break
+                        self._get_ks_states(i + 1, sd_eigenvalues)
+                        down_n += 1
 
             return su_eigenvalues, sd_eigenvalues
 
@@ -487,7 +481,10 @@ class AimsOutput(Output):
         spin_polarised = self.check_spin_polarised()
 
         # Get the number of KS states
-        n_ks_states = self.get_n_initial_ks_states(include_spin_polarised=False)
+
+        n_ks_states = self.get_n_initial_ks_states(
+            include_spin_polarised=spin_polarised
+        )
 
         # Parse line to find the start of the KS eigenvalues
         target_line = "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
@@ -505,14 +502,7 @@ class AimsOutput(Output):
                 "eigenvalue_eV": np.zeros(n_ks_states, dtype=float),
             }
             # Get the KS states from this line until the next empty line
-            for i, line in enumerate(self.lines[final_ev_start:]):
-                if len(line) > 1:
-                    values = line.split()
-                    eigenvalues["state"][i] = int(values[0])
-                    eigenvalues["occupation"][i] = float(values[1])
-                    eigenvalues["eigenvalue_eV"][i] = float(values[3])
-                else:
-                    break
+            self._get_ks_states(final_ev_start, eigenvalues)
 
             return eigenvalues
 
@@ -524,30 +514,24 @@ class AimsOutput(Output):
             }
             sd_eigenvalues = su_eigenvalues.copy()
 
+            # TODO Debugging
+            print(self.lines[final_ev_start - 1])
+            print(self.lines[final_ev_start])
+            print(self.lines[final_ev_start + 1])
+
             # The spin-down states start from here
-            for i, line in enumerate(self.lines[final_ev_start + 1 :]):
-                if len(line) > 1:
-                    values = line.split()
-                    sd_eigenvalues["state"][i] = int(values[0])
-                    sd_eigenvalues["occupation"][i] = float(values[1])
-                    sd_eigenvalues["eigenvalue_eV"][i] = float(values[3])
-                else:
-                    break
+            self._get_ks_states(final_ev_start, sd_eigenvalues)
+
+            print(sd_eigenvalues)
 
             # Go back one more target line to get the spin-up states
-            for i, line in enumerate(reversed(self.lines[: final_ev_start + 1])):
+            for i, line in enumerate(reversed(self.lines[: final_ev_start - 1])):
+                print(line)
                 if target_line == line.strip():
-                    final_ev_start = -i
+                    final_ev_start = i
                     break
 
-            for i, line in enumerate(self.lines[final_ev_start + 1 :]):
-                if len(line) > 1:
-                    values = line.split()
-                    su_eigenvalues["state"][i] = int(values[0])
-                    su_eigenvalues["occupation"][i] = float(values[1])
-                    su_eigenvalues["eigenvalue_eV"][i] = float(values[3])
-                else:
-                    break
+            self._get_ks_states(final_ev_start, su_eigenvalues)
 
             return su_eigenvalues, sd_eigenvalues
 

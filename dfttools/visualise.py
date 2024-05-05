@@ -219,6 +219,9 @@ class VisualiseAims(AimsOutput):
             matplotlib subplot object
         """
 
+        # Need to debug
+        raise NotImplementedError
+
         if isinstance(ks_eigenvals, dict):
             # Don't include last eigenvalue as it only prints after final SCF iteration
             # Add 1 to total SCF iterations to match the length of the eigenvalues and
