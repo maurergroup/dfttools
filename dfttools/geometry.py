@@ -3290,12 +3290,12 @@ class Geometry:
             Geometry of substrate. The default is None.
         threshold : float, optional
             DESCRIPTION. The default is 1e-2.
-        primitive_substrate : TYPE, optional
+        primitive_substrate : Geometry, optional
             DESCRIPTION. The default is None.
 
         Returns
         -------
-        geometry_of_layer : TYPE
+        geometry_of_layer : Geometry
             Geometry of layer.
 
         """
