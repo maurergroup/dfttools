@@ -1,44 +1,85 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed May  1 16:39:18 2024
-
-@author: lukas
-"""
+import os
 import numpy as np
+from scipy.optimize import curve_fit
+import copy
+import warnings
+from ast import literal_eval
+from dfttools.utils.periodic_table import PeriodicTable
+import dfttools.utils.math_utils as mu
+import dfttools.utils.units as units
+from typing import Union
+from dfttools.geometry import AimsGeometry, VaspGeometry
+from numba import jit, njit, prange
+
+# get environment variable for parallelisation in numba
+parallel_numba = os.environ.get('parallel_numba')
+if parallel_numba is None:
+    warnings.warn('System variable <parallel_numba> not set. Using default!')
+    parallel_numba = True
+else:
+    parallel_numba = literal_eval(parallel_numba)
 
 
 class Vibrations():
-    def __int__(self, geometry):
-        self.geometry = geometry
-        self.coords = None
-        self.forces = None
+    def __init__(self):
+        self.vibration_coords = None
+        self.vibration_forces = None
+        self.eigenvalues = None
+        self.eigenvectors = None
+        self.wave_vector = np.array([0.0, 0.0, 0.0])
+        self.time_step = None
     
     
-    def set_coords(self, coords):
-        self.coords = coords
+    def get_instance_of_other_type(self, vibrations_type):
+        if vibrations_type == 'aims':
+            new_vibration = AimsVibrations()
+        if vibrations_type == 'vasp':
+            new_vibration = VaspVibrations()
+        
+        new_vibration.__dict__ = self.__dict__
+        return new_vibration
+    
+    
+    def set_vibration_coords(self, vibration_coords: list) -> None:
+        self.vibration_coords = vibration_coords
         
     
-    def set_forces(self, forces):
-        self.forces = forces
+    def set_vibration_forces(self, vibration_forces : list) -> None:
+        self.vibration_forces = vibration_forces
+        
+        
+    def set_hessian(self, hessian: np.array) -> None:
+        self.hessian = hessian
+        
+    
+    def set_eigenvalues(self, eigenvalues: np.array) -> None:
+        self.eigenvalues = eigenvalues
+        
+    
+    def set_eigenvectros(self, eigenvectors: np.array) -> None:
+        self.eigenvectors = eigenvectors
     
     
     def get_hessian(self, set_constrained_atoms_zero: bool=True) -> np.array:
         
-        N = len(self.geometry) * 3
+        N = len(self) * 3
         H = np.zeros([N, N])
         
-        coords_0 = self.coords[0].flatten()
-        F_0 = self.forces[0].flatten()
+        coords_0 = self.vibration_coords[0].flatten()
+        F_0 = self.vibration_forces[0].flatten()
         
         n_forces = np.zeros(N, np.int64)
         
-        for c, F in zip(self.coords, self.forces):
+        for c, F in zip(self.vibration_coords, self.vibration_forces):
             dF = F.flatten() - F_0
             dx = c.flatten() - coords_0
             ind = np.argmax(np.abs(dx))
             n_forces[ind] += 1
             displacement = dx[ind]
+            
+            if np.abs(displacement) < 1e-5:
+                continue
+            
             H[ind, :] -= dF / displacement
 
         for row in range(H.shape[0]):
@@ -46,86 +87,355 @@ class Vibrations():
                 H[row, :] /= n_forces[row]  # prevent div by zero for unknown forces
         
         if set_constrained_atoms_zero:
-            constrained = self.geometry.constrain_relax.flatten()
+            constrained = self.constrain_relax.flatten()
             H[constrained, :] = 0
             H[:, constrained] = 0
-            
+        
+        self.set_hessian(H)
         return H
-    
-    
-    # this will all go
-    def getHessian(calc_dir,
-                   get_geometries=False,
-                   set_constrained_atoms_zero=False,
-                   reference_geometry=None):
+
+
+    def symmetrize_hessian(self, hessian=None):
+        h = copy.deepcopy(self.hessian)
+        self.hessian = (h+np.transpose(h))/2
+        
+
+    def get_eigenvalues_and_eigenvectors(
+        self,
+        hessian: np.array=None,
+        bool_only_real: bool=True,
+        bool_symmetrize_hessian: bool=True
+    ) -> Union[np.array, list, np.array]:
         """
+        This function is supposed to return all eigenvalues and eigenvectors of
+        the matrix self.hessian
+
         Parameters
         ----------
-        calc_dir
-        get_geometries                  boolean     return hessian AND the distorted geometries (as a tuple)
-        set_constrained_atoms_zero      boolean     set elements of the hessian that correspond to constrained atoms to zero
-        reference_geometry              GeoometryFile       pass the undistorted geometry explicitly
-                                                            instead of using the first geomery of the calculations
-                                                            (if you used the setupHessian function, just use None)
+        hessian : np.array, optional
+            Hessian. The default is None.
+        bool_only_real : bool, optional
+            Returns only real valued eigenfrequencies + eigenmodes
+            (ATTENTION: if you want to also include instable modes, you have to
+            symmetrize the hessian as provided below). The default is True.
+        bool_symmetrize_hessian : bool, optional
+            Symmetrise the hessian only for this function (no global change).
+            The default is True.
 
         Returns
         -------
+        omega2 : np.array
+            Direct eigenvalues as squared angular frequencies instead of
+            inverse wavelengths.
+        eigenvectors : np.array
+            List of numpy arrays, where each array is a normalized
+            displacement for the corresponding eigenfrequency, such that
+            new_coords = coords + displacement * amplitude..
 
         """
-        file_filter = join(calc_dir, '*/aims.out')
-        output_fnames = sorted(glob.glob(file_filter))
-        geometries = []
+        periodic_table = PeriodicTable()
+        
+        if hessian is None:
+            hessian = self.hessian
+        
+        assert hasattr(self,'hessian') and hessian is not None, \
+            'Hessian must be given to calculate the Eigenvalues!'
+        try:
+            masses = [periodic_table.get_atomic_mass(s) for s in self.species]
+        except KeyError:
+            print('getEigenValuesAndEigenvectors: Some Species were not known, used version without _ suffix')
+            masses = [periodic_table.get_atomic_mass(s.split('_')[0]) for s in self.species]
 
-        if len(output_fnames) == 0:
-            raise ValueError("No files found in {}".format(file_filter))
+        masses = np.repeat(masses, 3)
+        M = np.diag(1.0 / masses)
 
-        for calc_ind, output_fname in enumerate(output_fnames):
-            aims = AIMSOutput(output_fname)
-            geom = aims.getGeometryFile()
-            geometries.append(geom)
-            F = aims.getGradients()
+        hessian = copy.deepcopy(hessian)
+        if bool_symmetrize_hessian:
+            hessian = (hessian + np.transpose(hessian)) / 2
 
-            if np.any(np.isnan(F)):
-                raise RuntimeError("Error in grep of forces from out. Where they calculated properly?")        
+        omega2, X = np.linalg.eig(M.dot(hessian))
+        
+        # only real valued eigen modes
+        if bool_only_real:
+            real_mask = np.isreal(omega2)
+            min_omega2 = 1e-3
+            min_mask = omega2 >= min_omega2
+            mask = np.logical_and(real_mask, min_mask)
 
-            if calc_ind == 0:
-                N = len(geom) * 3
-                H = np.zeros([N, N])
-                F0 = F.flatten()
+            omega2 = np.real(omega2[mask])
+            X = np.real(X[:, mask])
 
-                if reference_geometry is None:
-                    # no explicit reference geometry was passed -> use first calculation
-                    warnings.warn('No reference geometry has been passed! In this case, the first calculation will be used as reference geometry.')
-                    
-                    geom0 = geom
-                else:
-                    # a reference geometry was passed explicitly -> use it
-                    if not isinstance(reference_geometry, GeometryFile):
-                        raise ValueError
-                    geom0 = reference_geometry
+        eigenvectors = [column.reshape(-1, 3) for column in X.T]
 
-                coords0 = geom0.coords.flatten()
-                n_forces = np.zeros(N, np.int64)
+        # sort modes by energies (ascending)
+        ind_sort = np.argsort(omega2)
+        eigenvectors = np.array(eigenvectors)[ind_sort, :, :]
+        omega2 = omega2[ind_sort]
+        
+        self.set_eigenvalues(omega2)
+        self.set_eigenvectros(eigenvectors)
+        
+        return omega2, eigenvectors
+
+    
+    def get_eigenvalues_in_inverse_cm(self, omega2: Union[None, np.array]=None) -> np.array:
+        """
+        Determine vibration frequencies in cm^-1.
+
+        Parameters
+        ----------
+        omega2 : Union[None, np.array]
+            Eigenvalues of the mass weighted hessian.
+
+        Returns
+        -------
+        f_inv_cm : np.array
+            Array of the eigenfrequencies in cm^(-1).
+
+        """
+        if omega2 is None:
+            omega2 = self.eigenvalues
+        
+        omega = np.sign(omega2) * np.sqrt(np.abs(omega2))
+        
+        conversion = np.sqrt((units.EV_IN_JOULE) / (units.ATOMIC_MASS_IN_KG * units.ANGSTROM_IN_METER ** 2))
+        omega_SI = omega * conversion
+        f_inv_cm = omega_SI * units.INVERSE_CM_IN_HZ / (2 * np.pi)
+        
+        return f_inv_cm
+        
+
+    def get_atom_type_index(self):
+        
+        n_atoms = len(self)
+        
+        # Tolerance for accepting equivalent atoms in super cell
+        masses = self.get_mass_of_all_atoms()
+        tolerance = 0.001
+        
+        primitive_cell_inverse = np.linalg.inv(self.lattice_vectors)
+    
+        atom_type_index = np.array([None]*n_atoms)
+        counter = 0
+        for i in range(n_atoms):
+            if atom_type_index[i] is None:
+                atom_type_index[i] = counter
+                counter += 1
+            for j in range(i+1, n_atoms):
+                coordinates_atom_i = self.coords[i]
+                coordinates_atom_j = self.coords[j]
+
+                difference_in_cell_coordinates = np.around((np.dot(primitive_cell_inverse.T, (coordinates_atom_j - coordinates_atom_i))))
                 
-            # if the first geometry is NOT used as reference it is a normal calculation
-            if calc_ind != 0 or reference_geometry is not None:
-                dF = F.flatten() - F0
-                dx = geom.coords.flatten() - coords0
-                ind = np.argmax(np.abs(dx))
-                n_forces[ind] += 1
-                displacement = dx[ind]
-                H[ind, :] -= dF / displacement
+                projected_coordinates_atom_j = coordinates_atom_j - np.dot(self.lattice_vectors.T, difference_in_cell_coordinates)
+                separation = pow(np.linalg.norm(projected_coordinates_atom_j - coordinates_atom_i),2)
 
-        for row in range(H.shape[0]):
-            if n_forces[row] > 0:
-                H[row, :] /= n_forces[row]  # prevent div by zero for unknown forces
+                if separation < tolerance and masses[i] == masses[j]:
+                    atom_type_index[j] = atom_type_index[i]
+                        
+        atom_type_index = np.array(atom_type_index, dtype=int)
+        
+        return atom_type_index
 
-        if set_constrained_atoms_zero:
-            constrained = geometries[0].constrain_relax.flatten()
-            H[constrained, :] = 0
-            H[:, constrained] = 0
+    
+    def project_onto_wave_vector(self, velocities, q_vector, project_on_atom=-1):
+        
+        number_of_primitive_atoms = len(self)
+        number_of_atoms = velocities.shape[1]
+        number_of_dimensions = velocities.shape[2]
 
-        if get_geometries:
-            return H, geometries
-        else:
-            return H
+        coordinates = self.coords
+        atom_type = self.get_atom_type_index()
+
+        velocities_projected = np.zeros((velocities.shape[0],
+                                         number_of_primitive_atoms,
+                                         number_of_dimensions), dtype=complex)
+
+        if q_vector.shape[0] != coordinates.shape[1]:
+            print("Warning!! Q-vector and coordinates dimension do not match")
+            exit()
+
+        #Projection into wave vector
+        for i in range(number_of_atoms):
+            # Projection on atom
+            if project_on_atom > -1:
+                if atom_type[i] != project_on_atom:
+                    continue
+
+            for k in range(number_of_dimensions):
+                velocities_projected[:, atom_type[i], k] += velocities[:,i,k]*np.exp(-1j*np.dot(q_vector, coordinates[i,:]))
+
+       #Normalize velocities (method 1)
+      #  for i in range(velocity_projected.shape[1]):
+      #      velocity_projected[:,i,:] /= atom_type.count(i)
+
+       #Normalize velocities (method 2)
+        number_of_primitive_cells = number_of_atoms/number_of_primitive_atoms
+        velocities_projected /= np.sqrt(number_of_primitive_cells)
+        
+        return velocities_projected
+    
+    
+    def get_normal_mode_decomposition(self,
+                                      velocities: np.array,
+                                      eigenvectors: np.array) -> np.array:
+        """
+        Calculate the normal-mode-decomposition of the velocities. This is done
+        by projecting the atomic velocities onto the vibrational eigenvectors.
+        See equation 10 in: https://doi.org/10.1016/j.cpc.2017.08.017
+
+        Parameters
+        ----------
+        velocities : np.array
+            Array containing the velocities from an MD trajectory structured in
+            the following way:
+            [number of time steps, number of atoms, number of dimensions].
+        eigenvectors : np.array
+            Array of eigenvectors structured in the following way:
+            [number of frequencies, number of atoms, number of dimensions].
+
+        Returns
+        -------
+        velocities_projected : np.array
+            Velocities projected onto the eigenvectors structured as follows:
+            [number of time steps, number of frequencies]
+
+        """
+        number_of_cell_atoms = velocities.shape[1]
+        number_of_frequencies = eigenvectors.shape[0]
+
+        #Projection in vibration coordinates
+        velocities_projected = np.zeros((velocities.shape[0], number_of_frequencies), dtype=complex)
+        # for k in range(number_of_frequencies):
+        #     for i in range(number_of_cell_atoms):
+        #         velocities_projected[:, k] += np.dot(velocities[:, i, :], eigenvectors[k, i, :].conj())
+
+        _get_normal_mode_decomposition_numba(velocities_projected,
+                                             velocities,
+                                             eigenvectors) 
+
+        return velocities_projected
+    
+    
+    def get_autocorrelation_function(self,
+                                     signal: np.array,
+                                     max_lag: Union[None, int]=None,
+                                     bootstrapping_blocks: int=1) -> np.array:
+        
+        signal_length = len(signal)
+        
+        if max_lag is None:
+            max_lag = int( signal_length*0.5 )
+        
+        autocorrelation = []
+        
+        block_size = int(signal_length/bootstrapping_blocks)
+        
+        for block in range(bootstrapping_blocks):
+            
+            block_start = block*block_size
+            block_end = (block+1)*block_size
+            if block_end > signal_length-1:
+                block_end = signal_length-1
+        
+            signal_block = signal[block_start:block_end]
+            
+            autocorrelation_block = mu.get_autocorrelation_function(signal_block, max_lag=max_lag) 
+            autocorrelation.append(autocorrelation_block)
+        
+        autocorrelation = np.atleast_2d(autocorrelation)
+        
+        autocorrelation = np.mean(autocorrelation, axis=0)
+        
+        return autocorrelation
+    
+    
+    def get_power_spectrum(self,
+                           signal: np.array,
+                           time_step: float,
+                           bootstrapping_blocks: int=1,
+                           block_overlap: int=1) -> tuple:
+
+        signal_length = len(signal)
+        
+        power_spectrum = []
+        
+        a = bootstrapping_blocks/block_overlap
+        
+        block_size = int(np.floor(signal_length/a))
+        
+        for block in range(bootstrapping_blocks):
+            block_start = block * int(np.floor( (signal_length - block_size) / (bootstrapping_blocks-1)))
+            block_end = block_start + block_size
+            
+            #bootstrapping_blocks * a + block_size = signal_length
+            
+            print(block_start, block_end)
+            
+            if block_end > signal_length-1:
+                block_end = signal_length-1
+        
+            signal_block = signal[block_start:block_end]
+            
+            autocorrelation_block = mu.get_autocorrelation_function(signal_block) 
+            
+            power_spectrum_block = mu.get_fourier_transform(autocorrelation_block, time_step)
+            
+            power_spectrum.append(power_spectrum_block)
+        
+        power_spectrum = np.atleast_2d(power_spectrum)
+        
+        power_spectrum = np.average(power_spectrum, axis=0)
+
+        return power_spectrum
+    
+    
+    def lorentzian_fit(self, frequencies, power_spectrum):
+        
+        max_ind = np.argmax(power_spectrum)
+        
+        frequency_step = frequencies[1]-frequencies[0]
+        
+        a_0 = frequencies[max_ind]
+        b_0 = frequency_step*100
+        c_0 = np.max(power_spectrum) * b_0
+        
+        p_0 = [a_0, b_0, c_0]
+        
+        res, _ = curve_fit(mu.lorentzian,
+                           frequencies,
+                           power_spectrum,
+                           p0=p_0)
+        
+        return res
+
+
+# helper functions
+@njit(parallel=parallel_numba, fastmath=True)
+def _get_normal_mode_decomposition_numba(velocities_projected,
+                                         velocities,
+                                         eigenvectors) -> None:
+    
+    number_of_cell_atoms = velocities.shape[1]
+    number_of_frequencies = eigenvectors.shape[0]
+    
+    for k in prange(number_of_frequencies):
+        for i in prange(number_of_cell_atoms):
+            velocities_projected[:, k] += np.dot(velocities[:, i, :], eigenvectors[k, i, :].conj())
+
+
+class AimsVibrations(Vibrations, AimsGeometry):
+    def __init__(self, filename=None):
+        Vibrations.__init__(self)
+        AimsGeometry.__init__(self, filename=filename)
+        
+
+class VaspVibrations(Vibrations, VaspGeometry):
+    def __init__(self, filename=None):
+        Vibrations.__init__(self)
+        VaspGeometry.__init__(self, filename=filename)
+
+
+
+
+
