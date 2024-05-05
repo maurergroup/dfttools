@@ -23,6 +23,7 @@ optional = true
 black = "^24.3.0"
 ruff = "^0.3.5"
 pytest = "^8.2.0"
+ptpython = "^3.0.26"
 
 [build-system]
 requires = ["poetry-core"]

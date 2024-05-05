@@ -1,3 +1,5 @@
+from typing import List
+
 import dfttools.utils.file_utils as fu
 from dfttools.base_parser import BaseParser
 
@@ -27,6 +29,7 @@ class AimsControl(Parameters):
 
     Attributes
     ----------
+    lines
     _supported_files : list
         List of supported file types.
     file_paths : dict
@@ -37,8 +40,26 @@ class AimsControl(Parameters):
 
     def __init__(self, control_in="control.in") -> None:
         super().__init__(control_in=control_in)
+        self.lines = self._file_contents["control_in"]
+        self.path = self._file_paths["control_in"]
         # Check if the control.in file was provided
         fu.check_required_files(self._supported_files, "control_in")
+
+    @property
+    def lines(self) -> list:
+        return self._lines
+
+    @lines.setter
+    def lines(self, lines: List[str]) -> None:
+        self._lines = lines
+
+    @property
+    def path(self) -> str:
+        return self._file_path
+
+    @path.setter
+    def path(self, file_path: str) -> None:
+        self._file_path = file_path
 
     def add_control_keywords(self, **kwargs: dict) -> None:
         """Add keywords to the control.in file.
@@ -50,7 +71,7 @@ class AimsControl(Parameters):
         """
 
         for keyword in kwargs:
-            self.file_contents["control_in"].append(keyword + "\n")
+            self.lines.append(keyword + "\n")
 
         # TODO finish this
         raise NotImplementedError
@@ -65,9 +86,9 @@ class AimsControl(Parameters):
         """
 
         for keyword in args:
-            for i, line in enumerate(self.file_contents["control_in"]):
+            for i, line in enumerate(self.lines):
                 if keyword in line:
-                    self.file_contents["control_in"].pop(i)
+                    self.lines.pop(i)
 
-        with open(self.file_paths["control_in"], "w") as f:
-            f.writelines(self.file_contents["control_in"])
+        with open(self.path, "w") as f:
+            f.writelines(self.lines)
