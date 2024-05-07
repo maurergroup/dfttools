@@ -219,34 +219,28 @@ class VisualiseAims(AimsOutput):
             matplotlib subplot object
         """
 
-        # Need to debug
-        raise NotImplementedError
-
         if isinstance(ks_eigenvals, dict):
             # Don't include last eigenvalue as it only prints after final SCF iteration
             # Add 1 to total SCF iterations to match the length of the eigenvalues and
             # we want to include the first pre SCF iteration
-            for ev in ks_eigenvals["eigenvalue_eV"][:-2].T:
-                ax.plot(np.arange(1, len(ks_eigenvals["eigenvalue_eV"]) - 1), ev)
+            for ev in ks_eigenvals["eigenvalue_eV"].T:
+                ax.plot(np.arange(len(ks_eigenvals["eigenvalue_eV"])), ev)
 
         elif isinstance(ks_eigenvals, tuple):
             su_ks_eigenvals = ks_eigenvals[0]
             sd_ks_eigenvals = ks_eigenvals[1]
 
-            for ev in su_ks_eigenvals["eigenvalue_eV"][:-2].T:
-                ax.plot(
-                    np.arange(1, len(su_ks_eigenvals["eigenvalue_eV"]) - 1), ev, c="C0"
-                )
+            for ev in su_ks_eigenvals["eigenvalue_eV"].T:
+                ax.plot(np.arange(len(su_ks_eigenvals["eigenvalue_eV"])), ev, c="C0")
 
-            for ev in sd_ks_eigenvals["eigenvalue_eV"][:-2].T:
-                ax.plot(
-                    np.arange(1, len(su_ks_eigenvals["eigenvalue_eV"]) - 1), ev, c="C1"
-                )
+            for ev in sd_ks_eigenvals["eigenvalue_eV"].T:
+                ax.plot(np.arange(len(su_ks_eigenvals["eigenvalue_eV"])), ev, c="C1")
 
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.set_yscale("symlog")
         ax.set_xlabel("cumulative SCF iteration")
         ax.set_ylabel("energy / eV")
+        # ax.legend()
 
         if title is not None:
             ax.set_title(f"{title} KS State Convergence")
