@@ -103,8 +103,8 @@ class Vibrations():
     def get_eigenvalues_and_eigenvectors(
         self,
         hessian: np.array=None,
-        bool_only_real: bool=True,
-        bool_symmetrize_hessian: bool=True
+        only_real: bool=True,
+        symmetrize_hessian: bool=True
     ) -> Union[np.array, list, np.array]:
         """
         This function is supposed to return all eigenvalues and eigenvectors of
@@ -114,11 +114,11 @@ class Vibrations():
         ----------
         hessian : np.array, optional
             Hessian. The default is None.
-        bool_only_real : bool, optional
+        only_real : bool, optional
             Returns only real valued eigenfrequencies + eigenmodes
             (ATTENTION: if you want to also include instable modes, you have to
             symmetrize the hessian as provided below). The default is True.
-        bool_symmetrize_hessian : bool, optional
+        symmetrize_hessian : bool, optional
             Symmetrise the hessian only for this function (no global change).
             The default is True.
 
@@ -150,13 +150,13 @@ class Vibrations():
         M = np.diag(1.0 / masses)
 
         hessian = copy.deepcopy(hessian)
-        if bool_symmetrize_hessian:
+        if symmetrize_hessian:
             hessian = (hessian + np.transpose(hessian)) / 2
 
         omega2, X = np.linalg.eig(M.dot(hessian))
         
         # only real valued eigen modes
-        if bool_only_real:
+        if only_real:
             real_mask = np.isreal(omega2)
             min_omega2 = 1e-3
             min_mask = omega2 >= min_omega2
@@ -178,6 +178,32 @@ class Vibrations():
         return omega2, eigenvectors
 
     
+    def get_eigenvalues_in_Hz(self, omega2: Union[None, np.array]=None) -> np.array:
+        """
+        Determine vibration frequencies in cm^-1.
+    
+        Parameters
+        ----------
+        omega2 : Union[None, np.array]
+            Eigenvalues of the mass weighted hessian.
+    
+        Returns
+        -------
+        omega_SI : np.array
+            Array of the eigenfrequencies in Hz.
+    
+        """
+        if omega2 is None:
+            omega2 = self.eigenvalues
+        
+        omega = np.sign(omega2) * np.sqrt(np.abs(omega2))
+        
+        conversion = np.sqrt((units.EV_IN_JOULE) / (units.ATOMIC_MASS_IN_KG * units.ANGSTROM_IN_METER ** 2))
+        omega_SI = omega * conversion
+        
+        return omega_SI
+
+    
     def get_eigenvalues_in_inverse_cm(self, omega2: Union[None, np.array]=None) -> np.array:
         """
         Determine vibration frequencies in cm^-1.
@@ -193,13 +219,7 @@ class Vibrations():
             Array of the eigenfrequencies in cm^(-1).
 
         """
-        if omega2 is None:
-            omega2 = self.eigenvalues
-        
-        omega = np.sign(omega2) * np.sqrt(np.abs(omega2))
-        
-        conversion = np.sqrt((units.EV_IN_JOULE) / (units.ATOMIC_MASS_IN_KG * units.ANGSTROM_IN_METER ** 2))
-        omega_SI = omega * conversion
+        omega_SI = self.get_eigenvalues_in_Hz(omega2=omega2)
         f_inv_cm = omega_SI * units.INVERSE_CM_IN_HZ / (2 * np.pi)
         
         return f_inv_cm
@@ -238,7 +258,7 @@ class Vibrations():
         return atom_type_index
 
     
-    def project_onto_wave_vector(self, velocities, q_vector, project_on_atom=-1):
+    def project_onto_wave_vector(self, velocities, wave_vector, project_on_atom=-1):
         
         number_of_primitive_atoms = len(self)
         number_of_atoms = velocities.shape[1]
@@ -251,11 +271,11 @@ class Vibrations():
                                          number_of_primitive_atoms,
                                          number_of_dimensions), dtype=complex)
 
-        if q_vector.shape[0] != coordinates.shape[1]:
+        if wave_vector.shape[0] != coordinates.shape[1]:
             print("Warning!! Q-vector and coordinates dimension do not match")
             exit()
 
-        #Projection into wave vector
+        # Projection onto the wave vector
         for i in range(number_of_atoms):
             # Projection on atom
             if project_on_atom > -1:
@@ -263,13 +283,9 @@ class Vibrations():
                     continue
 
             for k in range(number_of_dimensions):
-                velocities_projected[:, atom_type[i], k] += velocities[:,i,k]*np.exp(-1j*np.dot(q_vector, coordinates[i,:]))
+                velocities_projected[:, atom_type[i], k] += velocities[:,i,k]*np.exp(-1j*np.dot(wave_vector, coordinates[i,:]))
 
-       #Normalize velocities (method 1)
-      #  for i in range(velocity_projected.shape[1]):
-      #      velocity_projected[:,i,:] /= atom_type.count(i)
-
-       #Normalize velocities (method 2)
+        # Normalize the velocities
         number_of_primitive_cells = number_of_atoms/number_of_primitive_atoms
         velocities_projected /= np.sqrt(number_of_primitive_cells)
         
@@ -301,15 +317,10 @@ class Vibrations():
             [number of time steps, number of frequencies]
 
         """
-        number_of_cell_atoms = velocities.shape[1]
-        number_of_frequencies = eigenvectors.shape[0]
-
-        #Projection in vibration coordinates
-        velocities_projected = np.zeros((velocities.shape[0], number_of_frequencies), dtype=complex)
-        # for k in range(number_of_frequencies):
-        #     for i in range(number_of_cell_atoms):
-        #         velocities_projected[:, k] += np.dot(velocities[:, i, :], eigenvectors[k, i, :].conj())
-
+        # Projection in vibration coordinates
+        velocities_projected = np.zeros((velocities.shape[0], eigenvectors.shape[0]), dtype=complex)
+        
+        # Get normal mode decompositon parallelised by numba
         _get_normal_mode_decomposition_numba(velocities_projected,
                                              velocities,
                                              eigenvectors) 
@@ -319,13 +330,9 @@ class Vibrations():
     
     def get_autocorrelation_function(self,
                                      signal: np.array,
-                                     max_lag: Union[None, int]=None,
                                      bootstrapping_blocks: int=1) -> np.array:
         
         signal_length = len(signal)
-        
-        if max_lag is None:
-            max_lag = int( signal_length*0.5 )
         
         autocorrelation = []
         
@@ -340,7 +347,7 @@ class Vibrations():
         
             signal_block = signal[block_start:block_end]
             
-            autocorrelation_block = mu.get_autocorrelation_function(signal_block, max_lag=max_lag) 
+            autocorrelation_block = mu.get_autocorrelation_function(signal_block) 
             autocorrelation.append(autocorrelation_block)
         
         autocorrelation = np.atleast_2d(autocorrelation)
@@ -353,41 +360,59 @@ class Vibrations():
     def get_power_spectrum(self,
                            signal: np.array,
                            time_step: float,
-                           bootstrapping_blocks: int=1,
-                           block_overlap: int=1) -> tuple:
+                           bootstrapping_blocks: int=1) -> (np.array, np.array):
+        """
+        Determine the power spectrum for a given signal using bootstrapping:
+            - Splitting the sigmal into blocks and for each block:
+                * Determining the autocorrelation function of the signal
+                * Determining the fourire transform of the autocorrelation
+                  function to get the power spectrum for the block
+            - Calculating the average power spectrum by averaging of the power
+              spectra of all blocks
 
+        Parameters
+        ----------
+        signal : np.array
+            Siganl for which the autocorrelation function should be calculated.
+        time_step : float
+            DESCRIPTION.
+        bootstrapping_blocks : int, optional
+            DESCRIPTION. The default is 1.
+
+        Returns
+        -------
+        frequencies : np.array
+            Frequiencies of the power spectrum in units depending on the
+            tims_step.
+            
+        power_spectrum : np.array
+            Power spectrum.
+
+        """
         signal_length = len(signal)
+        block_size = int(np.floor(signal_length/bootstrapping_blocks))
         
+        print(signal_length, block_size)
+        
+        frequencies = None
         power_spectrum = []
         
-        a = bootstrapping_blocks/block_overlap
-        
-        block_size = int(np.floor(signal_length/a))
-        
         for block in range(bootstrapping_blocks):
-            block_start = block * int(np.floor( (signal_length - block_size) / (bootstrapping_blocks-1)))
-            block_end = block_start + block_size
             
-            #bootstrapping_blocks * a + block_size = signal_length
-            
-            print(block_start, block_end)
-            
-            if block_end > signal_length-1:
-                block_end = signal_length-1
+            block_start = block*block_size
+            block_end = (block+1)*block_size
+            if block_end > signal_length:
+                block_end = signal_length
         
             signal_block = signal[block_start:block_end]
-            
             autocorrelation_block = mu.get_autocorrelation_function(signal_block) 
-            
-            power_spectrum_block = mu.get_fourier_transform(autocorrelation_block, time_step)
-            
+            frequencies, power_spectrum_block = mu.get_fourier_transform(autocorrelation_block, time_step)
             power_spectrum.append(power_spectrum_block)
         
         power_spectrum = np.atleast_2d(power_spectrum)
-        
         power_spectrum = np.average(power_spectrum, axis=0)
 
-        return power_spectrum
+        return frequencies, power_spectrum
     
     
     def lorentzian_fit(self, frequencies, power_spectrum):
@@ -398,7 +423,7 @@ class Vibrations():
         
         a_0 = frequencies[max_ind]
         b_0 = frequency_step*100
-        c_0 = np.max(power_spectrum) * b_0
+        c_0 = np.max(power_spectrum) * b_0 * np.pi
         
         p_0 = [a_0, b_0, c_0]
         
@@ -408,6 +433,17 @@ class Vibrations():
                            p0=p_0)
         
         return res
+    
+    
+    def get_line_widths(self, frequencies, power_spectrum):
+        
+        res = self.lorentzian_fit(frequencies, power_spectrum)
+        
+        frequency = res[0]
+        line_width = res[1]
+        life_time = 1.0 / line_width
+        
+        return frequency, line_width, life_time
 
 
 # helper functions
@@ -421,7 +457,9 @@ def _get_normal_mode_decomposition_numba(velocities_projected,
     
     for k in prange(number_of_frequencies):
         for i in prange(number_of_cell_atoms):
-            velocities_projected[:, k] += np.dot(velocities[:, i, :], eigenvectors[k, i, :].conj())
+            for n in range( velocities.shape[0] ):
+                for m in range( velocities.shape[2] ):
+                    velocities_projected[n, k] += velocities[n, i, m] * eigenvectors[k, i, m]
 
 
 class AimsVibrations(Vibrations, AimsGeometry):
