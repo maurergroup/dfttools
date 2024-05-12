@@ -115,6 +115,25 @@ def get_mirror_matrix(normal_vector: np.array) -> np.array:
     return M
 
 
+def get_angle_between_vectors(vector_1: np.array, vector_2: np.array) -> np.array:
+    """
+    Determines angle between two vectors.
+
+    Parameters
+    ----------
+    vector_1 : np.array
+    vector_2 : np.array
+    
+    Returns
+    -------
+    angle : float
+        Angle in radiants.
+
+    """
+    angle = np.dot(vector_1, vector_2) / np.linalg.norm(vector_1) / np.linalg.norm(vector_2)
+    return angle
+
+
 def get_fractional_coords(cartesian_coords: np.array, lattice_vectors: np.array) -> np.array:
     """
     Transform cartesian coordinates into fractional coordinates.
@@ -154,12 +173,34 @@ def get_cartesian_coords(frac_coords: np.array, lattice_vectors: np.array) -> np
            
     """
     return np.dot(frac_coords, lattice_vectors)
+    
 
-
-def get_autocorrelation_function_1(signal: np.array,
-                                   max_lag: int) -> np.array:
+def get_autocorrelation_function(signal: np.array) -> np.array:
     """
     Calculate the autocorrelation function for a given signal.
+
+    Parameters
+    ----------
+    signal : 1D np.array
+        Siganl for which the autocorrelation function should be calculated.
+
+    Returns
+    -------
+    autocorrelation : np.array
+        Autocorrelation function from 0 to max_lag.
+
+    """
+    autocorrelation = np.correlate(signal, signal, mode='same') / signal.size
+    
+    return autocorrelation[autocorrelation.size//2:]
+
+
+def get_autocorrelation_function_manual_lag(signal: np.array,
+                                            max_lag: int) -> np.array:
+    """
+    Alternative method to determine the autocorrelation function for a given
+    signal that used numpy.corrcoef. This function allows to set the lag
+    manually.
 
     Parameters
     ----------
@@ -189,26 +230,6 @@ def get_autocorrelation_function_1(signal: np.array,
         autocorrelation[l] = corr
     
     return autocorrelation
-    
-
-def get_autocorrelation_function(signal: np.array) -> np.array:
-    """
-    Calculate the autocorrelation function for a given signal.
-
-    Parameters
-    ----------
-    signal : 1D np.array
-        Siganl for which the autocorrelation function should be calculated.
-
-    Returns
-    -------
-    autocorrelation : np.array
-        Autocorrelation function from 0 to max_lag.
-
-    """
-    autocorrelation = np.correlate(signal, signal, mode='same') / signal.size
-    
-    return autocorrelation[autocorrelation.size//2:]
 
 
 def get_fourier_transform(signal: np.array, time_step: float) -> tuple:
@@ -228,9 +249,9 @@ def get_fourier_transform(signal: np.array, time_step: float) -> tuple:
         Frequencs and absolute values of the fourier transform.
 
     """
-    d = len(signal) * time_step
+    #d = len(signal) * time_step
     
-    f = scipy.fft.fftfreq(signal.size, d=d)
+    f = scipy.fft.fftfreq(signal.size, d=time_step)
     y = scipy.fft.fft(signal)
     
     L = f >= 0
