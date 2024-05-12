@@ -15,56 +15,22 @@ import scipy.spatial
 import scipy.spatial.distance
 import networkx as nx
 
-import os.path
-
 import dfttools.utils.math_utils as utils
 from dfttools.utils.periodic_table import PeriodicTable
 import dfttools.utils.units as units
 
 
-
-def get_file_format_from_ending(filename):
-    if filename.endswith('.in'):
-        return 'aims'
-    elif filename.endswith('.next_step'):
-        return 'aims'
-    elif filename.endswith('.xsf'):
-        return 'xsf'
-    elif filename.endswith('.molden'):
-        return 'molden'
-    elif filename.endswith('POSCAR'):
-        return 'vasp'
-    elif filename.endswith('CONTCAR'):
-        return 'vasp'
-    elif filename.endswith('.xyz'):
-        return 'xyz'
-    return None
-
-
-def handle_unknown_file_format(filename, file_format=None):
-    unknown_format = ''
-    if file_format is None:
-    # Determine file format from filename (extension for filename itsself)
-        basename, ext = os.path.splitext(os.path.basename(filename))
-        if ext == '':
-            unknown_format = basename
-        else:
-            unknown_format = ext
-
-    else:
-        unknown_format = file_format
-
-    raise NotImplementedError("Unknown file format {} for reading.".format(unknown_format))
-
-
 class Geometry:
     """
     This class represents a geometry file for (in principle) any DFT code.
-    In practice it has only been fully implemented for FHI-aims geometry.in files.
+    In practice it has only been fully implemented for FHI-aims geometry.in
+    files.
+    
     """
-
-    def __init__(self, filename=None):
+    def __init__(self, filename: str=None):
         """
+        filename : str
+            Path to text file of geometry.
             
         center: dict
             atom indices and linear combination of them to define the center of a molecule.
@@ -91,12 +57,13 @@ class Geometry:
         self.inversion_index = None
         self.vacuum_level = None
         self.multipoles = []
-        self._homogeneous_field = None
+        self.homogeneous_field = None
         self.readAsFractionalCoords = False
         self.symmetry_params = None
         self.n_symmetry_params = None
         self.symmetry_LVs = None
         self.symmetry_frac_coords = None  # symmetry_frac_coords should have str values, not float, to include the parameters
+        
         if filename is None:
             self.n_atoms = 0
             self.coords = np.zeros([self.n_atoms, 3])
@@ -515,7 +482,7 @@ class Geometry:
         is added to all borders
         
         """
-        indices_to_remove = self.getCroppingIndices(xlim, ylim, zlim, auto_margin)
+        indices_to_remove = self.get_cropping_indices(xlim, ylim, zlim, auto_margin)
         self.remove_atoms(indices_to_remove)
     
     
@@ -529,7 +496,7 @@ class Geometry:
         """Removes all atoms that are inside specified bounds.
         If auto_margin == True then an additional margin of the maximum covalent radius
         is added to all borders"""
-        indices_to_keep = self.getCroppingIndices(xlim, ylim, zlim, auto_margin)
+        indices_to_keep = self.get_cropping_indices(xlim, ylim, zlim, auto_margin)
         indices_to_remove = [i for i in range(self.n_atoms) if i not in indices_to_keep]
         self.remove_atoms(indices_to_remove)
     
@@ -725,7 +692,8 @@ class Geometry:
             'Lattice vector must be defined in Geometry or given as function parameter'
         
         frac_coords = utils.get_fractional_coords(self.coords, lattice_vectors)
-        frac_coords[:,dimensions] = frac_coords[:,dimensions] % 1 # modulo 1 maps all coordinates to first unit cell
+        # modulo 1 maps all coordinates to first unit cell
+        frac_coords[:,dimensions] = frac_coords[:,dimensions] % 1 
         new_coords = utils.get_cartesian_coords(frac_coords, lattice_vectors)
         self.coords = new_coords
 
@@ -737,19 +705,33 @@ class Geometry:
         assert not np.allclose(lattice_vectors, np.zeros([3,3])), \
             'Lattice vector must be defined in Geometry or given as function parameter'
         
-        offset = self.getGeometricCenter()
+        offset = self.get_geometric_center()
         frac_offset = utils.get_fractional_coords(offset, lattice_vectors)
         frac_offset = np.floor(frac_offset)
-        self.moveByFractionalCoords(-frac_offset, lattice_vectors)
+        self.move_all_atoms_by_fractional_coords(-frac_offset, lattice_vectors)
     
     
-    def center_coordinates(self, ignore_center_attribute=False, dimensions=np.array(range(3))):
+    def center_coordinates(self,
+                           ignore_center_attribute: bool=False,
+                           dimensions=np.array(range(3))):
         """
-        Shift the coordinates of a geometry such that the "center of mass" or specified center lies at (0,0,0)
-        :param bool ignore_center_attribute: Switch usage of *center* attribute off/on.
-        :returns: Offset by which this geometry was shifted
+        Shift the coordinates of a geometry such that the "center of mass" or
+        specified center lies at (0,0,0)
+        
+        Parameters
+        ----------
+        ignore_center_attribute : bool
+            Switch usage of *center* attribute off/on. The default is False.
+            
+        dimensions: np.array
+            Dimensions that should be cnetered. The default is False [0, 1, 2].
+
+        Returns
+        -------
+        None.
+        
         """
-        offset = self.getGeometricCenter(ignore_center_attribute=ignore_center_attribute)[dimensions]
+        offset = self.get_geometric_center(ignore_center_attribute=ignore_center_attribute)[dimensions]
         self.coords[:,dimensions] -= offset
         return offset
     
@@ -779,29 +761,45 @@ class Geometry:
         
         self.remove_adsorbates(primitive_substrate=primitive_substrate)
         self += adsorbates
-        
     
-    def rotate_lattice_around_z_axis(self, angle_in_degree):
+    
+    def rotate_lattice_around_axis(
+        self,
+        angle_in_degree: float,
+        axis: np.array=np.array([0.0, 0.0, 1.0])
+    ) -> None:
         """
-        Rotates lattice around z axis
+        Rotates lattice around a given axis.
 
         Parameters
         ----------
         angle_in_degree : float
             angle of rotation
+            
+        axis: np.array
+            Axis around which to rotate. The default is 
 
         Returns
         -------
         None.
+        
         """
-        R = utils.get_rotation_matrix_around_z_axis(angle_in_degree * np.pi / 180)
+        R = utils.get_rotation_matrix_around_axis(axis, angle_in_degree * np.pi / 180)
         self.lattice_vectors = np.dot(self.lattice_vectors, R)
 
     
-    def rotate_around_z_axis(self, angle_in_degree, center=None, indices=None):
+    def rotate_coords_around_axis(
+        self,
+        angle_in_degree,
+        axis: np.array=np.array([0.0, 0.0, 1.0]),
+        center=None,
+        indices=None
+    ) -> None:
+        
         """Rotates structure COUNTERCLOCKWISE around a point defined by <center>.
 
-        If center == None, the geometric center of the structure (as defined by self.getGeometricCenter())
+        If center == None, the geometric center of the structure (as defined by
+        self.get_geometric_center())
         is used as the pivot for the rotation.
         """
         # ??? <aj, 25.2.2020> not sure if center should be the geometric center or [0,0,0], both
@@ -809,9 +807,9 @@ class Geometry:
         if indices is None:
             indices = np.arange(self.n_atoms)
         if center is None:
-            center = self.getGeometricCenter(indices=indices)
+            center = self.get_geometric_center(indices=indices)
 
-        R = utils.get_rotation_matrix_around_z_axis(angle_in_degree * np.pi / 180, get_3x3_matrix=True)
+        R = utils.get_rotation_matrix_around_axis(axis, angle_in_degree * np.pi / 180)
         temp_coords = copy.deepcopy(self.coords[indices])
         temp_coords -= center
         temp_coords = np.dot(temp_coords,R)
@@ -827,7 +825,7 @@ class Geometry:
         self.transform(mirror_matrix)
         
 
-    def align_into_XY_plane(self, atom_indices):
+    def align_into_xy_plane(self, atom_indices):
         """Rotates a planar molecule (defined by 3 atom indices) into the XY plane.
         Double check results, use with caution"""
         p1 = self.coords[atom_indices[0]]
@@ -846,7 +844,7 @@ class Geometry:
         self.transform(U)
     
     
-    def align_with_Z_vector(self, new_z_vec: np.array) -> None:
+    def align_with_z_vector(self, new_z_vec: np.array) -> None:
         """
         Transforms the coordinate system of the geometry file to a new z-vector
         calculates rotation martrix for coordinate transformation to new z-vector
@@ -885,12 +883,33 @@ class Geometry:
         # Apply the rotation to all positions
         rotated_positions = np.dot(old_positions, rotation_matrix.T)
         
-        self.coords= rotated_positions
+        self.coords = rotated_positions
+    
+    
+    def align_vector_to_vector(self, vector: np.array, vector_to_align: np.array):
+        """
+        Aligns a vector and the atomic coordiantes to a given vector.
         
+        vector : np.array
+            vector for alignment
+        
+        vector_to_align : np.array
+            index of the lattice vector that should be aligned
+            
+        """
+        vector_to_align_normed = vector_to_align / np.linalg.norm(vector_to_align)
+
+        vector_normed = vector / np.linalg.norm(vector)
+        
+        R = utils.get_rotation_matrix(vector_normed, vector_to_align_normed)
+
+        self.lattice_vectors = np.dot(self.lattice_vectors, R)
+        self.coords = np.dot(self.coords, R)
+    
         
     def align_lattice_vector_to_vector(self, vector, lattice_vector_index):
         """
-        Align a lattice vector to a given axis
+        Aligns a lattice vector and the atomic coordiantes to a given axis.
         
         vector : array
             vector for alignment
@@ -903,15 +922,46 @@ class Geometry:
             self.lattice_vectors[lattice_vector_index] / \
                 np.linalg.norm(self.lattice_vectors[lattice_vector_index])
 
-        vector_normed = vector / np.linalg.norm(vector)
-                
-        R = utils.get_rotation_matrix(vector_normed, lattice_vector_normed)
-
-        self.lattice_vectors = np.dot(self.lattice_vectors, R)
-        self.coords = np.dot(self.coords, R)
+        self.align_vector_to_vector(vector, lattice_vector_normed)
+    
+        
+    def align_cartiesian_axis_to_vector(self, vector, axis_index):
+        """
+        Aligns a lattice vector and the atomic coordiantes to a given axis.
+        
+        vector : array
+            vector for alignment
+        
+        axis_index : int
+            index of the axis that should be aligned
+            
+        """
+        axis = np.zeros(3, dtype=np.float64)
+        axis[axis_index] = 1.0
+        
+        self.align_vector_to_vector(vector, axis)
+    
+    
+    def align_with_view_direction(self, view_direction: np.array) -> None:
+        
+        view_direction /= np.linalg.norm(view_direction)
+        
+        vec_z = np.array([0.0, 0.0, -1.0])
+        
+        view_direction_y = np.cross(vec_z, view_direction)
+        norm_y = np.linalg.norm(view_direction_y)
+        
+        if norm_y == 0.0:
+            sign = np.dot(vec_z, view_direction)
+            self.lattice_vectors[2] *= sign
+            self.coords[:,2] *= sign
+            
+        else:
+            # Orient z-axis in view direction
+            self.align_cartiesian_axis_to_vector(-view_direction, 2)
         
     
-    def align_main_axis_along_XYZ(self) -> None:
+    def align_main_axis_along_xyz(self) -> None:
         """
         Align coordinates of rodlike molecules along specified axis
         
@@ -961,12 +1011,26 @@ class Geometry:
             self.coords[atom_indices,:] = temp_coords
 
 
+    def transform_fractional(self, R, t, lattice=None):
+        """
+        Transforms the coordinates by rotation and translation, where R,t are
+        given in fractional coordinates
+        The transformation is applied as c_new[3x1] = R[3x3] * c_old[3x1] + t[3x1]
+        
+        """
+        if lattice is None:
+            lattice=self.lattice_vectors
+        coords_frac = utils.get_fractional_coords(self.coords, lattice)
+        coords_frac = np.dot(coords_frac, R.T) + t.reshape([1,3])
+        self.coords = utils.get_cartesian_coords(coords_frac, lattice)
+
+
     def transform_lattice(self, R: np.array, t: np.array=np.array([0,0,0])) -> None:
         """
         Transforms the lattice vectors by rotation and translation.
         The transformation is applied as x_new[3x1] = x_old[3x1] x R[3x3] + t[3x1]
         Notice that this works in cartesian coordinates.
-        Use transformFractional if you got your R and t from get_symmetries
+        Use transform_fractional if you got your R and t from get_symmetries
 
         Parameters
         ----------
@@ -1003,20 +1067,6 @@ class Geometry:
         """
         self.lattice_vectors[[axis_1, axis_2], :] = self.lattice_vectors[[axis_2, axis_1], :]
         self.coords[[axis_1, axis_2], :] = self.coords[[axis_2, axis_1], :]
-
-
-    def transform_fractional(self, R, t, lattice=None):
-        """
-        Transforms the coordinates by rotation and translation, where R,t are
-        given in fractional coordinates
-        The transformation is applied as c_new[3x1] = R[3x3] * c_old[3x1] + t[3x1]
-        
-        """
-        if lattice is None:
-            lattice=self.lattice_vectors
-        coords_frac = utils.get_fractional_coords(self.coords, lattice)
-        coords_frac = np.dot(coords_frac, R.T) + t.reshape([1,3])
-        self.coords = utils.get_cartesian_coords(coords_frac, lattice)
     
     
     def symmetrize(self, symmetry_operations, center=None):
@@ -1032,7 +1082,7 @@ class Geometry:
             self.coords -= center
         else:
             offset = np.mean(self.coords, axis=0)
-            self.centerCoordinates()
+            self.center_coordinates()
         temp_coords = copy.deepcopy(self.coords) # this corresponds to the unity matrix symmetry operation
         for R in symmetry_operations:
             new_geom = copy.deepcopy(self)
@@ -1055,23 +1105,23 @@ class Geometry:
         transformed_geoms = []
 
         # bring all atoms to first UC. Provides a univocal distribution of the atoms in the UCs.
-        self.moveToFirstUnitCell(coords=np.array([0,1])) # only move to 1UC on XY
+        self.map_to_first_unit_cell(coords=np.array([0,1])) # only move to 1UC on XY
 
         for i,R in enumerate(Rs):
             t = ts[i]
             new_geom = copy.deepcopy(self)
             # store centered reference which will be used to reorder atoms later
             centered = copy.deepcopy(new_geom)
-            centered.centerXYCoordinates()
+            centered.center_coordinates(dimensions=np.array([0, 1]))
             # rotate
-            new_geom.transformFractional(R,np.array([0,0,0]),self.lattice_vectors)
+            new_geom.transform_fractional(R,np.array([0,0,0]),self.lattice_vectors)
             # translate
-            new_geom.moveByFractionalCoords(t)
+            new_geom.move_all_atoms_by_fractional_coords()(t)
             # bring all atoms to first UC. Provides a univocal distribution of the atoms in the UCs.
-            new_geom.moveToFirstUnitCell(lattice=self.lattice_vectors,coords=np.array([0,1]))
+            new_geom.map_to_first_unit_cell(lattice=self.lattice_vectors,coords=np.array([0,1]))
             # store offset and center
             offset2 = np.mean(new_geom.coords, axis=0)
-            new_geom.centerXYCoordinates()
+            new_geom.center_coordinates(dimensions=np.array([0, 1]))
             # reoreder atoms with the centered reference
             indices = centered.get_transformation_indices(new_geom,periodic_2D=True)
             new_geom.reorder_atoms(indices)
@@ -1100,13 +1150,13 @@ class Geometry:
         
         """
         if len(other_geometries) > 0:
-            offset = self.getGeometricCenter() # Attribute center should be used if it exists
+            offset = self.get_geometric_center() # Attribute center should be used if it exists
             self.coords -= offset
 
             for other_geom in other_geometries:
                 geom = copy.deepcopy(other_geom)
                 # center all other geometries to remove offset
-                geom.centerCoordinates()
+                geom.center_coordinates()
                 # all geometries have to be ordered like first geometry in order to sum them
                 geom.reorder_atoms(self.get_transformation_indices(geom))
                 self.coords += geom.coords
@@ -1202,8 +1252,15 @@ class Geometry:
     def set_multipoles_charge(self, charge: np.array) -> None:
         """
         Sets the charge of all multipoles
-        :param charge: list or float or int
-        :return:
+        
+        Parameters
+        ----------
+        charge : list or float or int
+        
+        Returns
+        -------
+        None
+
         """
         if isinstance(charge,list):
             assert len(charge) == len(self.multipoles)
@@ -1263,7 +1320,7 @@ class Geometry:
         It is possible to define which dimension will be constrained, but since
         the number of atoms in the cuboid is only calculated at runtime
         the dimensions may only be set for all atoms at once. If you need to
-        set them individually please use constrainAtomsBasedOnIndex.
+        set them individually please use set_constraints.
     
         Parameters
         ----------
@@ -1282,7 +1339,7 @@ class Geometry:
             constrain_dim_flags = [True, True, True]
     
         #--- get indices of all atoms outside the required interval ---
-        indices_outside = self.getCroppingIndices(
+        indices_outside = self.get_cropping_indices(
             xlim=xlim,
             ylim=ylim,
             zlim=zlim,
@@ -1298,7 +1355,7 @@ class Geometry:
         ]
         #---
     
-        self.constrainAtomsBasedOnIndex(indices_inside, constrain_dim_flags)
+        self.set_constraints(indices_inside, constrain_dim_flags)
     
     
     def free_all_constraints(self) -> None:
@@ -1397,14 +1454,14 @@ class Geometry:
         self.lattice_vectors = np.zeros((3,3), dtype=float)
         
         
-    def set_homogenous_field(self, E):
+    def set_homogeneous_field(self, E):
         """Field should be a numpy array (Ex, Ey, Ez) with the Field in V/A"""
         assert len(E) == 3, "Expected E-field components [Ex, Ey, Ez], but got " + str(E)
-        self._homogeneous_field = np.asarray(E)
+        self.homogeneous_field = np.asarray(E)
         
     
-    def free_homogenous_field(self):
-        self._homogeneous_field = np.zeros([0.0, 0.0, 0.0])
+    def free_homogeneous_field(self):
+        self.homogeneous_field = np.zeros([0.0, 0.0, 0.0])
 
 ###############################################################################
 #                      Get Properties of the Geometry                         #
@@ -1424,7 +1481,8 @@ class Geometry:
 
     def get_reassembled_molecule(self, threshold: float=2.0):
         
-        geom_replica = self.getPeriodicReplica((1,1,1), explicit_replications=([-1,0,1],[-1,0,1],[-1,0,1]))
+        geom_replica = self.get_periodic_replica((1,1,1),
+                            explicit_replications=([-1,0,1],[-1,0,1],[-1,0,1]))
         
         tree = scipy.spatial.KDTree(geom_replica.coords)
         pairs = tree.query_pairs(threshold)
@@ -1457,11 +1515,12 @@ class Geometry:
             if len(index_array) == len(self):
                 final_geom = geom_replica.get_atoms_by_indices( np.sort( np.array(list(index_array), dtype=np.int32) ) )
                 final_geom.lattice_vectors = self.lattice_vectors
-                final_geom.mapCenterOfAtomsClosestToOrigin()
+                final_geom.map_center_of_atoms_to_first_unit_cell()
                     
                 return final_geom
         
-        warnings.warn('Geometry.getReassembledMolecule could not reassemble molecule. Returning original Geometry.')
+        warnings.warn('Geometry.getReassembledMolecule could not reassemble \
+                      molecule. Returning original Geometry.')
         return self
 
 
@@ -1507,11 +1566,11 @@ class Geometry:
 
     def get_fractional_lattice_vectors(self, lattice_vectors=None):
         """
-        calculate the fractional representation of lattice vectors of the
+        Calculate the fractional representation of lattice vectors of the
         geometry file in another basis.
         Useful to calculate epitaxy matrices
+        
         """
-
         fractional_coords = np.linalg.solve(lattice_vectors.T, self.lattice_vectors.T)
         return fractional_coords.T
     
@@ -1520,11 +1579,13 @@ class Geometry:
         """
         Calculate the reciprocal lattice of the Geometry lattice_vectors in standard form
         For convention see en.wikipedia.org/wiki/Reciprocal_lattice
-        Returns: 
-            recip_lattice: np.array(3x3)
-                rowwise reciprocal lattice vectors
+        
+        Returns
+        -------
+        recip_lattice : np.array(3x3)
+            Row-wise reciprocal lattice vectors
+            
         """
-
         a1 = self.lattice_vectors[0]
         a2 = self.lattice_vectors[1]
         a3 = self.lattice_vectors[2]
@@ -1543,9 +1604,6 @@ class Geometry:
         """
         Get main axes and eigenvalues of a molecule
         https://de.wikipedia.org/wiki/Tr%C3%A4gheitstensor
-
-
-        weights: 
 
         Parameters
         ----------
@@ -1664,7 +1722,7 @@ class Geometry:
     
         Returns
         -------
-        float
+        volume : float
             Volume of the unit cell.
     
         """
@@ -1710,7 +1768,7 @@ class Geometry:
 
     def get_center_of_mass(self) -> np.array:
         """
-        Mind the difference to self.getGeometricCenter
+        Mind the difference to self.get_geometric_center
 
         Returns
         -------
@@ -1733,14 +1791,16 @@ class Geometry:
         Returns symmetries (rotation and translation matrices) from spglig.
         works only for unitcell and supercell geometries (lattice vecotrs must not be 0)
 
-        Beware: The returned symmetry matrices are given with respect to fractional coordinates, not Cartesian ones!
+        Beware: The returned symmetry matrices are given with respect to
+        fractional coordinates, not Cartesian ones!
 
         See https://atztogo.github.io/spglib/python-spglib.html#get-symmetry for details
 
         Parameters:
         -----------
         save_directory : str
-            save directory in string format, file will be name symmetry.pickle (default = None --> symmetry is not saved)
+            save directory in string format, file will be name symmetry.pickle
+            (default = None --> symmetry is not saved)
         """
         import spglib
         import pickle
@@ -1826,7 +1886,7 @@ class Geometry:
 
         Returns
         -------
-        float
+        atomic_mass : float
             Atomic mass of the entrie geometry.
 
         """
@@ -1873,7 +1933,7 @@ class Geometry:
 
         Returns
         -------
-        float
+        area : float
             Area of the unit cell.
 
         """
@@ -2395,7 +2455,7 @@ class Geometry:
         """
         masses_kg = [units.ATOMIC_MASS_IN_KG * self.periodic_table.get_atomic_mass(s) for s in self.species]
 
-        center_of_mass = self.getCenterOfMass()
+        center_of_mass = self.get_center_of_mass()
         r_to_center_in_m = units.ANGSTROM_IN_METER * (self.coords - center_of_mass)
 
         ###########
@@ -2422,12 +2482,12 @@ class Geometry:
         return moments
     
     
-    def get_homogenous_field(self):
+    def get_homogeneous_field(self):
         """Field is a numpy array (Ex, Ey, Ez) with the Field in V/A"""
         if not hasattr(self, "_homogeneous_field"):
-            self._homogeneous_field = None
+            self.homogeneous_field = None
             
-        return self._homogeneous_field
+        return self.homogeneous_field
     
 
 ###############################################################################
@@ -2476,8 +2536,8 @@ class Geometry:
 
         # Replicate other geometry to also search in neighbouring cells
         if periodic_2D:
-            other_geometry = other_geometry.getPeriodicReplica((3,3,1))
-            other_geometry.moveByFractionalCoords([-1/3.0, -1/3.0, 0])
+            other_geometry = other_geometry.get_periodic_replica((3,3,1))
+            other_geometry.move_all_atoms_by_fractional_coords([-1/3.0, -1/3.0, 0])
 
         # Get the atomic numbers of each geometry file: Later only compare matching atom types
         Z_values_1 = np.array([self.periodic_table.get_atomic_number(s) for s in self.species], np.int64)
@@ -2533,7 +2593,7 @@ class Geometry:
         # check in neighbouring cells, to account for geometries 'broken' around the cell border
         if check_neightbouring_cells:
             if self.lattice_vectors is not None:
-                geom = geom.getPeriodicReplica((3,3),explicit_replications=[[-1,0,1],[-1,0,1]])
+                geom = geom.get_periodic_replica((3,3),explicit_replications=[[-1,0,1],[-1,0,1]])
             else:
                 print('Non periodic structure. Ignoring check_neighbouring_cells')
 
@@ -2574,11 +2634,11 @@ class Geometry:
         """
         # shift both geometries to origin, get their relative translation.
         # Ignore center attribute (GeometryFile.center), if defined
-        meanA = self.getGeometricCenter(ignore_center_attribute=True)
-        meanB = geom.getGeometricCenter(ignore_center_attribute=True)
+        meanA = self.get_geometric_center(ignore_center_attribute=True)
+        meanB = geom.get_geometric_center(ignore_center_attribute=True)
         translation = meanA - meanB
-        self.centerCoordinates(ignore_center_attribute=True)
-        geom.centerCoordinates(ignore_center_attribute=True)
+        self.center_coordinates(ignore_center_attribute=True)
+        geom.center_coordinates(ignore_center_attribute=True)
 
         # check if they are equivalent (up to permutation)
         is_equivalent = self.is_equivalent(geom, tolerance, check_neightbouring_cells=check_neighbouring_cells)
@@ -2750,7 +2810,7 @@ class Geometry:
         primitive_slab = self.__class__()
         primitive_slab.lattice_vectors = primitive_slab_lattice
         primitive_slab.add_atoms(primitive_slab_coords, primitive_slab_species)
-        primitive_slab.moveToFirstUnitCell()
+        primitive_slab.map_to_first_unit_cell()
         
         # Sanity check: primitive_slab must be reducable to the standard unit cell 
         check_lattice, _, _ = spglib.standardize_cell(primitive_slab.get_spglib_cell())
@@ -2772,10 +2832,6 @@ class Geometry:
                  bool_shift_slab_to_bottom: bool=False):
         """
         Generates a slab.
-        
-        Returns:
-        --------
-        primitive_slab : Geometry
 
         Parameters
         ----------
@@ -2803,11 +2859,11 @@ class Geometry:
         else:
             primitive_slab = self
         
-        slab_layers = primitive_slab.getNumberOfAtomLayers()[1]
+        slab_layers = primitive_slab.get_number_of_atom_layers()[1]
 
         replica = np.array([1,1, int(np.ceil(layers / slab_layers))], dtype=np.int32)
         replica[:2] = surface_replica
-        slab_new = primitive_slab.getPeriodicReplica(replica)
+        slab_new = primitive_slab.get_periodic_replica(replica)
         
         slab_new_layers = slab_new.get_atom_layers_indices()
         
@@ -2860,7 +2916,7 @@ class Geometry:
                     curr_shift = i*self.lattice_vectors[0,:] + j*self.lattice_vectors[1,:] + k*self.lattice_vectors[2,:]
 
                     atom_distances = scipy.spatial.distance.cdist(self.coords, self.coords+curr_shift)
-                    index_tuples += self._getCollisionIndices(atom_distances, distance_threshold)
+                    index_tuples += self._get_collision_indices(atom_distances, distance_threshold)
         if len(index_tuples) > 0:
             G = nx.Graph()
             G = nx.from_edgelist(itertools.chain.from_iterable(itertools.pairwise(e) for e in index_tuples))
@@ -3110,15 +3166,44 @@ class Geometry:
 ###############################################################################
 #                           Evaluation Functions                              #
 ###############################################################################
-    def check_symmetry(self, transformation, tolerance, return_symmetrical=False):
-        """Returns True if the geometry is symmetric with respect to the transformation, and False if it is not.
-        If the geometry is periodic, transformation can be tuple (rotation, translation) or np.array (only rotation), \
-        otherwise it can only be np.array
-        :param return_symmetrical: return the corresponding transformed geometry together with the result"""
-        if isinstance(transformation,np.ndarray):
+    def check_symmetry(
+        self,
+        transformation: np.array,
+        tolerance: float,
+        return_symmetrical: bool=False
+    ):
+        """
+        Returns True if the geometry is symmetric with respect to the
+        transformation, and False if it is not. If the geometry is periodic,
+        transformation can be tuple (rotation, translation) or np.array
+        (only rotation), \ otherwise it can only be np.array
+        
+        Parameters
+        ----------
+        transformation : np.array
+            Symmetry transformation agaist which geometry should be checked.
+            
+        tolerance ; float
+            Tolerance for checking symmetry.
+        
+        return_symmetrical : bool
+            Return the corresponding transformed geometry together with the
+            result.
+        
+        Returns
+        -------
+        is_symmetric : bool
+        symm_geometry : Geometry
+        
+        or
+        
+        is_symmetric : bool
+        
+        """
+        if isinstance(transformation, np.ndarray):
             R = transformation
             t=np.array([0,0,0])
-        elif isinstance(transformation,tuple):
+        elif isinstance(transformation, tuple):
             if self.lattice_vectors is None:
                 raise AttributeError('Can not check translational symmetries in a non periodic structure')
             else:
@@ -3126,44 +3211,447 @@ class Geometry:
 
         # original structure with all atoms in the first unit cell
         self_1UC = copy.deepcopy(self)
-        self_1UC.moveToFirstUnitCell()
+        self_1UC.map_to_first_unit_cell()
+        
         # original structure centered for reordering
         centered_geometry = copy.deepcopy(self)
-        centered_geometry.centerCoordinates()
+        centered_geometry.center_coordinates()
+        
         #apply transformation
         symm_geometry = copy.deepcopy(self)
-        symm_geometry.transformFractional(R,np.array([0,0,0]),self.lattice_vectors)
-        symm_geometry.moveByFractionalCoords(t)
+        symm_geometry.transform_fractional(R,np.array([0,0,0]),self.lattice_vectors)
+        symm_geometry.move_all_atoms_by_fractional_coords(t)
+        
         #prevent problems if the center is very close to the edge
-        center = utils.get_fractional_coords(symm_geometry.getGeometricCenter(),symm_geometry.lattice_vectors)
+        center = utils.get_fractional_coords(symm_geometry.get_geometric_center(),
+                                             symm_geometry.lattice_vectors)
         center[:2] %= 1.0
         if 1-center[0]<0.001:
             adjust = -(center[0]-0.0001)
-            symm_geometry.moveByFractionalCoords([adjust,0,0])
+            symm_geometry.move_all_atoms_by_fractional_coords([adjust,0,0])
         if 1-center[1]<0.001:
             adjust = -(center[1]-0.0001)
-            symm_geometry.moveByFractionalCoords([0,adjust,0])
+            symm_geometry.move_all_atoms_by_fractional_coords([0,adjust,0])
 
-        symm_geometry.moveCenterOfAtomsToFirstUnitCell(lattice=self.lattice_vectors)
+        symm_geometry.map_center_of_atoms_to_first_unit_cell(lattice=self.lattice_vectors)
 
         #reorder atoms
         offset_symm = np.mean(symm_geometry.coords,axis=0)
-        symm_geometry.centerCoordinates()
+        symm_geometry.center_coordinates()
         indices = centered_geometry.get_transformation_indices(symm_geometry)
         symm_geometry.reorder_atoms(indices)
         symm_geometry.move(offset_symm)
+        
         # compare in first unit cell
         symm_geometry_1UC = copy.deepcopy(symm_geometry)
-        symm_geometry_1UC.moveToFirstUnitCell()
-        is_symmetric = symm_geometry_1UC.is_equivalent(self_1UC,tolerance=tolerance,check_neightbouring_cells=True)
-        # the simultaneous use of: 1)The moveToFirstUnitCell() function
-        #                          2)The check_neighbouring_cells flag
-        # is somehow redundant, but it works correctly.
+        symm_geometry_1UC.map_to_first_unit_cell()
+        is_symmetric = symm_geometry_1UC.is_equivalent(self_1UC,
+                                                       tolerance=tolerance,
+                                                       check_neightbouring_cells=True)
 
         if return_symmetrical:
-            return is_symmetric,symm_geometry
+            return is_symmetric, symm_geometry
         else:
             return is_symmetric
+
+
+###############################################################################
+#                                 Visualisation                               #
+###############################################################################
+    def visualise(
+        self,
+        axes=[0,1],
+        min_zorder=0,
+        value_list=None,
+        maxvalue=None,
+        minvalue=None,
+        cbar_label='',
+        hide_axes=False,
+        axis_labels=True,
+        auto_limits=True,
+        crop_ratio=None,
+        brightness_modifier=None,
+        print_lattice_vectors=False,
+        print_unit_cell=False,
+        plot_new_vectors=False,
+        alpha=1.0,
+        linewidth=1,
+        lattice_linewidth=None,
+        lattice_color='k',
+        lattice_linestyle='-',
+        atom_scale=1,
+        highlight_inds=[],
+        highlight_color='C2',
+        color_list = None,
+        cmap=None,
+        ax=None,
+        xlim=None,
+        ylim=None,
+        zlim=None,
+        plot_method='circles',
+        invert_colormap=False,
+        edge_color=None,
+        show_colorbar=True,
+        reverse_sort_inds=False,
+        axis_labels_format="/",
+        **kwargs
+    ) -> None:
+        """
+        Generates at plt-plot of the current geometry. This function has a
+        large number of options. In most cases the following examples will
+        work well:
+            
+        - Just look at the geometry:
+            geometry.visualise()
+        
+        - Turn aff axis:
+            geometry.visualise(hide_axes=True)
+            
+        - Turn off axis and set limits:
+            geometry.visualise(hide_axes=True,
+                               xlim=(-10, 10))
+        
+        - If you want to look at the geoemtry in the xz-plane:
+            geometry.visualise(axes=[0,2],
+                               hide_axes=True,
+                               xlim=(-10, 10))
+        
+        Visualise is one of the most useful things about geometry. Reading
+        through this code you may think that it is very ugly and on to of that
+        if has it's own imports. Still it is a great function and it must be
+        part of geometry. If you think otherwise you are wrong. 
+        
+        
+
+        Parameter:
+        ----------
+        axes : list of 2 int elements
+            axis that should be visualized, x=0, y=1, z=2
+            By default, we look at the geometry from:
+            the "top" (our viewpoint is at z = +infinity) when we visualize the xy plane;
+            the "right" (our viewpoint is at x = +infinity) when we visualize the yz plane;
+            the "front" (our viewpoint is at y = -infinity) when we visualize the xz plane.
+            In order to visualize the geometry from the opposite viewpoints, one needs to use the reverse_sort_inds flag,
+            and invert the axis when necessary (= set axis limits so that the first value is larger than the second value)
+
+        min_zorder : int
+            plotting layer
+
+        value_list : None or list of length nr. atoms
+
+        maxvalue : None
+
+        cbar_label : str
+
+        hide_axes : bool
+            hide axis
+
+        axis_labels : bool
+            generates automatic axis labels
+
+        auto_limits : bool
+            set xlim, ylim automatically
+
+        crop_ratio: float
+            defines the ratio between xlim and ylim if auto_limits is enabled
+
+        brightness_modifier : float or list/array with length equal to the number of atoms
+            modifies the brightness of selected atoms. If brightness_modifier is a list/array, then
+            brightness_modifier[i] sets the brightness for atom i, otherwise all atoms are set to the same brightness value.
+            This is done by tweaking the 'lightness' value of said atoms' color in the HSL (hue-saturation-lightness) colorspace.
+            Effect of brightness_modifier in detail:
+              -1.0 <= brightness_modifier < 0.0  : darker color
+              brightness_modifier == 0.0 or None : original color
+              0.0 < brightness_modifier <= 1.0   :  brighter color
+
+        print_lattice_vectors : bool
+            display lattice vectors
+
+        print_unit_cell : bool
+            display original unit cell
+
+        alpha : float between 0 and 1
+
+        color_list : list or string
+            choose colors for visualizing each atom. If only one color is passed, all atoms will have that color.
+
+        plot_method: str
+            circles: show filled circles for each atom
+            wireframe: show molecular wireframe, standard settings: don't show H,
+
+        reverse_sort_inds: bool
+            if set to True, inverts the order at which atoms are visualized, allowing to visualize the geometry from the "bottom", from the "left" or from the "back".
+            Example: if one wants to visualize the geometry from the "left" (= viewpoint at x=-infinity), atoms at lower x values should be visualized after atoms at high x values, and hide them.
+            This is the opposite of the default behavior of this function, and can be achieved with reverse_sort_inds=True
+            NOTE: in order to correctly visualize the structure from these non-default points of view, setting this flag to True is not sufficient: one must also invert the XY axes of the plot where needed.
+            Example: when visualizing from the "left", atoms with negative y values should appear on the right side of the plot, and atoms with positive y values should appear on the left side of the plot.
+            But if one simply sets reverse_sort_inds=True, atoms with negative y values will appear on the left side of the plot (because the x axis of the plot, the horizontal axis, goes from left to right!) and viceversa.
+            This is equivalent to visualizing a mirrored image of the structure.
+            To visualize the structure correctly, one should then set the x_limits of the plot with a first value smaller than the second value, so the x axis is inverted, and shows y-negative values on the left and viceversa.
+        
+        Returns
+        -------
+        None.
+        
+        """
+        import matplotlib.pyplot as plt
+        import matplotlib as mpl
+        import matplotlib.colors
+        import matplotlib.cm as cmx
+        import colorsys
+
+        # default for lattice_linewidth (which is used to draw the lattice)
+        if lattice_linewidth is None:
+            lattice_linewidth = 2*linewidth
+
+        orig_inds = np.arange(self.n_atoms)
+        remove_inds = []
+        if xlim is not None:
+            remove_x = self.get_cropping_indices(xlim=xlim, auto_margin=True)
+            remove_inds+=list(remove_x)
+        if ylim is not None:
+            remove_y = self.get_cropping_indices(ylim=ylim, auto_margin=True)
+            remove_inds+=list(remove_y)
+        if zlim is not None:
+            remove_z = self.get_cropping_indices(zlim=zlim, auto_margin=True)
+            remove_inds+=list(remove_z)
+            
+        crop_inds = list(set(remove_inds))
+        
+        if len(crop_inds)>0:
+            orig_inds = [orig_inds[i] for i in orig_inds if i not in crop_inds]
+            cropped_geom = copy.deepcopy(self)
+            cropped_geom.remove_atoms(crop_inds)
+        else:
+            cropped_geom = self
+
+        if ax is None:
+            ax = plt.gca()
+
+        axnames = ['x','y','z']
+        orig_coords = cropped_geom.coords
+        orig_species = cropped_geom.species
+#        orig_constrain = cropped_geom.constrain_relax
+        
+        # sorting along projecting dimension.
+        # If sort_ind == 1, which means that we look at XZ, along the Y axis, in order to enforce our default behaviour
+        # of looking at the XZ from "under" (== from the negative side of the Y axis), we need to flip the order
+        # at which we see atoms, so we reverse the order of sort inds.
+        # If the flat reverse_sort_inds is set to True, the order will be flipped again, to bring us out of our default.
+        for i in range(3):
+            if i not in axes: 
+                sort_ind = i
+                
+        inds = np.argsort(orig_coords[:,sort_ind])
+
+        if sort_ind == 1:
+            inds = inds[::-1]
+        if reverse_sort_inds:
+            inds = inds[::-1]
+
+        orig_inds = [orig_inds[i] for i in inds]
+        coords = orig_coords[inds]
+#        constrain = orig_constrain[inds]
+        species = [orig_species[i] for i in inds]
+        n_atoms = len(species)
+        circlesize = [self.periodic_table.get_covalent_radius(s)*atom_scale for s in species]
+
+        # Specify atom colors by value list or default atom colors
+        if value_list is None and color_list is None:
+            colors = [self.periodic_table.get_species_colors(s) for s in species]
+            colors = np.array(colors)
+        elif color_list is not None:
+            if len(color_list) == 1:
+                colors = list(color_list)*len(self.species)
+                colors = [mpl.colors.to_rgb(colors[i]) for i in inds]
+            else:
+                assert len(species) == len(color_list), 'Color must be specified for all atoms or none!' + \
+                    f" Expected {len(species)}, but got {len(color_list)} values"
+                colors = [mpl.colors.to_rgb(color_list[i]) for i in inds] # converting all types of color inputs to rgba here
+            colors = np.array(colors)
+        else:
+            assert len(value_list) == self.n_atoms, "Number of Values does not match number of atoms in geometry"
+            values = [value_list[i] for i in orig_inds]
+
+            if minvalue is not None:
+                assert maxvalue is not None, 'Error! If minvalue is defined also maxvalue must be defined'
+
+            if maxvalue is None and minvalue is None:
+                maxvalue = np.max(np.abs(value_list))
+                minvalue = -maxvalue
+
+                if maxvalue < 1E-5:
+                    maxvalue = 1E-5
+                    print('Maxvalue for colormap not specified and smaller 1E-5, \nsetting it automatically to: ', maxvalue)
+                else:
+                    print('Maxvalue for colormap not specified, \nsetting it automatically to: ', maxvalue)
+
+            if maxvalue is not None and minvalue is None:
+                minvalue = -maxvalue
+
+
+            if cmap is None:
+                if invert_colormap:
+                    cw = plt.get_cmap('coolwarm_r')
+                else:
+                    cw = plt.get_cmap('coolwarm')
+            else:
+                cw = plt.get_cmap(cmap)
+
+            cNorm = matplotlib.colors.Normalize(vmin=minvalue, vmax=maxvalue)
+            scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cw)
+            
+            a = np.array([[minvalue,maxvalue]])
+            img = plt.imshow(a,cmap=cw)
+            img.set_visible(False)
+            colors = []
+            for v in values:
+                colors.append(scalarMap.to_rgba(v))
+                
+        # make specified atoms brighter by adding color_offset to all rgb values
+
+        if brightness_modifier is not None:
+
+            # Check if brightness modifier is flat (i.e. a single value) or per atom (list of length n_atoms)
+            if isinstance(brightness_modifier, float) or isinstance(brightness_modifier, int):
+                brightness_modifier = brightness_modifier * np.ones(n_atoms)
+
+            else:
+                # Sort list according to orig_inds (which is already cropped if necessary!)
+                assert len(brightness_modifier) == self.n_atoms, "Argument 'brightness_modifier' must either be a " \
+                                                                 "scalar (float or int) or a list with length equal " \
+                                                                 "to the number of atoms"
+                brightness_modifier = [brightness_modifier[i] for i in orig_inds]
+
+            assert len(brightness_modifier) == n_atoms, "Something went wrong while reformatting brightness_modifier!"
+            for i in range(n_atoms):
+                hls_color = np.array(colorsys.rgb_to_hls(*colors[i,:]))
+                hls_color[1] += brightness_modifier[i]*(1-hls_color[1])
+                hls_color = np.clip(hls_color,0,1)
+                colors[i,:] = colorsys.hls_to_rgb(*hls_color)    
+        else:
+            brightness_modifier = np.zeros(n_atoms)
+
+        zorder = min_zorder
+
+        if plot_method =='circles':
+            for i,s in enumerate(species):
+                if plot_method=='circles':
+                    x1 = coords[i,axes[0]]
+                    x2 = coords[i,axes[1]]
+                    if orig_inds[i] not in highlight_inds:
+                        if edge_color is None:
+                            curr_edge_color = np.zeros(3)+brightness_modifier[i] if brightness_modifier[i]>0 else np.zeros(3)
+                        else:
+                            curr_edge_color = edge_color
+
+                        ax.add_artist(plt.Circle([x1,x2],circlesize[i],
+                                                 color=colors[i],
+                                                 zorder=zorder,
+                                                 linewidth=linewidth,
+                                                 alpha=alpha,
+                                                 ec=curr_edge_color))
+                    else:
+                        if edge_color is None:
+                            curr_edge_color = highlight_color
+                        else:
+                            curr_edge_color = edge_color
+                        ax.add_artist(plt.Circle([x1,x2],circlesize[i],color=colors[i],zorder=zorder,linewidth=linewidth,
+                                                 alpha=alpha,ec=curr_edge_color))
+                    zorder += 2
+
+        elif plot_method == 'wireframe':
+            raise NotImplementedError('self.visualize_wireframe is not implemented')
+            # self.visualizeWireframe(coords=coords, species=species,
+            #                         linewidth=linewidth, min_zorder=min_zorder,
+            #                         axes=axes, alpha=alpha, **kwargs)
+
+        if print_lattice_vectors:
+            ax.add_artist(plt.arrow(0, 0, *cropped_geom.lattice_vectors[0, axes], zorder=zorder, fc=lattice_color,
+                                    ec=lattice_color, head_width=0.5, head_length=1))
+            ax.add_artist(plt.arrow(0, 0, *cropped_geom.lattice_vectors[1, axes], zorder=zorder, fc=lattice_color,
+                                    ec=lattice_color, head_width=0.5, head_length=1))
+        if print_unit_cell:
+            cropped_geom.visualizeUnitCell(lattice=None, linecolor=lattice_color, axes=axes, linestyle=lattice_linestyle,
+                                           linewidth=lattice_linewidth, zorder=zorder,
+                                           plot_new_cell=plot_new_vectors,ax=ax)
+
+        # scale:
+        xmax = np.max(coords[:,axes[0]]) + 2
+        xmin = np.min(coords[:,axes[0]]) - 2
+        ymax = np.max(coords[:,axes[1]]) + 2
+        ymin = np.min(coords[:,axes[1]]) - 2
+
+        if auto_limits:
+            if print_lattice_vectors:
+                xmin_lattice = np.min(cropped_geom.lattice_vectors[:,axes[0]]) - 1
+                xmax_lattice = np.max(cropped_geom.lattice_vectors[:,axes[0]]) + 1
+                ymin_lattice = np.min(cropped_geom.lattice_vectors[:,axes[1]]) - 1
+                ymax_lattice = np.max(cropped_geom.lattice_vectors[:,axes[1]]) + 1
+
+                ax_xmin = min(xmin, xmin_lattice)
+                ax_xmax = max(xmax, xmax_lattice)
+                ax_ymin = min(ymin, ymin_lattice)
+                ax_ymax = max(ymax, ymax_lattice)
+
+            else:
+                ax_xmin, ax_xmax, ax_ymin, ax_ymax = xmin, xmax, ymin, ymax
+                # allow for a fixed ratio when defining the limits
+                # For this calculate the lengths and make the smaller limit longer so that the ratio fits
+
+            if crop_ratio is not None:
+
+                len_xlim = ax_xmax - ax_xmin
+                len_ylim = ax_ymax - ax_ymin
+                curr_crop_ratio = len_xlim/len_ylim
+                
+
+                if curr_crop_ratio>crop_ratio:
+                    # make y limits larger
+                    y_padding_fac = len_xlim/(crop_ratio*len_ylim)
+                    y_padding = len_ylim*(y_padding_fac-1)
+                    ax_ymin -= y_padding/2
+                    ax_ymax += y_padding/2
+                    
+                else:
+                    # make x limits larger
+                    x_padding_fac = (crop_ratio * len_ylim)/len_xlim
+                    x_padding = len_xlim * (x_padding_fac-1)
+                    ax_xmin -= x_padding/2
+                    ax_xmax += x_padding/2
+                    
+
+            ax.set_xlim([ax_xmin, ax_xmax])
+            ax.set_ylim([ax_ymin, ax_ymax])
+
+
+        # If limits are given, set them
+        limits = [xlim,ylim,zlim]
+        x1lim = limits[axes[0]]
+        x2lim = limits[axes[1]]
+        if x1lim is not None:
+            ax.set_xlim(x1lim)
+        if x2lim is not None:
+            ax.set_ylim(x2lim)
+
+        if axis_labels:
+            if axis_labels_format == "/":
+                ax.set_xlabel(r'{} / $\AA$'.format(axnames[axes[0]]))
+                ax.set_ylabel(r'{} / $\AA$'.format(axnames[axes[1]]))
+            elif axis_labels_format == "[]":
+                ax.set_xlabel(r'{} [$\AA$]'.format(axnames[axes[0]]))
+                ax.set_ylabel(r'{} [$\AA$]'.format(axnames[axes[1]]))
+        
+        if show_colorbar and (value_list is not None):
+            cbar = plt.colorbar(ax=ax)
+            cbar.ax.set_ylabel(cbar_label)
+        
+        ax.set_aspect('equal')
+        plt.grid(False)
+        if hide_axes:
+            ax.set_axis_off()
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
 
 
 ###############################################################################
@@ -3226,7 +3714,7 @@ class AimsGeometry(Geometry):
         self.external_force = []
         self.calculate_friction = []
         self.multipoles = []
-        self._homogeneous_field = None
+        self.homogeneous_field = None
         self.symmetry_params = None
         self.n_symmetry_params = None
         self.symmetry_LVs = None # symmetry_LVs should have str values, not float, to allow for the inclusion of the parameters
@@ -3307,7 +3795,7 @@ class AimsGeometry(Geometry):
                 if 'symmetry_frac' in line:
                     symmetry_frac_lines.append(line)
                 if 'homogeneous_field' in line:
-                    self._homogeneous_field = \
+                    self.homogeneous_field = \
                         np.asarray(list(map(float, line.split()[1:4])))
                     
         # c Read all constraints/ moments and spins
@@ -3486,8 +3974,8 @@ class AimsGeometry(Geometry):
                             text += f"{cr}z\n"
 
         # write down the homogeneous field if any is present
-        if not self.homogenous_field is None:
-            text += "homogeneous_field {} {} {}\n".format(*self.homogenous_field)
+        if not self.homogeneous_field is None:
+            text += "homogeneous_field {} {} {}\n".format(*self.homogeneous_field)
 
         if is_fractional:
             coords = utils.get_fractional_coords(self.coords, self.lattice_vectors)
@@ -3934,7 +4422,28 @@ class XSFGeometry(Geometry):
                 line += '    {:.8f}'.format(self.coords[i, j])
             text += line + '\n'
         return text
-                             
+            
+
+###############################################################################
+#                            Auxiliary Functions                              #
+###############################################################################
+def get_file_format_from_ending(filename):
+    if filename.endswith('.in'):
+        return 'aims'
+    elif filename.endswith('.next_step'):
+        return 'aims'
+    elif filename.endswith('.xsf'):
+        return 'xsf'
+    elif filename.endswith('.molden'):
+        return 'molden'
+    elif filename.endswith('POSCAR'):
+        return 'vasp'
+    elif filename.endswith('CONTCAR'):
+        return 'vasp'
+    elif filename.endswith('.xyz'):
+        return 'xyz'
+    return None
+                 
 
 if __name__ == '__main__':
     pass
