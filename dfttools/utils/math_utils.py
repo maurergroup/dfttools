@@ -175,24 +175,32 @@ def get_cartesian_coords(frac_coords: np.array, lattice_vectors: np.array) -> np
     return np.dot(frac_coords, lattice_vectors)
     
 
-def get_autocorrelation_function(signal: np.array) -> np.array:
+def get_cross_correlation_function(
+    signal_0: np.array,
+    signal_1: np.array
+) -> np.array:
     """
     Calculate the autocorrelation function for a given signal.
 
     Parameters
     ----------
-    signal : 1D np.array
-        Siganl for which the autocorrelation function should be calculated.
+    signal_0 : 1D np.array
+        First siganl for which the correlation function should be calculated.
+    signal_1 : 1D np.array
+        Second siganl for which the correlation function should be calculated.
 
     Returns
     -------
-    autocorrelation : np.array
+    correlation : np.array
         Autocorrelation function from 0 to max_lag.
 
     """
-    autocorrelation = np.correlate(signal, signal, mode='same') / signal.size
+    # This is correct for the autocorrelation function
+    norm = np.sqrt( signal_0.size * signal_1.size )
     
-    return autocorrelation[autocorrelation.size//2:]
+    cross_correlation = np.correlate(signal_0, signal_1, mode='same') / norm
+    
+    return cross_correlation[cross_correlation.size//2:]
 
 
 def get_autocorrelation_function_manual_lag(signal: np.array,
@@ -256,17 +264,64 @@ def get_fourier_transform(signal: np.array, time_step: float) -> tuple:
     
     L = f >= 0
 
-    return f[L], np.abs( y[L] )
+    return f[L], y[L]
 
 
-def lorentzian(x, a, b, c):
-    
+def lorentzian(
+    x: Union[float, np.array],
+    a: float,
+    b: float,
+    c: float
+) -> Union[float, np.array]:
+    """
+    Returns a Lorentzian function.
+
+    Parameters
+    ----------
+    x : Union[float, np.array]
+        Argument x of f(x) --> y.
+    a : float
+        Maximum of Lorentzian.
+    b : float
+        Width of Lorentzian.
+    c : float
+        Magnitude of Lorentzian.
+
+    Returns
+    -------
+    f : Union[float, np.array]
+        Outupt of a Lorentzian function.
+
+    """
     f = c/(np.pi*b*(1.0+((x - a)/b)**2))#+d
     
     return f
     
+
+def norm_matrix_by_dagonal(matrix: np.array) -> np.array:
+    """
+    Norms a matrix such that the diagonal becomes 1.
     
+    | a_11 a_12 a_13 |       |   1   a'_12 a'_13 |
+    | a_21 a_22 a_23 |  -->  | a'_21   1   a'_23 |
+    | a_31 a_32 a_33 |       | a'_31 a'_32   1   |
+
+    Parameters
+    ----------
+    matrix : np.array
+        Matrix that should be normed.
+
+    Returns
+    -------
+    matrix : np.array
+        Normed matrix.
+
+    """
+    diagonal = np.diagonal(matrix)
     
+    matrix /= np.sqrt( np.tile( diagonal, (matrix.shape[1],1) ).T * np.tile( diagonal, (matrix.shape[0], 1) ) )
+    
+    return matrix
     
     
     
