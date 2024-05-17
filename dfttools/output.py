@@ -4,6 +4,7 @@ import warnings
 from typing import Tuple, Union
 
 import numpy as np
+import numpy.typing as npt
 
 import dfttools.utils.file_utils as fu
 from dfttools.base_parser import BaseParser
@@ -13,35 +14,47 @@ class Output(BaseParser):
     """
     Base class for parsing output files from electronic structure calculations.
 
+    If contributing a new parser, please subclass this class, add the new supported file
+    type to _supported_files, call the super().__init__ method, include the new file
+    type as a kwarg in the super().__init__ call. Optionally include the self.lines line
+    in examples.
+
     ...
 
     Attributes
     ----------
     supported_files
-    file_paths : dict
-        The paths to the files to be parsed
-    file_contents : dict
-        The contents of the files to be parsed
+    lines
+
+    Examples
+    --------
+    class AimsOutput(Output):
+        def __init__(self, aims_out: str = "aims.out"):
+            super().__init__(aims_out=aims_out)
+            self.lines = self._file_contents["aims_out"]
     """
 
-    # FHI-aims, ...
-    _supported_files = ["aims_out"]
+    # Add new supported files to this list
+    # FHI-aims, ELSI, ...
+    _supported_files = ["aims_out", "elsi_out"]
 
     def __init__(self, **kwargs: str):
         super().__init__(self._supported_files, **kwargs)
+
+        for val in kwargs.keys():
+            fu.check_required_files(self._supported_files, val)
 
     @property
     def supported_files(self):
         return self._supported_files
 
-    @supported_files.setter
-    def supported_files(self, file):
+    @property
+    def lines(self):
+        return self._lines
 
-        # Don't append if already in list
-        if file in self._supported_files:
-            return
-
-        return self._supported_files.append(file)
+    @lines.setter
+    def lines(self, value):
+        self._lines = value
 
 
 class AimsOutput(Output):
@@ -60,17 +73,6 @@ class AimsOutput(Output):
     def __init__(self, aims_out: str = "aims.out"):
         super().__init__(aims_out=aims_out)
         self.lines = self._file_contents["aims_out"]
-
-        # Check if the aims.out file was provided
-        fu.check_required_files(self._supported_files, "aims_out")
-
-    @property
-    def lines(self):
-        return self._lines
-
-    @lines.setter
-    def lines(self, value):
-        self._lines = value
 
     def check_exit_normal(self) -> bool:
         """
@@ -314,7 +316,7 @@ class AimsOutput(Output):
 
         return self.scf_conv_acc_params
 
-    def get_n_initial_ks_states(self, include_spin_polarised=True) -> int:
+    def get_n_initial_ks_states(self, include_spin_polarised: bool = True) -> int:
         """
         Get the number of Kohn-Sham states from the first SCF step.
 
@@ -594,19 +596,59 @@ class AimsOutput(Output):
         return eigenvalues
 
 
-class ElsiOutput(Output):
+class ELSIOutput(Output):
+    """
+    Parse matrix output written in a binary format from ELSI.
 
-    def __init__(self):
-        self.elsi_outs = glob.glob("*.csc")
+    ...
 
-        self.elsi_outs = []
-        for file in self.elsi_outs:
-            with open(file, "r") as f:
-                self.elsi_outs.append(f.readlines())
+    Attributes
+    ----------
+    lines :
+        Contents of ELSI output file.
+    n_basis : int
+        Number of basis functions
+    n_non_zero : int
+        Number of non-zero elements in the matrix
+    """
 
-    def _get_elsi_csc_header(self, file):
-        start, end = 0, 128  # 128 is the length of the header
-        header = struct.unpack("l" * 16, file[start:end])
+    def __init__(self, elsi_out: str = "D_spin_01_kpt_000001.csc"):
+        super().__init__(elsi_out=elsi_out)
+        self.lines = self._file_contents["elsi_out"]
+
+    def get_elsi_csc_header(self):  # -> Tuple(str):
+        """
+        Get the contents of the ELSI file header
+
+        Returns
+        -------
+        FIXME: Add return type
+        """
+
+        return struct.unpack("l" * 16, self.lines[0:128])
+
+    @property
+    def n_basis(self) -> int:
+        return self.get_elsi_csc_header()[3]
+
+    @property
+    def n_non_zero(self) -> int:
+        return self.get_elsi_csc_header()[5]
+
+    def _get_column_pointer_new(self):  # -> npt.NDArray[np.int64]:
+        """
+        Get the column pointer from the ELSI file.
+
+        Returns
+        -------
+        npt.NDArray[np.int64]
+            The column pointer
+        """
+
+        col_ptr = np.frombuffer(
+            self.lines[128 : 128 + self.n_basis * 8], dtype=np.int64
+        )
+        return np.append(col_ptr, self.n_non_zero + 1)
 
     def read_elsi_csc(self):
         pass

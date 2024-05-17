@@ -5,16 +5,16 @@ def check_required_files(files: list, *args: str, any=False) -> None:
     Parameters
     ----------
     files : list
-        supported files to reference provided files against
+        Supported files to reference provided files against.
     *args : str
-        the files that are required to be provided
+        The files that are required to be provided.
     any : bool
-        whether at least one of the files is required or all of them
+        Whether at least one of the files is required or all of them.
 
     Raises
     -------
     ValueError
-        if a necessary file was not given
+        If a necessary file was not given.
     """
 
     if any:
