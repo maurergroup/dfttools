@@ -1,23 +1,10 @@
-import os
 import numpy as np
-from scipy.optimize import curve_fit
 import copy
-import warnings
-from ast import literal_eval
-from dfttools.utils.periodic_table import PeriodicTable
-import dfttools.utils.math_utils as mu
 import dfttools.utils.units as units
+import dfttools.utils.vibrations_utils as vu
 from typing import Union
 from dfttools.geometry import AimsGeometry, VaspGeometry
-from numba import jit, njit, prange
-
-# get environment variable for parallelisation in numba
-parallel_numba = os.environ.get('parallel_numba')
-if parallel_numba is None:
-    warnings.warn('System variable <parallel_numba> not set. Using default!')
-    parallel_numba = True
-else:
-    parallel_numba = literal_eval(parallel_numba)
+from scipy.signal import argrelextrema
 
 
 class Vibrations():
@@ -60,8 +47,77 @@ class Vibrations():
         self.eigenvectors = eigenvectors
     
     
-    def get_hessian(self, set_constrained_atoms_zero: bool=True) -> np.array:
+    def get_displacements(self, displacement: float=0.0025) -> list:
+        """
+        Applies a given displacement for each degree of freedom of self and
+        generates a new vibration with it.
+
+        Parameters
+        ----------
+        displacement : float, optional
+            Displacement for finte difference calculation of vibrations in
+            Angstrom. The default is 0.0025 Angstrom.
+
+        Returns
+        -------
+        list
+            List of geometries where atoms have been displaced.
+
+        """
+        geometries_displaced = [self]
         
+        directions = [-1, 1]
+
+        for i in range(self.n_atoms):
+            for dim in range(3):
+                if self.constrain_relax[i, dim]:
+                    continue
+                
+                for direction in directions:
+                    geometry_displaced = copy.deepcopy(self)
+                    geometry_displaced.coords[i, dim] += displacement * direction
+                    
+                    geometries_displaced.append(geometry_displaced)
+        
+        return geometries_displaced
+    
+    
+    def get_mass_tensor(self) -> np.array:
+        """
+        Determine a NxN tensor containing sqrt(m_i*m_j).
+
+        Returns
+        -------
+        mass_tensor : np.array
+            Mass tensor in atomic units.
+
+        """
+        mass_vector = [self.periodic_table.get_atomic_mass(s) for s in self.species]
+        mass_vector = np.repeat(mass_vector, 3)
+        
+        mass_tensor = np.tile( mass_vector, (len(mass_vector),1) )
+        mass_tensor = np.sqrt( mass_tensor * mass_tensor.T )
+        
+        return mass_tensor
+    
+    
+    def get_hessian(self, set_constrained_atoms_zero: bool=True) -> np.array:
+        """
+        Calculates the Hessian from the forces. This includes the atmoic masses
+        since F = m*a.
+
+        Parameters
+        ----------
+        set_constrained_atoms_zero : bool, optional
+            Set elements in Hessian that code for constrained atoms to zero.
+            The default is True.
+
+        Returns
+        -------
+        H : np.array
+            Hessian.
+
+        """
         N = len(self) * 3
         H = np.zeros([N, N])
         
@@ -133,27 +189,19 @@ class Vibrations():
             new_coords = coords + displacement * amplitude..
 
         """
-        periodic_table = PeriodicTable()
-        
         if hessian is None:
             hessian = self.hessian
         
         assert hasattr(self,'hessian') and hessian is not None, \
             'Hessian must be given to calculate the Eigenvalues!'
-        try:
-            masses = [periodic_table.get_atomic_mass(s) for s in self.species]
-        except KeyError:
-            print('getEigenValuesAndEigenvectors: Some Species were not known, used version without _ suffix')
-            masses = [periodic_table.get_atomic_mass(s.split('_')[0]) for s in self.species]
-
-        masses = np.repeat(masses, 3)
-        M = np.diag(1.0 / masses)
-
+        
+        M = 1 / self.get_mass_tensor()
+        
         hessian = copy.deepcopy(hessian)
         if symmetrize_hessian:
             hessian = (hessian + np.transpose(hessian)) / 2
 
-        omega2, X = np.linalg.eig(M.dot(hessian))
+        omega2, X = np.linalg.eig(M * hessian)
         
         # only real valued eigen modes
         if only_real:
@@ -256,7 +304,17 @@ class Vibrations():
         atom_type_index = np.array(atom_type_index, dtype=int)
         
         return atom_type_index
+    
+    
+    def get_velocity_mass_average(self, velocities):
 
+        velocities_mass_average = np.zeros_like(velocities)      
+
+        for i in range(velocities.shape[1]):
+            velocities_mass_average[:, i, :] = velocities[:, i, :] * np.sqrt(self.get_atomic_masses()[i])
+            
+        return velocities_mass_average
+    
     
     def project_onto_wave_vector(self, velocities, wave_vector, project_on_atom=-1):
         
@@ -293,8 +351,7 @@ class Vibrations():
     
     
     def get_normal_mode_decomposition(self,
-                                      velocities: np.array,
-                                      eigenvectors: np.array) -> np.array:
+                                      velocities: np.array) -> np.array:
         """
         Calculate the normal-mode-decomposition of the velocities. This is done
         by projecting the atomic velocities onto the vibrational eigenvectors.
@@ -306,9 +363,6 @@ class Vibrations():
             Array containing the velocities from an MD trajectory structured in
             the following way:
             [number of time steps, number of atoms, number of dimensions].
-        eigenvectors : np.array
-            Array of eigenvectors structured in the following way:
-            [number of frequencies, number of atoms, number of dimensions].
 
         Returns
         -------
@@ -317,150 +371,112 @@ class Vibrations():
             [number of time steps, number of frequencies]
 
         """
-        # Projection in vibration coordinates
-        velocities_projected = np.zeros((velocities.shape[0], eigenvectors.shape[0]), dtype=complex)
+        velocities = np.array(velocities, dtype=np.complex128)
         
-        # Get normal mode decompositon parallelised by numba
-        _get_normal_mode_decomposition_numba(velocities_projected,
-                                             velocities,
-                                             eigenvectors) 
+        velocities_mass_averaged = self.get_velocity_mass_average(velocities)
+        
+        #velocities_proj_0 = vibrations.project_onto_wave_vector(velocities, q_vector)
+        
+        velocities_projected = vu.get_normal_mode_decomposition(velocities_mass_averaged,
+                                                                self.eigenvectors)
 
         return velocities_projected
     
     
-    def get_autocorrelation_function(self,
-                                     signal: np.array,
-                                     bootstrapping_blocks: int=1) -> np.array:
+    def get_cross_correlation_function(
+        self,
+        velocities: np.array,
+        time_step: float,
+        bootstrapping_blocks: int=1
+    ):
         
-        signal_length = len(signal)
+        velocities_proj = self.get_normal_mode_decomposition(velocities)
         
-        autocorrelation = []
+        n_points = len(self.eigenvectors)
         
-        block_size = int(signal_length/bootstrapping_blocks)
+        autocorr_t = None
+        autocorr = {}
         
-        for block in range(bootstrapping_blocks):
-            
-            block_start = block*block_size
-            block_end = (block+1)*block_size
-            if block_end > signal_length-1:
-                block_end = signal_length-1
+        for index_0 in range(n_points):
+            for index_1 in range(n_points):
+                autocorr_block \
+                    = vu.get_cross_correlation_function(velocities_proj[:,index_0],
+                                                        velocities_proj[:,index_1],
+                                                        bootstrapping_blocks=bootstrapping_blocks)
+                
+                autocorr_t_block = np.linspace(0,
+                                               len(autocorr_block)*time_step,
+                                               len(autocorr_block))
+                
+                
+                autocorr_t = autocorr_t_block
+                autocorr[(index_0, index_1)] = autocorr_block
         
-            signal_block = signal[block_start:block_end]
-            
-            autocorrelation_block = mu.get_autocorrelation_function(signal_block) 
-            autocorrelation.append(autocorrelation_block)
-        
-        autocorrelation = np.atleast_2d(autocorrelation)
-        
-        autocorrelation = np.mean(autocorrelation, axis=0)
-        
-        return autocorrelation
+        return autocorr_t, autocorr
     
     
-    def get_power_spectrum(self,
-                           signal: np.array,
-                           time_step: float,
-                           bootstrapping_blocks: int=1) -> (np.array, np.array):
-        """
-        Determine the power spectrum for a given signal using bootstrapping:
-            - Splitting the sigmal into blocks and for each block:
-                * Determining the autocorrelation function of the signal
-                * Determining the fourire transform of the autocorrelation
-                  function to get the power spectrum for the block
-            - Calculating the average power spectrum by averaging of the power
-              spectra of all blocks
-
-        Parameters
-        ----------
-        signal : np.array
-            Siganl for which the autocorrelation function should be calculated.
-        time_step : float
-            DESCRIPTION.
-        bootstrapping_blocks : int, optional
-            DESCRIPTION. The default is 1.
-
-        Returns
-        -------
-        frequencies : np.array
-            Frequiencies of the power spectrum in units depending on the
-            tims_step.
-            
-        power_spectrum : np.array
-            Power spectrum.
-
-        """
-        signal_length = len(signal)
-        block_size = int(np.floor(signal_length/bootstrapping_blocks))
+    def get_cross_spectrum(
+        self,
+        velocities: np.array,
+        time_step: float,
+        bootstrapping_blocks: int=1
+    ):
         
-        print(signal_length, block_size)
+        velocities_proj = self.get_normal_mode_decomposition(velocities)
+        
+        n_points = len(self.eigenvectors)
         
         frequencies = None
-        power_spectrum = []
+        cross_spectrum = {}
         
-        for block in range(bootstrapping_blocks):
-            
-            block_start = block*block_size
-            block_end = (block+1)*block_size
-            if block_end > signal_length:
-                block_end = signal_length
+        for index_0 in range(n_points):
+            for index_1 in range(n_points):
+                frequencies_block, cross_spectrum_block \
+                    = vu.get_cross_spectrum(velocities_proj[:,index_0],
+                                            velocities_proj[:,index_1],
+                                            time_step,
+                                            bootstrapping_blocks=bootstrapping_blocks)
+                
+                frequencies = frequencies_block            
+                cross_spectrum[(index_0, index_1)] = cross_spectrum_block
         
-            signal_block = signal[block_start:block_end]
-            autocorrelation_block = mu.get_autocorrelation_function(signal_block) 
-            frequencies, power_spectrum_block = mu.get_fourier_transform(autocorrelation_block, time_step)
-            power_spectrum.append(power_spectrum_block)
-        
-        power_spectrum = np.atleast_2d(power_spectrum)
-        power_spectrum = np.average(power_spectrum, axis=0)
-
-        return frequencies, power_spectrum
+        return frequencies, cross_spectrum
     
     
-    def lorentzian_fit(self, frequencies, power_spectrum):
+    def get_coupling_matrix(
+        self,
+        velocities: np.array,
+        time_step: float,
+        bootstrapping_blocks: int=1
+    ):
         
-        max_ind = np.argmax(power_spectrum)
+        omega = self.get_eigenvalues_in_Hz()
         
-        frequency_step = frequencies[1]-frequencies[0]
+        frequencies, power_spectrum = self.get_cross_spectrum(velocities,
+                                                              time_step,
+                                                              bootstrapping_blocks=bootstrapping_blocks)
         
-        a_0 = frequencies[max_ind]
-        b_0 = frequency_step*100
-        c_0 = np.max(power_spectrum) * b_0 * np.pi
+        n_points = len(self.eigenvectors)
+        coupling_matrix = np.zeros((n_points, n_points))
         
-        p_0 = [a_0, b_0, c_0]
-        
-        res, _ = curve_fit(mu.lorentzian,
-                           frequencies,
-                           power_spectrum,
-                           p0=p_0)
-        
-        return res
+        for index_0 in range(n_points):
+            for index_1 in range(n_points):
+                
+                power_spectrum_index = np.real( power_spectrum[(index_0, index_1)] )
+                
+                max_f = argrelextrema(power_spectrum_index, np.greater)[0]
+                
+                index_search = np.max([index_0, index_1])
+                
+                f_couple = omega[index_search] / (2 * np.pi)
+                
+                coupling_index_0 = np.argmin( np.abs(frequencies[max_f] - f_couple) )
+                coupling_index = max_f[coupling_index_0]
+                                
+                coupling_matrix[index_0, index_1] = power_spectrum_index[coupling_index]
+                
+        return coupling_matrix
     
-    
-    def get_line_widths(self, frequencies, power_spectrum):
-        
-        res = self.lorentzian_fit(frequencies, power_spectrum)
-        
-        frequency = res[0]
-        line_width = res[1]
-        life_time = 1.0 / line_width
-        
-        return frequency, line_width, life_time
-
-
-# helper functions
-@njit(parallel=parallel_numba, fastmath=True)
-def _get_normal_mode_decomposition_numba(velocities_projected,
-                                         velocities,
-                                         eigenvectors) -> None:
-    
-    number_of_cell_atoms = velocities.shape[1]
-    number_of_frequencies = eigenvectors.shape[0]
-    
-    for k in prange(number_of_frequencies):
-        for i in prange(number_of_cell_atoms):
-            for n in range( velocities.shape[0] ):
-                for m in range( velocities.shape[2] ):
-                    velocities_projected[n, k] += velocities[n, i, m] * eigenvectors[k, i, m]
-
 
 class AimsVibrations(Vibrations, AimsGeometry):
     def __init__(self, filename=None):
