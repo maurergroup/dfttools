@@ -1,3 +1,5 @@
+import glob
+import struct
 import warnings
 from typing import Tuple, Union
 
@@ -31,6 +33,15 @@ class Output(BaseParser):
     @property
     def supported_files(self):
         return self._supported_files
+
+    @supported_files.setter
+    def supported_files(self, file):
+
+        # Don't append if already in list
+        if file in self._supported_files:
+            return
+
+        return self._supported_files.append(file)
 
 
 class AimsOutput(Output):
@@ -581,3 +592,21 @@ class AimsOutput(Output):
             eigenvalues["level_spacing_eV"][i] = float(spl[4])
 
         return eigenvalues
+
+
+class ElsiOutput(Output):
+
+    def __init__(self):
+        self.elsi_outs = glob.glob("*.csc")
+
+        self.elsi_outs = []
+        for file in self.elsi_outs:
+            with open(file, "r") as f:
+                self.elsi_outs.append(f.readlines())
+
+    def _get_elsi_csc_header(self, file):
+        start, end = 0, 128  # 128 is the length of the header
+        header = struct.unpack("l" * 16, file[start:end])
+
+    def read_elsi_csc(self):
+        pass
