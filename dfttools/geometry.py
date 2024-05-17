@@ -58,7 +58,7 @@ class Geometry:
         self.vacuum_level = None
         self.multipoles = []
         self.homogeneous_field = None
-        self.readAsFractionalCoords = False
+        self.read_as_fractional_coords = False
         self.symmetry_params = None
         self.n_symmetry_params = None
         self.symmetry_LVs = None
@@ -221,6 +221,7 @@ class Geometry:
     
     def get_as_ase(self):
         import ase
+        from ase.constraints import FixAtoms
         """
         Convert geometry file to ASE object
         
@@ -228,14 +229,21 @@ class Geometry:
         #atoms_string = ""
         atom_coords = []
         atom_numbers = []
+        atom_constraints = []
         for i in range(self.n_atoms):
             # Do not export 'emptium" atoms
             if self.species[i] != 'Em':
                 atom_coords.append(self.coords[i,:])
                 atom_numbers.append(self.periodic_table.get_atomic_number(self.species[i]))
                 
+                if np.any( self.constrain_relax[i] ):
+                    atom_constraints.append(i)
+                
         ase_system = ase.Atoms(numbers=atom_numbers, positions=atom_coords)
         ase_system.cell = self.lattice_vectors
+        
+        c = FixAtoms(indices=atom_constraints)
+        ase_system.set_constraint(c)
         
         if not np.sum(self.lattice_vectors) == 0.0:
             ase_system.pbc = [1, 1, 1]
@@ -1184,6 +1192,16 @@ class Geometry:
         self.initial_charge = [self.initial_charge[i] for i in inds]
         self.initial_moment = [self.initial_moment[i] for i in inds]
         
+        inds_hessian = []
+        for ind in inds:
+            inds_new = np.array([0, 1, 2]) + 3*ind
+            inds_hessian.append(inds_new)
+        
+        inds_hessian = np.array(inds_hessian).flatten()
+        
+        self.hessian = self.hessian[inds_hessian, :]
+        self.hessian = self.hessian[:, inds_hessian]
+        
     
     def shift_to_bottom(self):
         """
@@ -1853,7 +1871,7 @@ class Geometry:
         return np.sum(electrons)
     
     
-    def get_mass_of_all_atoms(self) -> np.array:
+    def get_atomic_masses(self) -> np.array:
         """
         Determines the atomic mass for all atoms.
 
@@ -1880,7 +1898,7 @@ class Geometry:
         return np.array(masses)
 
 
-    def get_atomic_mass(self) -> float:
+    def get_total_mass(self) -> float:
         """
         Determines the atomic mass of the entrie geometry.
 
@@ -2514,6 +2532,11 @@ class Geometry:
         """
         Associates every atom in self to the closest atom of the same specie in
         other_geometry.
+        
+        If self should be orderd like other_geometry then this is done in the
+        following way:
+        >>> transformation_indices = other_geometry.get_transformation_indices(self)
+        >>> self.reorder_atoms(transformation_indices)
         
         Parameters
         ----------
@@ -3887,7 +3910,7 @@ class AimsGeometry(Geometry):
         # convert to cartesian coordinates
         if is_fractional:
             self.coords = utils.get_cartesian_coords(self.coords, self.lattice_vectors)
-            self.readAsFractionalCoords=True
+            self.read_as_fractional_coords=True
 
         self.constrain_relax = np.array(self.constrain_relax)
         self.external_force = np.array(self.external_force)
