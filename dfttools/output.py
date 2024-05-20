@@ -1,10 +1,10 @@
-import glob
 import struct
 import warnings
 from typing import Tuple, Union
 
 import numpy as np
 import numpy.typing as npt
+import scipy.sparse as sp
 
 import dfttools.utils.file_utils as fu
 from dfttools.base_parser import BaseParser
@@ -598,7 +598,7 @@ class AimsOutput(Output):
 
 class ELSIOutput(Output):
     """
-    Parse matrix output written in a binary format from ELSI.
+    Parse matrix output written in a binary csc format from ELSI.
 
     ...
 
@@ -612,20 +612,21 @@ class ELSIOutput(Output):
         Number of non-zero elements in the matrix
     """
 
-    def __init__(self, elsi_out: str = "D_spin_01_kpt_000001.csc"):
+    def __init__(self, elsi_out: str):
         super().__init__(elsi_out=elsi_out)
         self.lines = self._file_contents["elsi_out"]
 
-    def get_elsi_csc_header(self):  # -> Tuple(str):
+    def get_elsi_csc_header(self) -> tuple:
         """
         Get the contents of the ELSI file header
 
         Returns
         -------
-        FIXME: Add return type
+        tuple
+            The contents of the ELSI csc file header
         """
 
-        return struct.unpack("l" * 16, self.lines[0:128])
+        return np.frombuffer(self.lines[0:128], dtype=np.int64)
 
     @property
     def n_basis(self) -> int:
@@ -635,20 +636,53 @@ class ELSIOutput(Output):
     def n_non_zero(self) -> int:
         return self.get_elsi_csc_header()[5]
 
-    def _get_column_pointer_new(self):  # -> npt.NDArray[np.int64]:
+    def read_elsi_as_csc(
+        self, csc_format: bool = False
+    ) -> Tuple[sp.csc_matrix, np.ndarray]:
         """
-        Get the column pointer from the ELSI file.
+        Get a CSC matrix from an ELSI output file
+
+        Parameters
+        ----------
+        csc_format : bool, default=True
+            Whether to return the matrix in CSC format or a standard numpy array
 
         Returns
         -------
-        npt.NDArray[np.int64]
-            The column pointer
+        Tuple[sp.csc_matrix, np.ndarray]
+            The CSC matrix or numpy array
         """
 
-        col_ptr = np.frombuffer(
-            self.lines[128 : 128 + self.n_basis * 8], dtype=np.int64
-        )
-        return np.append(col_ptr, self.n_non_zero + 1)
+        header = self.get_elsi_csc_header()
 
-    def read_elsi_csc(self):
-        pass
+        # Get the column pointer
+        end = 128 + self.n_basis * 8
+        col_ptr = np.frombuffer(self.lines[128:end], dtype=np.int64)
+        col_ptr = np.append(col_ptr, self.n_non_zero + 1)
+        col_ptr -= 1
+
+        # Get the row index
+        start = end + self.n_non_zero * 4
+        row_idx = np.array(np.frombuffer(self.lines[end:start], dtype=np.int32))
+        row_idx -= 1
+
+        if header[2] == 0:  # real
+            nnz_val = np.frombuffer(
+                self.lines[start : start + self.n_non_zero * 8],
+                dtype=np.float64,
+            )
+
+        else:  # complex
+            nnz_val = np.frombuffer(
+                self.lines[start : start + self.n_non_zero * 16], dtype=np.complex128
+            )
+
+        if csc_format:
+            return sp.csc_matrix(
+                (nnz_val, row_idx, col_ptr), shape=(self.n_basis, self.n_basis)
+            )
+
+        else:
+            return sp.csc_matrix(
+                (nnz_val, row_idx, col_ptr), shape=(self.n_basis, self.n_basis)
+            ).toarray()
