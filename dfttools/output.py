@@ -75,16 +75,10 @@ class AimsOutput(Output):
         super().__init__(aims_out=aims_out)
         self.lines = self._file_contents["aims_out"]
 
+        # TODO: aims files can be named in different ways. Also this line does
+        # not do anything.
         # Check if the aims.out file was provided
-        fu.check_required_files(self._supported_files, "aims_out")
-
-    @property
-    def lines(self):
-        return self._lines
-
-    @lines.setter
-    def lines(self, value):
-        self._lines = value
+        #fu.check_required_files(self._supported_files, "aims_out")
         
     
     def get_number_of_atoms(self):
@@ -92,11 +86,13 @@ class AimsOutput(Output):
          Return number of atoms in unit cell
          
          """
+         numofatoms = None
+         
          for l in self.lines:
              if '| Number of atoms' in l:
                  numofatoms = int(l.strip().split()[5])
 
-         if not 'numofatoms' in locals():
+         if numofatoms is None:
              print('WARNING: number of atoms not found')
          return numofatoms
         
