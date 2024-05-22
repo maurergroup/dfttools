@@ -1120,6 +1120,7 @@ class AimsOutput(Output):
         return eigenvalues
 
 
+# TODO: maybe this should be in a different file
 class ELSIOutput(Output):
     """
     Parse matrix output written in a binary csc format from ELSI.
