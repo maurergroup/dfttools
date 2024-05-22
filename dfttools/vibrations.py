@@ -195,11 +195,12 @@ class Vibrations():
         assert hasattr(self,'hessian') and hessian is not None, \
             'Hessian must be given to calculate the Eigenvalues!'
         
+        M = 1 / self.get_mass_tensor()
+        
         hessian = copy.deepcopy(hessian)
         if symmetrize_hessian:
-            hessian = (hessian + np.transpose(hessian)) / 2.0
+            hessian = (hessian + np.transpose(hessian)) / 2
 
-        M = 1 / self.get_mass_tensor()
         omega2, X = np.linalg.eig(M * hessian)
         
         # only real valued eigen modes

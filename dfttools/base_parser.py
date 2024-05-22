@@ -25,7 +25,7 @@ class BaseParser:
                 raise ValueError(f"{kwarg} is not a supported file.")
 
             # Check if the file path exists
-            #print(kwargs[kwarg])
+            print(kwargs[kwarg])
             if not os.path.isfile(kwargs[kwarg]):
                 raise ValueError(f"{kwargs[kwarg]} does not exist.")
 
@@ -33,9 +33,5 @@ class BaseParser:
             self._file_paths[kwarg] = kwargs[kwarg]
 
             # Get the contents of the files
-            if kwargs[kwarg].endswith(".csc"):
-                with open(kwargs[kwarg], "rb") as f:
-                    self._file_contents[kwarg] = f.read()
-            else:
-                with open(kwargs[kwarg], "r") as f:
-                    self._file_contents[kwarg] = f.readlines()
+            with open(kwargs[kwarg], "r") as f:
+                self._file_contents[kwarg] = f.readlines()
