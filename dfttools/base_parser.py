@@ -25,7 +25,6 @@ class BaseParser:
                 raise ValueError(f"{kwarg} is not a supported file.")
 
             # Check if the file path exists
-            print(kwargs[kwarg])
             if not os.path.isfile(kwargs[kwarg]):
                 raise ValueError(f"{kwargs[kwarg]} does not exist.")
 
