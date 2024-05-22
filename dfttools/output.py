@@ -2,6 +2,8 @@ import warnings
 from typing import Tuple, Union
 
 import numpy as np
+import numpy.typing as npt
+import scipy.sparse as sp
 
 import dfttools.utils.file_utils as fu
 from dfttools.base_parser import BaseParser
@@ -11,26 +13,46 @@ class Output(BaseParser):
     """
     Base class for parsing output files from electronic structure calculations.
 
+    If contributing a new parser, please subclass this class, add the new supported file
+    type to _supported_files, call the super().__init__ method, include the new file
+    type as a kwarg in the super().__init__ call. Optionally include the self.lines line
+    in examples.
+
     ...
 
     Attributes
     ----------
     supported_files
-    file_paths : dict
-        The paths to the files to be parsed
-    file_contents : dict
-        The contents of the files to be parsed
+    lines
+
+    Examples
+    --------
+    class AimsOutput(Output):
+        def __init__(self, aims_out: str = "aims.out"):
+            super().__init__(aims_out=aims_out)
+            self.lines = self._file_contents["aims_out"]
     """
 
     # FHI-aims, ...
-    _supported_files = ["aims_out"]
+    _supported_files = ["aims_out", "elsi_out"]
 
     def __init__(self, **kwargs: str):
         super().__init__(self._supported_files, **kwargs)
 
+        for val in kwargs.keys():
+            fu.check_required_files(self._supported_files, val)
+
     @property
     def supported_files(self):
         return self._supported_files
+
+    @property
+    def lines(self):
+        return self._lines
+
+    @lines.setter
+    def lines(self, value):
+        self._lines = value
 
 
 class AimsOutput(Output):
@@ -49,17 +71,6 @@ class AimsOutput(Output):
     def __init__(self, aims_out: str = "aims.out"):
         super().__init__(aims_out=aims_out)
         self.lines = self._file_contents["aims_out"]
-
-        # Check if the aims.out file was provided
-        fu.check_required_files(self._supported_files, "aims_out")
-
-    @property
-    def lines(self):
-        return self._lines
-
-    @lines.setter
-    def lines(self, value):
-        self._lines = value
 
     def check_exit_normal(self) -> bool:
         """
@@ -581,3 +592,95 @@ class AimsOutput(Output):
             eigenvalues["level_spacing_eV"][i] = float(spl[4])
 
         return eigenvalues
+
+
+class ELSIOutput(Output):
+    """
+    Parse matrix output written in a binary csc format from ELSI.
+
+    ...
+
+    Attributes
+    ----------
+    lines :
+        Contents of ELSI output file.
+    n_basis : int
+        Number of basis functions
+    n_non_zero : int
+        Number of non-zero elements in the matrix
+    """
+
+    def __init__(self, elsi_out: str):
+        super().__init__(elsi_out=elsi_out)
+        self.lines = self._file_contents["elsi_out"]
+
+    def get_elsi_csc_header(self) -> tuple:
+        """
+        Get the contents of the ELSI file header
+
+        Returns
+        -------
+        tuple
+            The contents of the ELSI csc file header
+        """
+
+        return np.frombuffer(self.lines[0:128], dtype=np.int64)
+
+    @property
+    def n_basis(self) -> int:
+        return self.get_elsi_csc_header()[3]
+
+    @property
+    def n_non_zero(self) -> int:
+        return self.get_elsi_csc_header()[5]
+
+    def read_elsi_as_csc(
+        self, csc_format: bool = False
+    ) -> Tuple[sp.csc_matrix, np.ndarray]:
+        """
+        Get a CSC matrix from an ELSI output file
+
+        Parameters
+        ----------
+        csc_format : bool, default=True
+            Whether to return the matrix in CSC format or a standard numpy array
+
+        Returns
+        -------
+        Tuple[sp.csc_matrix, np.ndarray]
+            The CSC matrix or numpy array
+        """
+
+        header = self.get_elsi_csc_header()
+
+        # Get the column pointer
+        end = 128 + self.n_basis * 8
+        col_ptr = np.frombuffer(self.lines[128:end], dtype=np.int64)
+        col_ptr = np.append(col_ptr, self.n_non_zero + 1)
+        col_ptr -= 1
+
+        # Get the row index
+        start = end + self.n_non_zero * 4
+        row_idx = np.array(np.frombuffer(self.lines[end:start], dtype=np.int32))
+        row_idx -= 1
+
+        if header[2] == 0:  # real
+            nnz_val = np.frombuffer(
+                self.lines[start : start + self.n_non_zero * 8],
+                dtype=np.float64,
+            )
+
+        else:  # complex
+            nnz_val = np.frombuffer(
+                self.lines[start : start + self.n_non_zero * 16], dtype=np.complex128
+            )
+
+        if csc_format:
+            return sp.csc_matrix(
+                (nnz_val, row_idx, col_ptr), shape=(self.n_basis, self.n_basis)
+            )
+
+        else:
+            return sp.csc_matrix(
+                (nnz_val, row_idx, col_ptr), shape=(self.n_basis, self.n_basis)
+            ).toarray()

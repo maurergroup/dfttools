@@ -32,5 +32,10 @@ class BaseParser:
             self._file_paths[kwarg] = kwargs[kwarg]
 
             # Get the contents of the files
-            with open(kwargs[kwarg], "r") as f:
-                self._file_contents[kwarg] = f.readlines()
+            if kwargs[kwarg].endswith(".csc"):
+                with open(kwargs[kwarg], "rb") as f:
+                    self._file_contents[kwarg] = f.read()
+
+            else:
+                with open(kwargs[kwarg], "r") as f:
+                    self._file_contents[kwarg] = f.readlines()
