@@ -207,6 +207,53 @@ def aims_out_10():
 
 def test_check_exit_normal(aims_out_10):
     assert aims_out_10 is True
+    
+
+# TODO: currently a palceholder
+def test_all_output_functions(aims_out_9):
+    aims = aims_out_9
+    
+    aims.get_number_of_atoms()
+    aims.get_geometry()
+    aims.get_parameters()
+    aims.check_exit_normal() 
+    aims.get_change_of_total_energy()
+    #aims.get_change_of_forces()
+    aims.get_change_of_sum_of_eigenvalues()
+    #aims.get_maximum_force()
+    aims.get_final_energy()
+    aims.get_energy_corrected()
+    aims.get_total_energy_T0()
+    aims.get_energy_uncorrected()
+    #aims.get_energy_without_vdw()
+    aims.get_HOMO_energy()
+    aims.get_LUMO_energy()
+    #aims.get_vdw_energy()
+    aims.get_exchange_correlation_energy()
+    aims.get_electrostatic_energy()
+    aims.get_kinetic_energy()
+    aims.get_sum_of_eigenvalues()
+    aims.get_cx_potential_correction()
+    aims.get_free_atom_electrostatic_energy()
+    aims.get_entropy_correction()
+    aims.get_hartree_energy_correction()
+    #aims.get_ionic_embedding_energy()
+    #aims.get_density_embedding_energy()
+    #aims.get_nonlocal_embedding_energy()
+    #aims.get_external_embedding_energy()
+    #aims.get_forces()
+    aims.check_spin_polarised()
+    aims.get_conv_params()
+    aims.get_n_relaxation_steps()
+    aims.get_n_scf_iters()
+    aims.get_i_scf_conv_acc()
+    aims.get_n_initial_ks_states()
+    #aims.get_all_ks_eigenvalues()# -> functionality does not work 
+    aims.get_final_ks_eigenvalues()
+    #aims.get_pert_soc_ks_eigenvalues()# -> not great but may work if that output is there
+        
+    
+
 
 
 # @pytest.mark.parametrize(
