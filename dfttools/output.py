@@ -82,19 +82,19 @@ class AimsOutput(Output):
         
     
     def get_number_of_atoms(self):
-         """
-         Return number of atoms in unit cell
+        """
+        Return number of atoms in unit cell
+        
+        """
+        numofatoms = None
          
-         """
-         numofatoms = None
-         
-         for l in self.lines:
-             if '| Number of atoms' in l:
-                 numofatoms = int(l.strip().split()[5])
+        for l in self.lines:
+            if '| Number of atoms' in l:
+                numofatoms = int(l.strip().split()[5])
 
-         if numofatoms is None:
-             print('WARNING: number of atoms not found')
-         return numofatoms
+        if numofatoms is None:
+            print('WARNING: number of atoms not found')
+        return numofatoms
         
         
     def get_geometry(self):
@@ -428,7 +428,10 @@ class AimsOutput(Output):
         nr_of_occurrence=-1,
         energy_invalid_indicator=None
     ) -> Union[float, np.array]:
-        return self._get_energy(nr_of_occurrence, 'Highest occupied state', 'HOMO_energy',token_nr = 5, energy_invalid_indicator=energy_invalid_indicator)
+        return self._get_energy(nr_of_occurrence,
+                                'Highest occupied state',
+                                token_nr=5,
+                                energy_invalid_indicator=energy_invalid_indicator)
 
 
     def get_LUMO_energy(
@@ -436,7 +439,10 @@ class AimsOutput(Output):
         nr_of_occurrence=-1, 
         energy_invalid_indicator=None
     ) -> Union[float, np.array]:
-        return self._get_energy(nr_of_occurrence, 'Lowest unoccupied state', 'LUMO_energy',token_nr = 5, energy_invalid_indicator=energy_invalid_indicator)
+        return self._get_energy(nr_of_occurrence,
+                                'Lowest unoccupied state',
+                                token_nr=5,
+                                energy_invalid_indicator=energy_invalid_indicator)
 
 
     def get_vdw_energy(
@@ -445,18 +451,25 @@ class AimsOutput(Output):
         energy_invalid_indicator=None
     ) -> Union[float, np.array]:
 
-        control_file = self.getControlFile()
-        if 'vdw_correction_hirshfeld' in control_file.settings.keys() \
-        or 'many_body_dispersion_nl' in control_file.settings.keys():
-            search_keyword = '| vdW energy correction'
-            token_nr = None
-        elif 'many_body_dispersion' in control_file.settings.keys():
-            search_keyword = '| MBD@'
-            token_nr = 6
-        else:
-            return None
-        result = self._get_energy(nr_of_occurrence, search_keyword, 'van_der_waals_energy', token_nr=token_nr, energy_invalid_indicator=energy_invalid_indicator,
-                               energy_valid_indicator='Self-consistency cycle converged')
+        #control_file = self.getControlFile()
+        # if 'vdw_correction_hirshfeld' in control_file.settings.keys() \
+        # or 'many_body_dispersion_nl' in control_file.settings.keys():
+        #     search_keyword = '| vdW energy correction'
+        #     token_nr = None
+        # elif 'many_body_dispersion' in control_file.settings.keys():
+        #     search_keyword = '| MBD@'
+        #     token_nr = 6
+        # else:
+        #     return None
+        
+        search_keyword = '| vdW energy correction'
+        token_nr = None
+        
+        result = self._get_energy(nr_of_occurrence,
+                                  search_keyword,
+                                  token_nr=token_nr,
+                                  energy_invalid_indicator=energy_invalid_indicator,
+                                  energy_valid_indicator='Self-consistency cycle converged')
         return result
 
 
@@ -589,7 +602,8 @@ class AimsOutput(Output):
         I.e. ionic + (electronic) density + nonlocal.
         
         """
-        return self._get_energy(nr_of_occurrence, 
+        return self._get_energy(nr_of_occurrence,
+                                '| External embedding energy', 
                                 energy_invalid_indicator=energy_invalid_indicator)
 
 
@@ -1091,6 +1105,8 @@ class AimsOutput(Output):
             "State    Occupation    Unperturbed Eigenvalue [eV]"
             "    Eigenvalue [eV]    Level Spacing [eV]"
         )
+        
+        print(target_line)
 
         # Iterate backwards from end of aims.out to find the perturbative SOC
         # eigenvalues
