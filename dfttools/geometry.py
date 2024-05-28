@@ -1217,6 +1217,32 @@ class Geometry:
         self.coords[:, -1] -= min_z
 
 
+    def displace_atoms(
+        self,
+        displacement_strength: float,
+        displacement_indices: np.array
+    ) -> None:
+        """
+        Displaces atoms randomly.
+
+        Parameters
+        ----------
+        displacement_strength : float
+            Scaling factor for the strenght of the dispacements.
+        displacement_indices : np.array
+            Indices where atoms should be dispaced.
+
+        Returns
+        -------
+        None.
+
+        """
+        displacements = np.random.rand(len(displacement_indices), 3) - 0.5
+        displacements *= displacement_strength
+        
+        self.coords[displacement_indices, :] += displacements
+
+
     def move_multipoles(self, shift: np.array) -> None:
         """
         Moves all the multipoles by a shift vector
@@ -1570,6 +1596,39 @@ class Geometry:
         scaled_geom.coords = new_coords
 
         return scaled_geom
+    
+    
+    def get_displacement_of_atoms(
+        self,
+        displacement_strength: float,
+        displace_only_unconstrained: bool=True,
+    ):
+        """
+        Returns a copy of the geometry, where the atoms have been displaced
+        randomly.
+
+        Parameters
+        ----------
+        displacement_strength : float
+            Scaling factor for the strenght of the dispacements.
+        displace_only_unconstrained : bool
+            Indices where atoms should be dispaced. The default is True.
+
+        Returns
+        -------
+        geometry.
+
+        """
+        if displace_only_unconstrained:
+            displacement_indices = self.get_unconstrained_atoms()
+        else:
+            displacement_indices = np.array(range(len(self)))
+        
+        new_geometry = deepcopy(self)
+        new_geometry.displace_atoms(displacement_strength, displacement_indices)
+        
+        return new_geometry
+    
 
     def get_fractional_coords(self, lattice_vectors=None):
         if lattice_vectors is None:
@@ -2134,7 +2193,7 @@ class Geometry:
         """
         all_inds = list(range(len(self)))
         keep_inds = self.get_constrained_atoms()
-        inds = np.array(set(all_inds) - set(keep_inds))
+        inds = np.array(list(set(all_inds) - set(keep_inds)))
         return inds
     
 
@@ -4047,7 +4106,6 @@ class AimsGeometry(Geometry):
                 for j in range(self.n_atoms):
                     s = "hessian_block  {} {}".format(i+1, j+1)
                     H_block = self.hessian[3*i:3*(i+1), 3*j:3*(j+1)]
-                    # H_block = H_block.T #TODO: yes/no/maybe? tested: does not seem to make a large difference^^
                     # max_diff = np.max(np.abs(H_block-H_block.T))
                     # print("Max diff in H: {:.3f}".format(max_diff))
                     for h in H_block.flatten():
