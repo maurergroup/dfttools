@@ -1,4 +1,3 @@
-import struct
 import warnings
 from typing import Tuple, Union
 
@@ -8,7 +7,6 @@ import scipy.sparse as sp
 
 import dfttools.utils.file_utils as fu
 from dfttools.base_parser import BaseParser
-from dfttools.geometry import AimsGeometry
 
 
 class Output(BaseParser):
@@ -35,8 +33,7 @@ class Output(BaseParser):
             self.lines = self._file_contents["aims_out"]
     """
 
-    # Add new supported files to this list
-    # FHI-aims, ELSI, ...
+    # FHI-aims, ...
     _supported_files = ["aims_out", "elsi_out"]
 
     def __init__(self, **kwargs: str):
@@ -659,7 +656,6 @@ class AimsOutput(Output):
 
         return spin_polarised
 
-
     def get_conv_params(self) -> dict:
         """
         Get the convergence parameters from the aims.out file.
@@ -696,6 +692,19 @@ class AimsOutput(Output):
 
         return self.convergence_params
 
+    def get_final_energy(self) -> Union[float, None]:
+        """
+        Get the final energy from a FHI-aims calculation.
+
+        Returns
+        -------
+        Union[float, None]
+            The final energy of the calculation
+        """
+
+        for line in self.lines:
+            if "s.c.f. calculation      :" in line:
+                return float(line.split()[-2])
 
     def get_n_relaxation_steps(self) -> int:
         """
@@ -720,7 +729,6 @@ class AimsOutput(Output):
 
         return n_relax_steps
 
-
     def get_n_scf_iters(self) -> int:
         """
         Get the number of SCF iterations from the aims.out file.
@@ -743,7 +751,6 @@ class AimsOutput(Output):
                 n_scf_iters += 1
 
         return n_scf_iters
-
 
     def get_i_scf_conv_acc(self) -> dict:
         """
@@ -849,8 +856,7 @@ class AimsOutput(Output):
 
         return self.scf_conv_acc_params
 
-
-    def get_n_initial_ks_states(self, include_spin_polarised: bool = True) -> int:
+    def get_n_initial_ks_states(self, include_spin_polarised=True) -> int:
         """
         Get the number of Kohn-Sham states from the first SCF step.
 
@@ -902,7 +908,6 @@ class AimsOutput(Output):
 
         return n_ks_states
 
-
     def _get_ks_states(self, ev_start, eigenvalues, scf_iter, n_ks_states):
         """
         Get any set of KS states, occupations, and eigenvalues.
@@ -926,7 +931,6 @@ class AimsOutput(Output):
             eigenvalues["eigenvalue_eV"][scf_iter][i] = float(values[3])
 
         # return eigenvalues
-
 
     def get_all_ks_eigenvalues(self) -> Union[dict, Tuple[dict, dict]]:
         """Get all Kohn-Sham eigenvalues from a calculation.
@@ -1016,7 +1020,6 @@ class AimsOutput(Output):
         else:
             raise ValueError("Could not determine if calculation was spin polarised.")
 
-
     def get_final_ks_eigenvalues(self) -> Union[dict, Tuple[dict, dict]]:
         """Get the final Kohn-Sham eigenvalues from a calculation.
 
@@ -1087,7 +1090,6 @@ class AimsOutput(Output):
         else:
             raise ValueError("Could not determine if calculation was spin polarised.")
 
-
     def get_pert_soc_ks_eigenvalues(self) -> dict:
         """
         Get the perturbative SOC Kohn-Sham eigenvalues from a calculation.
@@ -1136,7 +1138,6 @@ class AimsOutput(Output):
         return eigenvalues
 
 
-# TODO: maybe this should be in a different file
 class ELSIOutput(Output):
     """
     Parse matrix output written in a binary csc format from ELSI.
