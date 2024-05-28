@@ -4,7 +4,7 @@ import numpy as np
 from dfttools.geometry import AimsGeometry
 
 
-#@pytest.fixture
+@pytest.fixture
 def get_geometry():
     geometry = AimsGeometry()
     geometry.add_atoms(
@@ -20,8 +20,8 @@ def get_geometry():
     return geometry
 
 
-def test_save_and_read_file():
-    geometry = get_geometry()
+def test_save_and_read_file(get_geometry):
+    geometry = get_geometry
     geometry.save_to_file('temp/geometry.in')
 
     geometry_read = AimsGeometry('temp/geometry.in')
@@ -30,8 +30,8 @@ def test_save_and_read_file():
     assert geometry == geometry_read
 
 
-def test_get_displacement_of_atoms():
-    geometry = get_geometry()
+def test_get_displacement_of_atoms(get_geometry):
+    geometry = get_geometry
     geometry_new = geometry.get_displacement_of_atoms(1)
     
     assert not np.allclose( geometry.coords[0], geometry_new.coords[0] )

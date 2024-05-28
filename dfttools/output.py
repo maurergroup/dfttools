@@ -5,6 +5,7 @@ import numpy as np
 import numpy.typing as npt
 import scipy.sparse as sp
 
+from dfttools.geometry import AimsGeometry
 import dfttools.utils.file_utils as fu
 from dfttools.base_parser import BaseParser
 

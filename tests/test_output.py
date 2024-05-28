@@ -209,11 +209,19 @@ def test_check_exit_normal(aims_out_10):
     assert aims_out_10 is True
     
 
+def test_get_number_of_atoms(aims_out_9):
+    aims = aims_out_9
+    
+    n_atoms = aims.get_number_of_atoms()
+    print('n_atoms', n_atoms)
+    
+    assert n_atoms == 3
+
+
 # TODO: currently a palceholder
 def test_all_output_functions(aims_out_9):
     aims = aims_out_9
     
-    aims.get_number_of_atoms()
     aims.get_geometry()
     aims.get_parameters()
     aims.check_exit_normal() 
