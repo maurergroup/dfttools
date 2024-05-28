@@ -213,7 +213,6 @@ def test_get_number_of_atoms(aims_out_9):
     aims = aims_out_9
     
     n_atoms = aims.get_number_of_atoms()
-    print('n_atoms', n_atoms)
     
     assert n_atoms == 3
 
