@@ -13,7 +13,6 @@ import numpy as np
 import scipy.linalg
 import scipy.spatial
 import scipy.spatial.distance
-import networkx as nx
 
 import dfttools.utils.math_utils as utils
 from dfttools.utils.periodic_table import PeriodicTable
@@ -206,7 +205,7 @@ class Geometry:
                 if isinstance(constr, FixAtoms):
                     fix_cart[constr.index] = [True, True, True]
         constrain_relax=fix_cart
-    
+        
         coords=[]
         species_list=[]
         for i, atom in enumerate(atoms):
@@ -247,6 +246,12 @@ class Geometry:
         
         if not np.sum(self.lattice_vectors) == 0.0:
             ase_system.pbc = [1, 1, 1]
+            
+        if self.energy is not None:
+            ase_system.info['energy'] = self.energy
+            
+        if self.forces is not None:
+            ase_system.arrays['forces'] = self.forces
                 
         return ase_system
 
@@ -622,7 +627,7 @@ class Geometry:
         self.remove_atoms(mol_inds)
 
 
-    def remove_substrate(self, primitive_substrate, dimension=2, threshold=0.3) -> None:
+    def remove_substrate(self, primitive_substrate=None, dimension=2, threshold=0.3) -> None:
         """
         Removes all substrate atoms given the primitive substrate by
         identifying species and height
@@ -1598,7 +1603,7 @@ class Geometry:
         return scaled_geom
     
     
-    def get_displacement_of_atoms(
+    def get_displaced_atoms(
         self,
         displacement_strength: float,
         displace_only_unconstrained: bool=True,
@@ -2976,8 +2981,8 @@ class Geometry:
     def get_colliding_groups(self, distance_threshold=1e-2, check_3D = False):
         """
         Remove atoms that are too close too each other from the geometry file.
-        This approach is useful if one maps back atoms into a different cell and then needs to get rid
-        of overlapping atoms
+        This approach is useful if one maps back atoms into a different cell 
+        and then needs to get rid of overlapping atoms
 
         Parameters
         ----------
@@ -2987,9 +2992,9 @@ class Geometry:
         Returns
         -------
         """
-
+        import networkx as nx
+        
         # get all distances between all atoms
-
         z_period = [-1,0,1] if check_3D else [0]
         index_tuples = []
         for i in [-1,0,1]:
@@ -4353,6 +4358,7 @@ class XYZGeometry(Geometry):
         read_natoms = None
         count_natoms = 0
         coords = []
+        forces = []
         species = []
         fi = text.split('\n')
 
@@ -4367,7 +4373,8 @@ class XYZGeometry(Geometry):
                 
             # look for lattice vectors
             if 'Lattice' in line:
-                split_line = line.split('Lattice')[1]
+                #split_line = line.split('Lattice')[1]
+                split_line = line.split('"')[1]
                 
                 lattice_parameters = re.findall("\d+\.\d+", split_line)
                 
@@ -4375,9 +4382,34 @@ class XYZGeometry(Geometry):
                     lattice_parameters = np.array(lattice_parameters, dtype=np.float64)
                     self.lattice_vectors = np.reshape(lattice_parameters, (3,3))
             
-            n_words = len( re.findall('[a-zA-Z]+', line) )
-            n_floats = len( re.findall('\d+\.\d+', line) )
+            if 'energy' in line:
+                split_line = line.split('energy')[1]
+                
+                energy = re.findall('-?[\d.]+(?:e-?\d+)?', split_line)
+                
+                if len(energy) > 0:
+                    self.energy = np.float64(energy[0])
+            
+            # words = re.findall('[a-zA-Z]+', line)
+            # numbers = re.findall('-?[\d.]+(?:e-?\d+)?', line)
+            
+            # n_words = len( words )
+            # n_floats = len( numbers )
+            
             split_line = line.split()
+            
+            n_words = 0
+            n_floats = 0
+            
+            for l in split_line:
+                n_words_new = len( re.findall('[a-zA-Z]+', l) )
+                n_floats_new = len( re.findall('-?[\d.]+(?:e-?\d+)?', l) )
+                
+                if n_words_new == 1 and n_floats_new == 1:
+                    n_floats += 1
+                else:
+                    n_words += n_words_new
+                    n_floats += n_floats_new
             
             # first few lines may be comments or properties
             if not started_parsing_atoms:
@@ -4391,11 +4423,15 @@ class XYZGeometry(Geometry):
                     break
                 else:
                     assert n_words == 1 and (n_floats == 3 or n_floats == 6), \
-                        "Bad atoms specification: " + str(split_line)
+                        "Bad atoms specification: " + str(split_line) + f'{n_words} {n_floats}'
                 
                 # write atoms
-                coords.append( np.array(split_line[1:4], dtype=np.float64) )
                 species.append(str(split_line[0]))
+                coords.append( np.array(split_line[1:4], dtype=np.float64) )
+                
+                if n_floats == 6:
+                    forces.append( np.array(split_line[4:], dtype=np.float64) )
+                
                 count_natoms += 1
 
         if not started_parsing_atoms:
@@ -4407,6 +4443,10 @@ class XYZGeometry(Geometry):
         
         coords = np.asarray(coords)
         self.add_atoms(coords,species)
+        
+        if forces:
+            forces = np.asarray(forces)
+            self.forces = forces
 
 
     def get_text(self, comment='XYZ file written by Geometry.py'):
@@ -4441,10 +4481,7 @@ class MoldenGeometry(Geometry):
 
         # add eigenmodes and frequencies if they exist
         if hasattr(self, 'hessian') and self.hessian is not None:
-            frequencies, displacement_coords = self.getEigenvaluesAndEigenvectors(
-                bool_symmetrize_hessian=True,
-                bool_only_real=False
-            )
+            frequencies, displacement_coords = self.get_eigenvalues_and_eigenvectors(only_real=False)
             print("INFO: Eigenfrequencies and -modes are calculated after "
                   "symmetrizing the hessian")
 
