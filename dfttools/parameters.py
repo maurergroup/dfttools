@@ -5,7 +5,8 @@ from dfttools.base_parser import BaseParser
 
 
 class Parameters(BaseParser):
-    """Handle files that control parameters for electronic structure calculations.
+    """
+    Handle files that control parameters for electronic structure calculations.
 
     Parameters
     ----------
@@ -23,9 +24,33 @@ class Parameters(BaseParser):
     def __init__(self, **kwargs):
         super().__init__(self._supported_files, **kwargs)
 
+        for val in kwargs.keys():
+            fu.check_required_files(self._supported_files, val)
+
+    @property
+    def supported_files(self):
+        return self._supported_files
+
+    @property
+    def lines(self):
+        return self._lines
+
+    @lines.setter
+    def lines(self, lines: List[str]):
+        self._lines = lines
+
+    @property
+    def path(self):
+        return self._file_path
+
+    @path.setter
+    def path(self, file_path: str):
+        self._file_path = file_path
+
 
 class AimsControl(Parameters):
-    """FHI-aims control file parser.
+    """
+    FHI-aims control file parser.
 
     Attributes
     ----------
@@ -38,31 +63,14 @@ class AimsControl(Parameters):
         The contents of the files to be parsed.
     """
 
-    def __init__(self, control_in="control.in") -> None:
+    def __init__(self, control_in: str = "control.in") -> None:
         super().__init__(control_in=control_in)
         self.lines = self._file_contents["control_in"]
         self.path = self._file_paths["control_in"]
-        # Check if the control.in file was provided
-        fu.check_required_files(self._supported_files, "control_in")
-
-    @property
-    def lines(self) -> list:
-        return self._lines
-
-    @lines.setter
-    def lines(self, lines: List[str]) -> None:
-        self._lines = lines
-
-    @property
-    def path(self) -> str:
-        return self._file_path
-
-    @path.setter
-    def path(self, file_path: str) -> None:
-        self._file_path = file_path
 
     def add_control_keywords(self, **kwargs: dict) -> None:
-        """Add keywords to the control.in file.
+        """
+        Add keywords to the control.in file.
 
         Parameters
         ----------
@@ -77,7 +85,8 @@ class AimsControl(Parameters):
         raise NotImplementedError
 
     def remove_control_keywords(self, *args: str) -> None:
-        """Remove keywords from the control.in file.
+        """
+        Remove keywords from the control.in file.
 
         Parameters
         ----------
