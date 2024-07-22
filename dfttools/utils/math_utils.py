@@ -1,6 +1,7 @@
 import numpy as np
 import scipy
 from typing import Union
+from copy import deepcopy
 
 def get_rotation_matrix(vec_start: np.array, vec_end: np.array) -> np.array:
     '''
@@ -177,7 +178,8 @@ def get_cartesian_coords(frac_coords: np.array, lattice_vectors: np.array) -> np
 
 def get_cross_correlation_function(
     signal_0: np.array,
-    signal_1: np.array
+    signal_1: np.array,
+    detrend: bool=False,
 ) -> np.array:
     """
     Calculate the autocorrelation function for a given signal.
@@ -198,9 +200,22 @@ def get_cross_correlation_function(
     # This is correct for the autocorrelation function
     norm = np.sqrt( signal_0.size * signal_1.size )
     
-    cross_correlation = np.correlate(signal_0, signal_1, mode='same') / norm
+    if detrend:
+        signal_0 = scipy.signal.detrend(signal_0)
+        signal_1 = scipy.signal.detrend(signal_1)
     
-    return cross_correlation[cross_correlation.size//2:]
+    #cross_correlation = np.correlate(signal_0, signal_1, mode='same')
+    cross_correlation = np.correlate(signal_0, signal_1, mode='full')
+    cross_correlation = cross_correlation[cross_correlation.size//2:]
+    
+    #cross_correlation /= norm
+    
+    # normalize by number of overlapping data points
+    cross_correlation /= np.arange(cross_correlation.size, 0, -1)
+    cutoff = int(cross_correlation.size/2)
+    cross_correlation = cross_correlation[:cutoff]
+    
+    return cross_correlation
 
 
 def get_autocorrelation_function_manual_lag(signal: np.array,
@@ -317,11 +332,14 @@ def norm_matrix_by_dagonal(matrix: np.array) -> np.array:
         Normed matrix.
 
     """
-    diagonal = np.diagonal(matrix)
+    diagonal = np.array( np.diagonal(matrix) )
+    L = diagonal == 0.0
+    diagonal[L] = 1.0
     
-    matrix /= np.sqrt( np.tile( diagonal, (matrix.shape[1],1) ).T * np.tile( diagonal, (matrix.shape[0], 1) ) )
+    new_matrix = deepcopy(matrix)
+    new_matrix /= np.sqrt( np.tile( diagonal, (matrix.shape[1],1) ).T * np.tile( diagonal, (matrix.shape[0], 1) ) )
     
-    return matrix
+    return new_matrix
     
     
     
