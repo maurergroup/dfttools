@@ -3,7 +3,8 @@ import warnings
 import numpy as np
 import dfttools.utils.math_utils as mu
 from ast import literal_eval
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, root
+from scipy.signal import csd, argrelextrema
 from numba import jit, njit, prange
 
 
@@ -51,7 +52,9 @@ def get_cross_correlation_function(signal_0: np.array,
 def get_cross_spectrum(signal_0: np.array,
                        signal_1: np.array,
                        time_step: float,
-                       bootstrapping_blocks: int=1) -> (np.array, np.array):
+                       bootstrapping_blocks: int=1,
+                       zero_padding: int=0,
+                       cutoff_at_last_maximum: bool=False) -> (np.array, np.array):
     """
     Determine the cross spectrum for a given signal using bootstrapping:
         - Splitting the sigmal into blocks and for each block:
@@ -71,6 +74,14 @@ def get_cross_spectrum(signal_0: np.array,
         DESCRIPTION.
     bootstrapping_blocks : int, optional
         DESCRIPTION. The default is 1.
+    zero_padding : int, optional
+        Pad the cross correlation function with zeros to increase the frequency
+        resolution of the FFT. This also avoids the effect of varying spectral
+        leakage. However, it artificially broadens the resulting cross spectrum
+        and introduces wiggles.
+    cutoff_at_last_maximum : bool, optional
+        Cut off the cross correlation function at the last maximum to hide
+        spectral leakage.
 
     Returns
     -------
@@ -97,14 +108,37 @@ def get_cross_spectrum(signal_0: np.array,
         block_end = (block+1)*block_size
         if block_end > signal_length:
             block_end = signal_length
-    
+        
         signal_0_block = signal_0[block_start:block_end]
         signal_1_block = signal_1[block_start:block_end]
         
         cross_correlation = mu.get_cross_correlation_function(signal_0_block,
-                                                              signal_1_block) 
+                                                                signal_1_block)
+        
+        # truncate cross correlation function at last maximum
+        if cutoff_at_last_maximum:
+            cutoff_index = get_last_maximum(cross_correlation)
+            cross_correlation = cross_correlation[:cutoff_index]
+        
+        # add zero padding
+        if zero_padding < len(cross_correlation):
+            zero_padding = len(cross_correlation)
+            
+        cross_correlation = np.pad(cross_correlation,
+                                   (0, zero_padding - len(cross_correlation)),
+                                   'constant')
+        
         frequencies, cross_spectrum_block = mu.get_fourier_transform(cross_correlation,
                                                                      time_step)
+        # frequencies, cross_spectrum_block = csd(signal_0_block,
+        #                                         signal_1_block,
+        #                                         1/time_step)
+        
+        # frequencies = frequencies[:frequencies.size//2]
+        # cross_spectrum_block = cross_spectrum_block[:cross_spectrum_block.size//2]
+        
+        #cross_spectrum_block = np.convolve(cross_spectrum_block, np.ones(5)/5, mode='same')
+        
         cross_spectrum.append( np.abs(cross_spectrum_block) )
     
     cross_spectrum = np.atleast_2d(cross_spectrum)
@@ -112,6 +146,24 @@ def get_cross_spectrum(signal_0: np.array,
 
     return frequencies, cross_spectrum
 
+
+def get_last_maximum(x: np.array):
+    import matplotlib.pyplot as plt
+    
+    maxima = argrelextrema(x, np.greater_equal)[0]
+    #roots = argrelextrema(-np.abs(x), np.greater_equal)[0]
+    
+    last_maximum = maxima[-1]
+    
+    if last_maximum == len(x)-1:
+        last_maximum = maxima[-2]
+    
+    # plt.plot( x )
+    # plt.plot( maxima, x[maxima], 'o' )
+    # plt.plot( last_maximum, x[last_maximum], 'o' )
+    
+    return last_maximum
+    
 
 def lorentzian_fit(frequencies, power_spectrum, p_0=None):
     
@@ -125,10 +177,13 @@ def lorentzian_fit(frequencies, power_spectrum, p_0=None):
         
         p_0 = [a_0, b_0, c_0]
     
-    res, _ = curve_fit(mu.lorentzian,
-                       frequencies,
-                       power_spectrum,
-                       p0=p_0)
+    try:
+        res, _ = curve_fit(mu.lorentzian,
+                           frequencies,
+                           power_spectrum,
+                           p0=p_0)
+    except RuntimeError:
+        res = [np.nan, np.nan, np.nan]
     
     return res
 
