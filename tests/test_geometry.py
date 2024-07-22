@@ -30,9 +30,9 @@ def test_save_and_read_file(get_geometry):
     assert geometry == geometry_read
 
 
-def test_get_displacement_of_atoms(get_geometry):
+def test_get_displaced_atoms(get_geometry):
     geometry = get_geometry
-    geometry_new = geometry.get_displacement_of_atoms(1)
+    geometry_new = geometry.get_displaced_atoms(1)
     
     assert not np.allclose( geometry.coords[0], geometry_new.coords[0] )
     assert np.allclose( geometry.coords[1], geometry_new.coords[1] )
