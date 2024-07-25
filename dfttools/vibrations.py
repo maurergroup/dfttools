@@ -237,7 +237,7 @@ class Vibrations():
             'Hessian must be given to calculate the Eigenvalues!'
         
         M = 1 / self.get_mass_tensor()
-
+        
         omega2, X = np.linalg.eig(M * hessian)
         
         # only real valued eigen modes

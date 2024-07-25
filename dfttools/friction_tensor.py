@@ -110,7 +110,7 @@ class FrictionTensor:
         """
         returns life time in ps
         """
-        #vibration /= np.linalg.norm(vibration)
+        vibration /= np.linalg.norm(vibration)
         
         force = self.friction_tensor_raw.dot( vibration )
         
