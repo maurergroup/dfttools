@@ -1,10 +1,13 @@
 import numpy as np
 import copy
+import os
 import dfttools.utils.units as units
 import dfttools.utils.vibrations_utils as vu
 from typing import Union
-from dfttools.geometry import AimsGeometry, VaspGeometry
+from dfttools.geometry import AimsGeometry, VaspGeometry, MoldenGeometry
 from scipy.signal import argrelextrema
+import multiprocessing as mp
+import functools
 
 
 class Vibrations():
@@ -22,7 +25,9 @@ class Vibrations():
             new_vibration = AimsVibrations()
         if vibrations_type == 'vasp':
             new_vibration = VaspVibrations()
-        
+        if vibrations_type == 'molden':
+            new_vibration = MoldenVibrations()
+            
         new_vibration.__dict__ = self.__dict__
         return new_vibration
     
@@ -101,7 +106,7 @@ class Vibrations():
         return mass_tensor
     
     
-    def get_hessian(self, set_constrained_atoms_zero: bool=True) -> np.array:
+    def get_hessian(self, set_constrained_atoms_zero: bool=False) -> np.array:
         """
         Calculates the Hessian from the forces. This includes the atmoic masses
         since F = m*a.
@@ -110,7 +115,7 @@ class Vibrations():
         ----------
         set_constrained_atoms_zero : bool, optional
             Set elements in Hessian that code for constrained atoms to zero.
-            The default is True.
+            The default is False.
 
         Returns
         -------
@@ -120,6 +125,8 @@ class Vibrations():
         """
         N = len(self) * 3
         H = np.zeros([N, N])
+        
+        assert np.allclose(self.coords, self.vibration_coords[0]), 'The first entry in vibration_coords must be identical to the undispaced geometry.'
         
         coords_0 = self.vibration_coords[0].flatten()
         F_0 = self.vibration_forces[0].flatten()
@@ -151,9 +158,39 @@ class Vibrations():
         return H
 
 
-    def symmetrize_hessian(self, hessian=None):
-        h = copy.deepcopy(self.hessian)
-        self.hessian = (h+np.transpose(h))/2
+    def get_symmetrized_hessian(self, hessian=None):
+        """
+        Symmetrieses the Hessian by using the lower triangular matrix
+
+        Parameters
+        ----------
+        hessian : TYPE, optional
+            DESCRIPTION. The default is None.
+
+        Returns
+        -------
+        None.
+
+        """
+        if hessian is None:
+            hessian = copy.deepcopy(self.hessian)
+        
+        hessian_new = hessian + hessian.T
+        
+        all_inds = list(range(len(self)*3))
+        
+        constrain = self.constrain_relax.flatten()
+        constrained_inds = [i for i, c in enumerate(constrain) if c]
+        constrained_inds = np.array(constrained_inds)
+        
+        unconstrained_inds = np.array(list(set(all_inds) - set(constrained_inds)))
+        
+        for i in unconstrained_inds:
+            for j in unconstrained_inds:
+                hessian_new[i,j] *= 0.5
+        
+        return hessian_new
+        #self.hessian = (h+np.transpose(h))/2
         
 
     def get_eigenvalues_and_eigenvectors(
@@ -189,18 +226,18 @@ class Vibrations():
             new_coords = coords + displacement * amplitude..
 
         """
-        if hessian is None:
-            hessian = self.hessian
+        
+            
+        if symmetrize_hessian:
+            hessian = self.get_symmetrized_hessian(hessian=hessian)
+        elif hessian is None:
+            hessian = copy.deepcopy(self.hessian)
         
         assert hasattr(self,'hessian') and hessian is not None, \
             'Hessian must be given to calculate the Eigenvalues!'
         
         M = 1 / self.get_mass_tensor()
         
-        hessian = copy.deepcopy(hessian)
-        if symmetrize_hessian:
-            hessian = (hessian + np.transpose(hessian)) / 2
-
         omega2, X = np.linalg.eig(M * hessian)
         
         # only real valued eigen modes
@@ -306,8 +343,20 @@ class Vibrations():
         return atom_type_index
     
     
-    def get_velocity_mass_average(self, velocities):
+    def get_velocity_mass_average(self, velocities: np.array) -> np.array:
+        """
+        Weighs velocities by atomic masses.
 
+        Parameters
+        ----------
+        velocities : np.array
+
+        Returns
+        -------
+        velocities_mass_average : np.array
+            Velocities weighted by atomic masses.
+
+        """
         velocities_mass_average = np.zeros_like(velocities)      
 
         for i in range(velocities.shape[1]):
@@ -316,7 +365,12 @@ class Vibrations():
         return velocities_mass_average
     
     
-    def project_onto_wave_vector(self, velocities, wave_vector, project_on_atom=-1):
+    def project_onto_wave_vector(
+        self,
+        velocities: np.array,
+        wave_vector: np.array,
+        project_on_atom: int=-1
+    ) -> np.array:
         
         number_of_primitive_atoms = len(self)
         number_of_atoms = velocities.shape[1]
@@ -350,8 +404,10 @@ class Vibrations():
         return velocities_projected
     
     
-    def get_normal_mode_decomposition(self,
-                                      velocities: np.array) -> np.array:
+    def get_normal_mode_decomposition(
+        self,
+        velocities: np.array
+    ) -> np.array:
         """
         Calculate the normal-mode-decomposition of the velocities. This is done
         by projecting the atomic velocities onto the vibrational eigenvectors.
@@ -389,7 +445,26 @@ class Vibrations():
         time_step: float,
         bootstrapping_blocks: int=1
     ):
+        """
         
+
+        Parameters
+        ----------
+        velocities : np.array
+            DESCRIPTION.
+        time_step : float
+            DESCRIPTION.
+        bootstrapping_blocks : int, optional
+            DESCRIPTION. The default is 1.
+
+        Returns
+        -------
+        autocorr_t : np.array
+            DESCRIPTION.
+        autocorr : np.array
+            DESCRIPTION.
+
+        """
         velocities_proj = self.get_normal_mode_decomposition(velocities)
         
         n_points = len(self.eigenvectors)
@@ -426,28 +501,82 @@ class Vibrations():
         
         n_points = len(self.eigenvectors)
         
-        frequencies = None
-        cross_spectrum = {}
+        frequencies = vu.get_cross_spectrum(velocities_proj[:,0],
+                                            velocities_proj[:,0],
+                                            time_step,
+                                            bootstrapping_blocks=bootstrapping_blocks)[0]
+        
+        cross_spectrum = np.zeros((n_points, n_points, len(frequencies)), dtype=np.complex128)
         
         for index_0 in range(n_points):
             for index_1 in range(n_points):
-                frequencies_block, cross_spectrum_block \
+                print(index_0, index_1)
+                cross_spectrum_block \
                     = vu.get_cross_spectrum(velocities_proj[:,index_0],
                                             velocities_proj[:,index_1],
                                             time_step,
-                                            bootstrapping_blocks=bootstrapping_blocks)
-                
-                frequencies = frequencies_block            
-                cross_spectrum[(index_0, index_1)] = cross_spectrum_block
+                                            bootstrapping_blocks=bootstrapping_blocks)[1]
+                     
+                cross_spectrum[index_0, index_1, :] = cross_spectrum_block
         
         return frequencies, cross_spectrum
+    
+    
+    def output_cross_spectrum(
+        self,
+        velocities: np.array,
+        time_step: float,
+        bootstrapping_blocks: int=1,
+        processes=1,
+        frequency_cutoff=None,
+        dirname='cross_spectrum',
+    ):
+        
+        velocities_proj = self.get_normal_mode_decomposition(velocities)
+        
+        n_points = len(self.eigenvectors)
+        
+        frequencies = vu.get_cross_spectrum(velocities_proj[:,0],
+                                            velocities_proj[:,0],
+                                            time_step,
+                                            bootstrapping_blocks=bootstrapping_blocks)[0]
+        
+        if not os.path.isdir(dirname):
+            os.mkdir(dirname)
+        
+        cutoff = -1
+        if not frequency_cutoff is None:
+            f_inv_cm = frequencies * units.INVERSE_CM_IN_HZ
+            L = f_inv_cm < frequency_cutoff
+            cutoff = np.sum(L)
+        
+        np.savetxt(os.path.join(dirname, 'frequencies.csv'), frequencies[:cutoff])
+        
+        index = []
+        for index_0 in range(n_points):
+            for index_1 in range(n_points):
+                if index_0 < index_1:
+                    continue
+                
+                index.append((index_0, index_1))
+        
+                
+        func = functools.partial(_output_cross_spectrum,
+                                 velocities_proj=velocities_proj,
+                                 time_step=time_step,
+                                 bootstrapping_blocks=bootstrapping_blocks,
+                                 cutoff=cutoff,
+                                 dirname=dirname)
+        
+        with mp.Pool(processes) as pool:
+            pool.map(func, index)
     
     
     def get_coupling_matrix(
         self,
         velocities: np.array,
         time_step: float,
-        bootstrapping_blocks: int=1
+        bootstrapping_blocks: int=1,
     ):
         
         omega = self.get_eigenvalues_in_Hz()
@@ -462,7 +591,7 @@ class Vibrations():
         for index_0 in range(n_points):
             for index_1 in range(n_points):
                 
-                power_spectrum_index = np.real( power_spectrum[(index_0, index_1)] )
+                power_spectrum_index = np.real( power_spectrum[index_0, index_1, :] )
                 
                 max_f = argrelextrema(power_spectrum_index, np.greater)[0]
                 
@@ -476,7 +605,27 @@ class Vibrations():
                 coupling_matrix[index_0, index_1] = power_spectrum_index[coupling_index]
                 
         return coupling_matrix
+
+
+def _output_cross_spectrum(
+    index,
+    velocities_proj,
+    time_step,
+    bootstrapping_blocks,
+    cutoff,
+    dirname
+):
+    index_0 = index[0]
+    index_1 = index[1]
+    cross_spectrum \
+        = vu.get_cross_spectrum(velocities_proj[:,index_0],
+                                velocities_proj[:,index_1],
+                                time_step,
+                                bootstrapping_blocks=bootstrapping_blocks)[1]
     
+    np.savetxt(os.path.join(dirname, f'cross_spectrum_{index_0}_{index_1}.csv'),
+               cross_spectrum[:cutoff])
+
 
 class AimsVibrations(Vibrations, AimsGeometry):
     def __init__(self, filename=None):
@@ -490,6 +639,9 @@ class VaspVibrations(Vibrations, VaspGeometry):
         VaspGeometry.__init__(self, filename=filename)
 
 
-
+class MoldenVibrations(Vibrations, MoldenGeometry):
+    def __init__(self, filename=None):
+        Vibrations.__init__(self)
+        MoldenGeometry.__init__(self, filename=filename)
 
 
