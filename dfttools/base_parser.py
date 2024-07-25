@@ -16,8 +16,8 @@ class BaseParser:
     """
 
     def __init__(self, supported_files, **kwargs):
-        self._file_paths = {}
-        self._file_contents = {}
+        self.file_paths = {}
+        self.file_contents = {}
 
         for kwarg in kwargs:
             # Check if the file type is supported
@@ -29,13 +29,13 @@ class BaseParser:
                 raise ValueError(f"{kwargs[kwarg]} does not exist.")
 
             # Store the file paths
-            self._file_paths[kwarg] = kwargs[kwarg]
+            self.file_paths[kwarg] = kwargs[kwarg]
 
             # Get the contents of the files
             if kwargs[kwarg].endswith(".csc"):
                 with open(kwargs[kwarg], "rb") as f:
-                    self._file_contents[kwarg] = f.read()
+                    self.file_contents[kwarg] = f.read()
 
             else:
                 with open(kwargs[kwarg], "r") as f:
-                    self._file_contents[kwarg] = f.readlines()
+                    self.file_contents[kwarg] = f.readlines()
