@@ -66,6 +66,21 @@ def test_get_displaced_atoms(get_geometry):
 def test_get_symmetries(get_geometry_periodic):
     geometry = get_geometry_periodic
     
-    symmetries = geometry.get_symmetries(symmetry_precision=1e-05)
+    symmetries = geometry.get_symmetries(symmetry_precision=1e-03)
     
-    print(symmetries)
+    assert len(symmetries['rotations']) == 6
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
