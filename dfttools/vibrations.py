@@ -4,7 +4,7 @@ import os
 import dfttools.utils.units as units
 import dfttools.utils.vibrations_utils as vu
 from typing import Union
-from dfttools.geometry import AimsGeometry, VaspGeometry, MoldenGeometry
+from dfttools.geometry import AimsGeometry, VaspGeometry
 from scipy.signal import argrelextrema
 import multiprocessing as mp
 import functools
@@ -637,11 +637,5 @@ class VaspVibrations(Vibrations, VaspGeometry):
     def __init__(self, filename=None):
         Vibrations.__init__(self)
         VaspGeometry.__init__(self, filename=filename)
-
-
-class MoldenVibrations(Vibrations, MoldenGeometry):
-    def __init__(self, filename=None):
-        Vibrations.__init__(self)
-        MoldenGeometry.__init__(self, filename=filename)
 
 

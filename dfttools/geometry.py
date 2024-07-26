@@ -1560,8 +1560,8 @@ class Geometry:
         scaled_geom.coords = new_coords
 
         return scaled_geom
-
-    def get_displacement_of_atoms(
+    
+    def get_displaced_atoms(
         self,
         displacement_strength: float,
         displace_only_unconstrained: bool = True,
