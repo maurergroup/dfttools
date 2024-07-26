@@ -3627,16 +3627,18 @@ class Geometry:
                     cw = plt.get_cmap("coolwarm")
             else:
                 cw = plt.get_cmap(cmap)
-
+            
             cNorm = matplotlib.colors.Normalize(vmin=minvalue, vmax=maxvalue)
             scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cw)
 
             a = np.array([[minvalue, maxvalue]])
             img = plt.imshow(a, cmap=cw)
             img.set_visible(False)
+            
             colors = []
             for v in values:
-                colors.append(scalarMap.to_rgba(v))
+                colors.append(scalarMap.to_rgba(v)[:3]) # reomve alpha channel
+            colors = np.array(colors)
 
         # make specified atoms brighter by adding color_offset to all rgb values
 
