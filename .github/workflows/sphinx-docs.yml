@@ -1,34 +1,56 @@
-name: build-deploy-sphinx-docs
+name: Deploy Sphinx docs to Pages
 
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "master" branch
+  # Runs on pushes targeting the default branch
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   build:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    
-    # Steps represent a sequence of tasks that will be executed as part of the job
+    permissions:
+      contents: write
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
-    
-      # Runs a single command using the runners shell
       - name: Build HTML
         uses: ammaraskar/sphinx-action@master
-
-      # Runs a set of commands using the runners shell
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: html-docs
           path: docs/build/html/
+          
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs/build/html'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
