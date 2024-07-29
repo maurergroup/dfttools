@@ -35,7 +35,7 @@ jobs:
         with: 
           docs-folder: "docs/"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-pages-artifact@v3
         with:
           name: github-pages
           path: docs/build/html
@@ -49,8 +49,8 @@ jobs:
     steps:
       #- name: Checkout
       #  uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      #- name: Setup Pages
+      #  uses: actions/configure-pages@v5
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
