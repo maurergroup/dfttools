@@ -1,11 +1,11 @@
-name: Deploy and build Sphinx docs
+name: Build and deploy Sphinx docs
 
 on:
   # Runs on pushes targeting the default branch
   push:
-    branches: ["master"]
+    branches: ["master, docs"]
   pull_request:
-    branches: ["master"]
+    branches: ["master, docs"]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -38,7 +38,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: github-pages
-          path: docs/_build/html
+          path: docs/build/html
           
   deploy:
     environment:
@@ -49,12 +49,8 @@ jobs:
     steps:
       #- name: Checkout
       #  uses: actions/checkout@v4
-      #- name: Setup Pages
-      #  uses: actions/configure-pages@v5
-      #- name: Upload artifact
-      #  uses: actions/upload-pages-artifact@v3
-      #  with:
-      #    path: docs/build/html
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
