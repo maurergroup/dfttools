@@ -65,8 +65,8 @@ class AimsControl(Parameters):
 
     def __init__(self, control_in: str = "control.in") -> None:
         super().__init__(control_in=control_in)
-        self.lines = self._file_contents["control_in"]
-        self.path = self._file_paths["control_in"]
+        self.lines = self.file_contents["control_in"]
+        self.path = self.file_paths["control_in"]
 
     def add_control_keywords(self, **kwargs: dict) -> None:
         """
