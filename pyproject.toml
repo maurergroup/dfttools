@@ -33,9 +33,9 @@ optional = true
 [tool.poetry.group.docs.dependencies]
 sphinx = "^7.4.7"
 piccolo-theme = "^0.23.0"
+sphinx-rtd-theme = "^2.0.0"
 sphinx-pyproject = "^0.3.0"
 myst-parser = "^3.0.1"
-sphinx-rtd-theme = "^2.0.0"
 
 [build-system]
 requires = ["poetry-core"]
