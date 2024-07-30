@@ -22,8 +22,8 @@ networkx = "^3.3"
 optional = true
 
 [tool.poetry.group.dev.dependencies]
-black = "^24.3.0"
 ruff = "^0.3.5"
+pyright = "^1.1.373"
 pytest = "^8.2.0"
 ptpython = "^3.0.26"
 
@@ -70,6 +70,10 @@ target-version = "py310"
 [tool.ruff.lint]
 # select = ['']
 ignore = ["E741", ]
+
+[tool.pyright]
+include = ["dfttools"]
+exclude = ["**/__pycache__"]
 
 [tool.pytest.ini_options]
 pythonpath = "dfttools"
