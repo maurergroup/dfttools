@@ -43,11 +43,7 @@ jobs:
       - name: Install the project dependencies
         run: poetry install --only=docs
       - name: Build HTML
-        uses: ammaraskar/sphinx-action@master
-        with: 
-          docs-folder: "docs/"
-          pre-build-command: "poetry shell"
-          # build-command: "poetry run -- make html"
+        run: cd docs && poetry run -- make html
       - name: Upload artifacts
         uses: actions/upload-pages-artifact@v3
         with:
