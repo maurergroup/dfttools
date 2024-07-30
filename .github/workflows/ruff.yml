@@ -1,0 +1,29 @@
+name: Run the ruff linter and formatter
+
+on:
+  push:
+    branches:
+      - master
+
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  ruff-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: chartboost/ruff-action@v1
+        with:
+          src: "./dfttools"
+          args: "--fix --config ./pyproject.toml --output-format=github"
+
+  ruff-format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: chartboost/ruff-action@v1
+        with:
+          src: "./dfttools"
+          args: "format --config ./pyproject.toml"

@@ -32,8 +32,9 @@ optional = true
 
 [tool.poetry.group.docs.dependencies]
 sphinx = "^7.4.7"
-piccolo-theme = "^0.23.0"
-sphinx-rtd-theme = "^2.0.0"
+furo = "^2024.7.18"
+# sphinx-rtd-theme = "^2.0.0"
+# piccolo-theme = "^0.23.0"
 sphinx-pyproject = "^0.3.0"
 myst-parser = "^3.0.1"
 
@@ -45,8 +46,9 @@ build-backend = "poetry.core.masonry.api"
 project = "dfttools"
 author = "Lukas Hoermann, Dylan Morgan"
 copyright = "2024, Lukas Hoermann, Dylan Morgan"
+html_theme = "furo"
+# html_theme = "sphinx_rtd_theme"
 # html_theme = "piccolo_theme"
-html_theme = "sphinx_rtd_theme"
 extensions = [
   "sphinx.ext.autodoc",
   "sphinx.ext.viewcode",
@@ -59,6 +61,12 @@ exclude_patterns = [
   "build", 
   ".DS_Store",
 ]
+
+[tool.ruff]
+line-length = 88
+
+# [tool.ruff.lint]
+# select = ['']
 
 [tool.pytest.ini_options]
 pythonpath = "dfttools"
