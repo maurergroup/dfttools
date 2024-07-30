@@ -1856,7 +1856,7 @@ class Geometry:
         unit_cell = self.get_spglib_cell()
         symmetry = spglib.get_symmetry(unit_cell, symprec=symmetry_precision)
 
-        if not save_directory == None:
+        if save_directory is not None:
             if not os.path.exists(save_directory):
                 print("symmetry not saved; save_directory does not exist")
             else:
