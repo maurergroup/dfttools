@@ -1,7 +1,7 @@
-import numpy as np
-import scipy
 from typing import Union
 from copy import deepcopy
+import numpy as np
+import scipy
 
 def get_rotation_matrix(vec_start: np.array, vec_end: np.array) -> np.array:
     '''
@@ -198,7 +198,7 @@ def get_cross_correlation_function(
 
     """
     # This is correct for the autocorrelation function
-    norm = np.sqrt( signal_0.size * signal_1.size )
+    #norm = np.sqrt( signal_0.size * signal_1.size )
     
     if detrend:
         signal_0 = scipy.signal.detrend(signal_0)
@@ -337,12 +337,90 @@ def norm_matrix_by_dagonal(matrix: np.array) -> np.array:
     diagonal[L] = 1.0
     
     new_matrix = deepcopy(matrix)
-    new_matrix /= np.sqrt( np.tile( diagonal, (matrix.shape[1],1) ).T * np.tile( diagonal, (matrix.shape[0], 1) ) )
+    new_matrix /= np.sqrt( np.tile( diagonal, (matrix.shape[1],1) ).T \
+                          * np.tile( diagonal, (matrix.shape[0], 1) ) )
     
     return new_matrix
     
     
-    
+def mae(delta: np.ndarray) -> float:
+    """
+    Calculated the mean absolute error from a list of value differnces.
+
+    Parameters
+    ----------
+    delta : np.ndarray
+        Array containing differences
+
+    Returns
+    -------
+    float
+        mean absolute error
+
+    """
+    return np.mean(np.abs(delta))
+
+
+def rel_mae(delta: np.ndarray, target_val: np.ndarray) -> float:
+    """
+    Calculated the relative mean absolute error from a list of value differnces,
+    given the target values.
+
+    Parameters
+    ----------
+    delta : np.ndarray
+        Array containing differences
+    target_val : np.ndarray
+        Array of target values against which the difference should be compared
+
+    Returns
+    -------
+    float
+        relative mean absolute error
+
+    """
+    target_norm = np.mean(np.abs(target_val))
+    return np.mean(np.abs(delta)).item() / (target_norm + 1e-9)
+
+
+def rmse(delta: np.ndarray) -> float:
+    """
+    Calculated the root mean sqare error from a list of value differnces.
+
+    Parameters
+    ----------
+    delta : np.ndarray
+        Array containing differences
+
+    Returns
+    -------
+    float
+        root mean square error
+
+    """
+    return np.sqrt(np.mean(np.square(delta)))
+
+
+def rel_rmse(delta: np.ndarray, target_val: np.ndarray) -> float:
+    """
+    Calculated the relative root mean sqare error from a list of value differnces,
+    given the target values.
+
+    Parameters
+    ----------
+    delta : np.ndarray
+        Array containing differences
+    target_val : np.ndarray
+        Array of target values against which the difference should be compared
+
+    Returns
+    -------
+    float
+        relative root mean sqare error
+
+    """
+    target_norm = np.sqrt(np.mean(np.square(target_val)))
+    return np.sqrt(np.mean(np.square(delta))) / (target_norm + 1e-9)
     
     
     

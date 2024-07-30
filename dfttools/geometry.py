@@ -116,8 +116,6 @@ class Geometry:
             new_geometry = VaspGeometry()
         elif geometry_type == "xyz":
             new_geometry = XYZGeometry()
-        elif geometry_type == "molden":
-            new_geometry = MoldenGeometry()
         elif geometry_type == "xsf":
             new_geometry = XSFGeometry()
         else:
