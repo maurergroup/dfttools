@@ -20,4 +20,5 @@ jobs:
         run: poetry install --only=dev
       - run: echo "$(poetry env info --path)/bin" >> $GITHUB_PATH
       - uses: jakebailey/pyright-action@v2
-        working-directory: "./dfttools"
+        with:
+          working-directory: "./dfttools"
