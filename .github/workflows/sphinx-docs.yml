@@ -34,10 +34,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Install Python 
+        uses: actions/setup-python@v5 
+        with: 
+          python-version: "3.12"
+      - name: Install Poetry 
+        uses: abatilo/actions-poetry@v2 
+      - name: Install the project dependencies
+        run: poetry install --with=docs
       - name: Build HTML
         uses: ammaraskar/sphinx-action@master
         with: 
           docs-folder: "docs/"
+          build-command: "poetry run -- make html"
       - name: Upload artifacts
         uses: actions/upload-pages-artifact@v3
         with:
@@ -51,10 +60,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      #- name: Checkout
-      #  uses: actions/checkout@v4
-      #- name: Setup Pages
-      #  uses: actions/configure-pages@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
