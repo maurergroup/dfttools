@@ -64,7 +64,7 @@ exclude_patterns = [
 
 [tool.ruff]
 line-length = 88
-indent-with = 4
+indent-width = 4
 target-version = "py310"
 
 [tool.ruff.lint]
