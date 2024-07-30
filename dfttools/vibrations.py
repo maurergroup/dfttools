@@ -29,11 +29,11 @@ class Vibrations:
 
     @property
     def vibration_coords(self):
-        return self.vibration_coords
+        return self._vibration_coords
 
     @vibration_coords.setter
     def vibration_coords(self, vibration_coords: List[npt.NDArray[np.float64]]):
-        self.vibration_coords = vibration_coords
+        self._vibration_coords = vibration_coords
 
     @property
     def vibration_forces(self):
