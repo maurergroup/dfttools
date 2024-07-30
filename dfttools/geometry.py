@@ -244,13 +244,13 @@ class Geometry:
 
         if not np.sum(self.lattice_vectors) == 0.0:
             ase_system.pbc = [1, 1, 1]
-            
+
         if self.energy is not None:
-            ase_system.info['energy'] = self.energy
-            
+            ase_system.info["energy"] = self.energy
+
         if self.forces is not None:
-            ase_system.arrays['forces'] = self.forces
-                
+            ase_system.arrays["forces"] = self.forces
+
         return ase_system
 
     ###############################################################################
@@ -1558,7 +1558,7 @@ class Geometry:
         scaled_geom.coords = new_coords
 
         return scaled_geom
-    
+
     def get_displaced_atoms(
         self,
         displacement_strength: float,
@@ -1856,7 +1856,7 @@ class Geometry:
         unit_cell = self.get_spglib_cell()
         symmetry = spglib.get_symmetry(unit_cell, symprec=symmetry_precision)
 
-        if not save_directory == None:
+        if save_directory is not None:
             if not os.path.exists(save_directory):
                 print("symmetry not saved; save_directory does not exist")
             else:
@@ -3002,7 +3002,7 @@ class Geometry:
     def get_colliding_groups(self, distance_threshold=1e-2, check_3D=False):
         """
         Remove atoms that are too close too each other from the geometry file.
-        This approach is useful if one maps back atoms into a different cell 
+        This approach is useful if one maps back atoms into a different cell
         and then needs to get rid of overlapping atoms
 
         Parameters
@@ -3014,7 +3014,7 @@ class Geometry:
         -------
         """
         import networkx as nx
-        
+
         # get all distances between all atoms
 
         z_period = [-1, 0, 1] if check_3D else [0]
@@ -3625,17 +3625,17 @@ class Geometry:
                     cw = plt.get_cmap("coolwarm")
             else:
                 cw = plt.get_cmap(cmap)
-            
+
             cNorm = matplotlib.colors.Normalize(vmin=minvalue, vmax=maxvalue)
             scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cw)
 
             a = np.array([[minvalue, maxvalue]])
             img = plt.imshow(a, cmap=cw)
             img.set_visible(False)
-            
+
             colors = []
             for v in values:
-                colors.append(scalarMap.to_rgba(v)[:3]) # reomve alpha channel
+                colors.append(scalarMap.to_rgba(v)[:3])  # reomve alpha channel
             colors = np.array(colors)
 
         # make specified atoms brighter by adding color_offset to all rgb values
@@ -4482,45 +4482,45 @@ class XYZGeometry(Geometry):
                     continue
 
             # look for lattice vectors
-            if 'Lattice' in line:
-                #split_line = line.split('Lattice')[1]
+            if "Lattice" in line:
+                # split_line = line.split('Lattice')[1]
                 split_line = line.split('"')[1]
-                
+
                 lattice_parameters = re.findall("\d+\.\d+", split_line)
 
                 if len(lattice_parameters) == 9:
                     lattice_parameters = np.array(lattice_parameters, dtype=np.float64)
-                    self.lattice_vectors = np.reshape(lattice_parameters, (3,3))
-            
-            if 'energy' in line:
-                split_line = line.split('energy')[1]
-                
-                energy = re.findall('-?[\d.]+(?:e-?\d+)?', split_line)
-                
+                    self.lattice_vectors = np.reshape(lattice_parameters, (3, 3))
+
+            if "energy" in line:
+                split_line = line.split("energy")[1]
+
+                energy = re.findall("-?[\d.]+(?:e-?\d+)?", split_line)
+
                 if len(energy) > 0:
                     self.energy = np.float64(energy[0])
-            
+
             # words = re.findall('[a-zA-Z]+', line)
             # numbers = re.findall('-?[\d.]+(?:e-?\d+)?', line)
-            
+
             # n_words = len( words )
             # n_floats = len( numbers )
-            
+
             split_line = line.split()
-            
+
             n_words = 0
             n_floats = 0
-            
+
             for l in split_line:
-                n_words_new = len( re.findall('[a-zA-Z]+', l) )
-                n_floats_new = len( re.findall('-?[\d.]+(?:e-?\d+)?', l) )
-                
+                n_words_new = len(re.findall("[a-zA-Z]+", l))
+                n_floats_new = len(re.findall("-?[\d.]+(?:e-?\d+)?", l))
+
                 if n_words_new == 1 and n_floats_new == 1:
                     n_floats += 1
                 else:
                     n_words += n_words_new
                     n_floats += n_floats_new
-            
+
             # first few lines may be comments or properties
             if not started_parsing_atoms:
                 if n_words == 1 and (n_floats == 3 or n_floats == 6):
@@ -4532,16 +4532,19 @@ class XYZGeometry(Geometry):
                 if split_line == []:
                     break
                 else:
-                    assert n_words == 1 and (n_floats == 3 or n_floats == 6), \
-                        "Bad atoms specification: " + str(split_line) + f'{n_words} {n_floats}'
-                
+                    assert n_words == 1 and (n_floats == 3 or n_floats == 6), (
+                        "Bad atoms specification: "
+                        + str(split_line)
+                        + f"{n_words} {n_floats}"
+                    )
+
                 # write atoms
                 species.append(str(split_line[0]))
-                coords.append( np.array(split_line[1:4], dtype=np.float64) )
-                
+                coords.append(np.array(split_line[1:4], dtype=np.float64))
+
                 if n_floats == 6:
-                    forces.append( np.array(split_line[4:], dtype=np.float64) )
-                
+                    forces.append(np.array(split_line[4:], dtype=np.float64))
+
                 count_natoms += 1
 
         if not started_parsing_atoms:
@@ -4551,8 +4554,8 @@ class XYZGeometry(Geometry):
             assert read_natoms == count_natoms, "Not all atoms found!"
 
         coords = np.asarray(coords)
-        self.add_atoms(coords,species)
-        
+        self.add_atoms(coords, species)
+
         if forces:
             forces = np.asarray(forces)
             self.forces = forces

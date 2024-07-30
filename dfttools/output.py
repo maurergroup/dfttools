@@ -174,6 +174,29 @@ class AimsOutput(Output):
 
         return exit_normal
 
+    def get_time_per_scf(self) -> npt.NDArray[np.float64]:
+        """
+        Calculate the average time taken per SCF iteration.
+
+        Returns
+        -------
+        npt.NDArray[np.float64]
+            The average time taken per SCF iteration.
+        """
+
+        # Get the number of SCF iterations
+        n_scf_iters = self.get_n_scf_iters()
+        scf_iter_times = np.zeros(n_scf_iters)
+
+        # Get the time taken for each SCF iteration
+        iter_num = 0
+        for line in self.lines:
+            if "Time for this iteration" in line:
+                scf_iter_times[iter_num] = float(line.split()[-4])
+                iter_num += 1
+
+        return scf_iter_times
+
     ###############################################################################
     #                                   Energies                                  #
     ###############################################################################
@@ -645,9 +668,8 @@ class AimsOutput(Output):
         if len(all_force_values) == 0:
             raise ValueError(f"Forces not found in {self.aims_out_path} file")
 
-        # TODO continute code review from here
         if n_occurrence is None:
-            return all_force_values
+            return np.array(all_force_values)
         else:
             return all_force_values[n_occurrence]
 
@@ -1176,9 +1198,9 @@ class ELSIOutput(Output):
 
     def __init__(self, elsi_out: str):
         super().__init__(elsi_out=elsi_out)
-        self.lines = self._file_contents["elsi_out"]
+        self.lines = self.file_contents["elsi_out"]
 
-    def get_elsi_csc_header(self) -> tuple:
+    def get_elsi_csc_header(self) -> npt.NDArray[np.int64]:
         """
         Get the contents of the ELSI file header
 
@@ -1200,7 +1222,7 @@ class ELSIOutput(Output):
 
     def read_elsi_as_csc(
         self, csc_format: bool = False
-    ) -> Tuple[sp.csc_matrix, np.ndarray]:
+    ) -> Union[sp.csc_matrix, npt.NDArray[np.float64]]:
         """
         Get a CSC matrix from an ELSI output file
 

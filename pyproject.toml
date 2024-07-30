@@ -22,14 +22,58 @@ networkx = "^3.3"
 optional = true
 
 [tool.poetry.group.dev.dependencies]
-black = "^24.3.0"
 ruff = "^0.3.5"
+pyright = "^1.1.373"
 pytest = "^8.2.0"
 ptpython = "^3.0.26"
+
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+sphinx = "^7.4.7"
+furo = "^2024.7.18"
+# sphinx-rtd-theme = "^2.0.0"
+# piccolo-theme = "^0.23.0"
+sphinx-pyproject = "^0.3.0"
+myst-parser = "^3.0.1"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.sphinx-pyproject]
+project = "dfttools"
+author = "Lukas Hoermann, Dylan Morgan"
+copyright = "2024, Lukas Hoermann, Dylan Morgan"
+html_theme = "furo"
+# html_theme = "sphinx_rtd_theme"
+# html_theme = "piccolo_theme"
+extensions = [
+  "sphinx.ext.autodoc",
+  "sphinx.ext.viewcode",
+  "sphinx.ext.napoleon",
+  "myst_parser",
+]
+templates_path = ["_templates",]
+html_static_path = ["_static",]
+exclude_patterns = [
+  "build", 
+  ".DS_Store",
+]
+
+[tool.ruff]
+line-length = 88
+indent-width = 4
+target-version = "py310"
+
+[tool.ruff.lint]
+# select = ['']
+ignore = ["E741", ]
+
+[tool.pyright]
+include = ["dfttools"]
+exclude = ["**/__pycache__"]
 
 [tool.pytest.ini_options]
 pythonpath = "dfttools"
