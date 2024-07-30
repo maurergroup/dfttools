@@ -37,35 +37,35 @@ class Vibrations:
 
     @property
     def vibration_forces(self):
-        return self.vibration_forces
+        return self._vibration_forces
 
     @vibration_forces.setter
     def vibration_forces(self, vibration_forces: List[npt.NDArray[np.float64]]):
-        self.vibration_forces = vibration_forces
+        self._vibration_forces = vibration_forces
 
     @property
     def hessian(self):
-        return self.hessian
+        return self._hessian
 
     @hessian.setter
     def hessian(self, hessian: npt.NDArray[np.float64]):
-        self.hessian = hessian
+        self._hessian = hessian
 
     @property
     def eigenvalues(self):
-        return self.eigenvalues
+        return self._eigenvalues
 
     @eigenvalues.setter
     def eigenvalues(self, eigenvalues: npt.NDArray[np.float64]):
-        self.eigenvalues = eigenvalues
+        self._eigenvalues = eigenvalues
 
     @property
     def eigenvectors(self):
-        return self.eigenvectors
+        return self._eigenvectors
 
     @eigenvectors.setter
     def eigenvectors(self, eigenvectors: npt.NDArray[np.float64]):
-        self.eigenvectors = eigenvectors
+        self._eigenvectors = eigenvectors
 
     def get_displacements(self, displacement: float = 0.0025) -> list:
         """
