@@ -311,7 +311,8 @@ def lorentzian(
         Outupt of a Lorentzian function.
 
     """
-    f = c / (np.pi * b * (1.0 + ((x - a) / b) ** 2))  # +d
+    #f = c / (np.pi * b * (1.0 + ((x - a) / b) ** 2))  # +d
+    f = c / (1.0 + ((x - a) / (b/2.0) ) ** 2)  # +d
 
     return f
 

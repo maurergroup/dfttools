@@ -6,6 +6,8 @@ from ast import literal_eval
 from scipy.optimize import curve_fit, root
 from scipy.signal import csd, argrelextrema
 from numba import jit, njit, prange
+from scipy.interpolate import interp1d
+from scipy.optimize import brentq
 
 
 # get environment variable for parallelisation in numba
@@ -111,14 +113,15 @@ def get_cross_spectrum(signal_0: np.array,
         
         signal_0_block = signal_0[block_start:block_end]
         signal_1_block = signal_1[block_start:block_end]
-        
+                
         cross_correlation = mu.get_cross_correlation_function(signal_0_block,
-                                                                signal_1_block)
+                                                              signal_1_block)
         
         # truncate cross correlation function at last maximum
         if cutoff_at_last_maximum:
             cutoff_index = get_last_maximum(cross_correlation)
             cross_correlation = cross_correlation[:cutoff_index]
+            print(block, cutoff_index)
         
         # add zero padding
         if zero_padding < len(cross_correlation):
@@ -128,16 +131,14 @@ def get_cross_spectrum(signal_0: np.array,
                                    (0, zero_padding - len(cross_correlation)),
                                    'constant')
         
-        frequencies, cross_spectrum_block = mu.get_fourier_transform(cross_correlation,
+        frequencies_block, cross_spectrum_block = mu.get_fourier_transform(cross_correlation,
                                                                      time_step)
-        # frequencies, cross_spectrum_block = csd(signal_0_block,
-        #                                         signal_1_block,
-        #                                         1/time_step)
         
-        # frequencies = frequencies[:frequencies.size//2]
-        # cross_spectrum_block = cross_spectrum_block[:cross_spectrum_block.size//2]
-        
-        #cross_spectrum_block = np.convolve(cross_spectrum_block, np.ones(5)/5, mode='same')
+        if block == 0:
+            frequencies = frequencies_block
+        else:
+            f = interp1d(frequencies_block, cross_spectrum_block, kind='linear', fill_value="extrapolate")
+            cross_spectrum_block = f(frequencies)
         
         cross_spectrum.append( np.abs(cross_spectrum_block) )
     
@@ -148,7 +149,6 @@ def get_cross_spectrum(signal_0: np.array,
 
 
 def get_last_maximum(x: np.array):
-    import matplotlib.pyplot as plt
     
     maxima = argrelextrema(x, np.greater_equal)[0]
     #roots = argrelextrema(-np.abs(x), np.greater_equal)[0]
@@ -173,7 +173,7 @@ def lorentzian_fit(frequencies, power_spectrum, p_0=None):
         # determine reasonable starting parameters
         a_0 = frequencies[max_ind]
         b_0 = np.abs(frequencies[1]-frequencies[0])
-        c_0 = np.max(power_spectrum) * b_0
+        c_0 = np.max(power_spectrum)
         
         p_0 = [a_0, b_0, c_0]
     
@@ -188,10 +188,40 @@ def lorentzian_fit(frequencies, power_spectrum, p_0=None):
     return res
 
 
-def get_line_widths(frequencies, power_spectrum):
+def get_peak_parameters(frequencies, power_spectrum):
     
-    res = lorentzian_fit(frequencies, power_spectrum)
+    max_ind = np.argmax(power_spectrum)
+    frequency = frequencies[max_ind]
     
+    half_max = power_spectrum[max_ind]/2.0
+    
+    f_interp = interp1d(frequencies, power_spectrum, kind='cubic')
+    
+    # Define a function to find roots (y - half_max)
+    def f_half_max(x_val):
+        return f_interp(x_val) - half_max
+
+    # Find roots (i.e., the points where the function crosses the half maximum)
+    root1 = brentq(f_half_max, frequencies[0], frequencies[max_ind])  # Left intersection
+    root2 = brentq(f_half_max, frequencies[max_ind], frequencies[-1]) # Right intersection
+    
+    # Calculate the FWHM
+    line_width = np.abs(root1 - root2)
+    
+    res = [frequency, line_width, power_spectrum[max_ind]]
+    
+    return res
+
+
+def get_line_widths(frequencies, power_spectrum, use_lorentzian=True):
+    res = [np.nan, np.nan, np.nan]
+    
+    if use_lorentzian:
+        res = lorentzian_fit(frequencies, power_spectrum)
+    
+    if np.isnan(res[0]):
+        res = get_peak_parameters(frequencies, power_spectrum)
+        
     frequency = res[0]
     line_width = res[1]
     life_time = 1.0 / line_width
