@@ -1,6 +1,7 @@
 from typing import Union
 from copy import deepcopy
 import numpy as np
+import numpy.typing as npt
 import scipy
 
 
@@ -429,7 +430,29 @@ def rel_rmse(delta: np.ndarray, target_val: np.ndarray) -> float:
     return np.sqrt(np.mean(np.square(delta))) / (target_norm + 1e-9)
     
     
+def get_moving_average(signal: npt.NDArray[np.float64], window_size: int):
+    """
+    Cacluated the moving average and the variance around the moving average.
+
+    Parameters
+    ----------
+    signal : npt.NDArray[np.float64]
+        Signal for which the moving average should be calculated.
+    window_size : int
+        Window size for the mocing average.
+
+    Returns
+    -------
+    moving_avg : TYPE
+        Moving average.
+    variance : TYPE
+        Variance around the moving average.
+
+    """
+    moving_avg = np.convolve(signal, np.ones(window_size)/window_size, mode='valid')
+    variance = np.array([np.var(signal[i:i+window_size]) for i in range(len(signal) - window_size + 1)])
     
+    return moving_avg, variance
     
     
     
