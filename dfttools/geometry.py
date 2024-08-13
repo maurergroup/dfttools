@@ -3013,8 +3013,6 @@ class Geometry:
         Returns
         -------
         """
-        import networkx as nx
-
         # get all distances between all atoms
 
         z_period = [-1, 0, 1] if check_3D else [0]
