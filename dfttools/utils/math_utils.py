@@ -205,22 +205,17 @@ def get_cross_correlation_function(
         Autocorrelation function from 0 to max_lag.
 
     """
-    # This is correct for the autocorrelation function
-    #norm = np.sqrt( signal_0.size * signal_1.size )
-    
     if detrend:
         signal_0 = scipy.signal.detrend(signal_0)
         signal_1 = scipy.signal.detrend(signal_1)
 
     # cross_correlation = np.correlate(signal_0, signal_1, mode='same')
     cross_correlation = np.correlate(signal_0, signal_1, mode="full")
-    cross_correlation = cross_correlation[cross_correlation.size // 2 :]
-
-    # cross_correlation /= norm
-
+    cross_correlation = cross_correlation[cross_correlation.size//2:]
+    
     # normalize by number of overlapping data points
     cross_correlation /= np.arange(cross_correlation.size, 0, -1)
-    cutoff = int(cross_correlation.size / 2)
+    cutoff = int(cross_correlation.size*0.75)
     cross_correlation = cross_correlation[:cutoff]
 
     return cross_correlation
