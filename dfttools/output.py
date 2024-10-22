@@ -34,7 +34,7 @@ class Output(BaseParser):
             self.lines = self._file_contents["aims_out"]
     """
 
-    # FHI-aims, ...
+    # FHI-aims, ELSI, ...
     _supported_files = ["aims_out", "elsi_out"]
 
     def __init__(self, **kwargs: str):

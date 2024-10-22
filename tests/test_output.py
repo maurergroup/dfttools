@@ -1,266 +1,224 @@
-import pathlib
-
+import numpy as np
 import pytest
 from dfttools.output import AimsOutput
 
 
-@pytest.fixture
-def aims_out_1():
-    """
-    Completed, cluster, w/o spin
-
-    Stats
-    -----
-    exit_normal=True
-
-    Parameters
-    ----------
-    xc=pbe
-    """
-
-    return AimsOutput(aims_out="fixtures/aims_calculations/1/aims.out")
-
-
-@pytest.fixture
-def aims_out_2():
-    """
-    Completed, cluster, w/ spin
-
-    Stats
-    -----
-    exit_normal=True
-
-    Parameters
-    ----------
-    xc=pbe
-    spin=collinear
-    default_initial_moment=1
-    """
-
-    return AimsOutput(aims_out="fixtures/aims_calculations/2/aims.out")
-
-
-@pytest.fixture
-def aims_out_3():
-    """
-    Completed, cluster, w/ spin, w/ spin-orbit
-
-    Stats
-    -----
-    exit_normal=True
-
-    Parameters
-    ----------
-    xc=pbe
-    spin=collinear
-    default_initial_moment=1
-    include_spin_orbit=non_self_consistent
-    """
-
-    return AimsOutput(aims_out="fixtures/aims_calculations/3/aims.out")
-
-
-@pytest.fixture
-def aims_out_4():
-    """
-    Completed, PBC, gamma point
-
-    Stats
-    -----
-    exit_normal=True
-
-    Parameters
-    ----------
-    xc=pbe
-    k_grid=(1, 1, 1)
-    """
-
-    return AimsOutput(aims_out="fixtures/aims_calculations/4/aims.out")
-
-
-@pytest.fixture
-def aims_out_5():
-    """
-    Completed, cluster, w/ geometry relaxation
-
-    Stats
-    -----
-    exit_normal=True
-
-    Parameters
-    ----------
-    xc=pbe
-    relax_geometry=bfgs 5e-3
-    """
-
-    return AimsOutput(aims_out="fixtures/aims_calculations/5/aims.out")
-
-
-@pytest.fixture
-def aims_out_6():
-    """
-    Completed, PBC, w/ geometry relaxation, 8x8x8
-
-    Stats
-    -----
-    exit_normal=True
-
-    Parameters
-    ----------
-    relax_geometry=bfgs 5e-3
-    relax_unit_cell=full
-    k_grid=(8, 8, 8)
-    """
-
-    return AimsOutput(aims_out="fixtures/aims_calculations/6/aims.out")
-
-
-@pytest.fixture
-def aims_out_7():
-    """
-    Failed, cluster
-
-    Stats
-    -----
-    exit_normal=False
-
-    Parameters
-    ----------
-    sc_iter_limit=10
-    sc_accuracy_rho=1e-10
-    sc_accuracy_eev=1e-6
-    sc_accuracy_etot=1e-12
-    sc_accuracy_forces=1e-8
-    """
-
-    return AimsOutput(aims_out="fixtures/aims_calculations/7/aims.out")
-
-
-@pytest.fixture
-def aims_out_8():
-    """
-    Failed, PBC, gamma point
-
-    Stats
-    -----
-    exit_normal=False
-
-    Parameters
-    ----------
-    k_grid=(1, 1, 1)
-    sc_iter_limit=10
-    sc_accuracy_rho=1e-10
-    sc_accuracy_eev=1e-6
-    sc_accuracy_etot=1e-12
-    sc_accuracy_forces=1e-8
-    """
-
-    return AimsOutput(aims_out="fixtures/aims_calculations/8/aims.out")
-
-
-@pytest.fixture
-def aims_out_9():
-    """
-    Completed, cluster, hybrid functional
-
-    Stats
-    -----
-    exit_normal=True
-
-    Parameters
-    ----------
-    xc=hse06
-    sc_accuracy_rho=1e-5
-    sc_accuracy_eev=1e-3
-    sc_accuracy_etot=1e-6
-    sc_accuracy_forces=1e-4
-    """
-
-    return AimsOutput(aims_out="fixtures/aims_calculations/9/aims.out")
-
-
-@pytest.fixture
-def aims_out_10():
-    """
-    Completed, PBC, hybrid functional, 8x8x8
-
-    Stats
-    -----
-    exit_normal=True
-
-    Parameters
-    ----------
-    xc=hse06 0.11
-    k_grid=(8, 8, 8)
-    sc_accuracy_rho=1e-5
-    sc_accuracy_eev=1e-3
-    sc_accuracy_etot=1e-6
-    sc_accuracy_forces=1e-4
-    """
-
-    ao = AimsOutput(
-        f"{pathlib.Path(__file__).parent.resolve()}/fixtures/aims_calculations/10/"
-        "aims.out"
+@pytest.fixture(scope="module", params=range(1, 11))
+def aims_out(request):
+    return AimsOutput(
+        aims_out=f"tests/fixtures/aims_calculations/{str(request.param)}/aims.out"
     )
-    return ao.check_exit_normal()
 
 
-def test_check_exit_normal(aims_out_10):
-    assert aims_out_10 is True
-    
+def aims_fixture_no(aims_out: AimsOutput) -> str:
+    """
+    Get the aims fixture number
 
-def test_get_number_of_atoms(aims_out_9):
-    aims = aims_out_9
-    
-    n_atoms = aims.get_number_of_atoms()
-    
-    assert n_atoms == 3
+    Parameters
+    ----------
+    aims_out : AimsOutput
+        AimsOutput object taken from the aims_out fixture
+
+    Returns
+    -------
+    str
+        The aims fixture number
+    """
+
+    return aims_out.aims_out_path.split("/")[3]
+
+
+def test_get_number_of_atoms(aims_out):
+    if aims_fixture_no(aims_out) in ["4", "6", "8", "10"]:
+        assert aims_out.get_number_of_atoms() == 2
+    else:
+        assert aims_out.get_number_of_atoms() == 3
+
+
+# TODO
+# def test_get_geometry(aims_out):
+
+# TODO
+# def test_get_parameters(aims_out):
+
+
+def test_check_exit_normal(aims_out):
+    if aims_fixture_no(aims_out) in ["7", "8"]:
+        assert aims_out.check_exit_normal() is False
+    else:
+        assert aims_out.check_exit_normal() is True
+
+
+def test_get_time_per_scf(aims_out):
+
+    # fmt: off
+    timings = [
+        np.array([0.042, 0.045, 0.038, 0.037, 0.036, 0.038, 0.033, 0.036, 0.032, 0.032, 0.031, 0.023]),
+        np.array([0.033, 0.033, 0.033, 0.034, 0.035, 0.035, 0.036, 0.036, 0.036, 0.036, 0.036, 0.036, 0.026]),
+        np.array([0.033, 0.033, 0.034, 0.034, 0.034, 0.035, 0.036, 0.036, 0.036, 0.036, 0.036, 0.037, 0.027]),
+        np.array([0.649, 0.666, 0.667, 0.666, 0.667, 0.667, 0.667, 0.665, 0.666, 0.326]),
+        np.array([0.028, 0.028, 0.029, 0.029, 0.029, 0.029, 0.029, 0.029, 0.03, 0.03, 0.072, 0.028, 0.028, 0.028, 0.028, 0.029, 0.029, 0.03, 0.03, 0.073, 0.028, 0.028, 0.028, 0.028, 0.028, 0.029, 0.029, 0.03, 0.073, 0.028, 0.028, 0.029, 0.028, 0.029, 0.029, 0.072, 0.028, 0.028, 0.028, 0.029, 0.028, 0.072]),
+        np.array([0.785, 0.801, 0.803, 0.808, 0.802, 0.803, 0.802, 0.802, 0.801, 0.803, 2.276, 9.297, 0.797, 0.79, 0.793, 0.792, 0.794, 2.248, 9.114, 0.797, 0.794, 0.793, 0.793, 0.793, 0.793, 2.248, 9.248]),
+        np.array([0.028, 0.028, 0.029, 0.029, 0.029, 0.029, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.073, 0.073, 0.028, 0.028, 0.029, 0.029, 0.029, 0.029, 0.029, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.073, 0.073, 0.028, 0.028, 0.028, 0.029, 0.029, 0.029, 0.029, 0.029, 0.031, 0.03, 0.03, 0.03, 0.03, 0.03, 0.073, 0.073, 0.028, 0.028, 0.028, 0.029, 0.0]),
+        np.array([0.636, 0.653, 0.652, 0.652, 0.657, 0.65, 0.65, 0.0]),
+        np.array([0.048, 0.046, 0.046, 0.046, 0.049, 0.047, 0.048, 0.047, 0.047, 0.047, 0.047, 0.047, 0.047, 0.039]),
+        np.array([34.786, 33.136, 33.081, 33.97, 33.873, 33.9, 33.933, 33.921, 33.945, 33.936, 33.575]),
+    ]
+    # fmt: on
+
+    # Fail if the absolute tolerance between any values in test vs. reference array is
+    # greater than 2e-3
+    assert np.allclose(
+        aims_out.get_time_per_scf(),
+        timings[int(aims_fixture_no(aims_out)) - 1],
+        atol=2e-3,
+    )
+
+
+def test_get_change_of_total_energy_1(aims_out):
+    """
+    Using default args (final energy change)
+    """
+
+    final_energies = np.array(
+        [
+            1.599e-08,
+            1.611e-09,
+            1.611e-09,
+            -1.492e-07,
+            -5.833e-09,
+            3.703e-09,
+            1.509e-05,
+            -0.0001144,
+            6.018e-06,
+            7.119e-06,
+        ]
+    )
+
+    assert (
+        abs(
+            aims_out.get_change_of_total_energy()
+            - final_energies[int(aims_fixture_no(aims_out)) - 1]
+        )
+        < 1e-10
+    )
+
+
+def test_get_change_of_total_energy_2(aims_out):
+    """
+    Get every energy change
+    """
+
+    # fmt: off
+    energy_diffs = [
+        np.array([0.4663, 1.408, -0.4107, 0.5095, 0.004077, 0.01574, 0.003194, 2.061e-05, 7.458e-06, -3.721e-07, 3.822e-07, 1.599e-08]),
+        np.array([0.2611, -0.1508, -0.8718, 0.2303, 0.05782, -0.001582, 0.0006921, -0.0002017, 8.818e-05, -7.301e-06, -1.198e-06, -5.717e-09, 1.611e-09]),
+        np.array([0.2611, -0.1508, -0.8718, 0.2303, 0.05782, -0.001582, 0.0006921, -0.0002017, 8.818e-05, -7.301e-06, -1.198e-06, -5.717e-09, 1.611e-09]),
+        np.array([0.1202, 0.871, 0.02343, 0.005611, -0.0003911, 0.0002121, -0.0001144, 1.971e-05, -3.046e-06, -1.492e-07]),
+        np.array([0.4426, 1.277, -0.3396, 0.453, -0.001744, 0.01792, 0.0002052, 8.435e-06, 1.013e-06, -2.988e-08, 1.168e-07, -2081.0, 0.002236, 0.0004654, 1.558e-05, 5.188e-09, -8.163e-07, -1.626e-07, -6.659e-09, -3.078e-10, -2081.0, 0.00177, 0.0003977, 2.452e-05, 3.896e-07, -7.184e-07, -3.316e-07, -9.563e-09, 3.674e-11, -2081.0, 3.323e-05, 9.511e-06, -1.416e-06, 1.403e-07, -3.84e-07, -1.012e-09, -2081.0, 6.632e-07, 2.993e-07, -2.037e-07, 1.171e-08, -5.833e-09]),
+        np.array([0.01644, 0.1063, 0.006359, 0.002794, 0.0001406, 2.873e-05, 5.028e-06, 4.511e-06, -8.154e-07, -3.882e-08, -2.815e-10, 6.156e-10, -15800.0, -5.771e-06, -2.262e-05, -6.403e-06, -1.75e-07, -2.497e-08, -4.832e-09, -15800.0, -9.886e-06, -4.329e-05, -1.378e-05, -1.58e-07, -1.163e-07, -4.241e-08, 3.703e-09]),
+        np.array([0.4295, 1.19, -0.3077, 0.4194, 0.004835, 0.01161, 0.001319, -2.423e-05, 2.34e-05, -7.693e-09, 1.223e-07, -8.323e-09, 4.424e-10, 2.738e-10, 1.856e-11, 2.32e-12, 7.734e-13, 0.0, 0.0, -2081.0, 0.00942, 0.002121, 0.0002073, 1.587e-05, -7.203e-07, -1.062e-06, 1.538e-08, 1.902e-09, -1.001e-09, -1.868e-10, 8.082e-11, -3.867e-12, 0.0, 0.0, -3.867e-13, -2081.0, 0.004698, 0.001127, 8.39e-05, 7.677e-06, -7.438e-07, -8.215e-07, 9.776e-09, -2.514e-11, -2.224e-10, -8.314e-11, 2.243e-11, -3.48e-12, -3.867e-13, 3.867e-13, -3.867e-13, -2081.0, 0.0001081, 2.93e-05, 1.509e-05]),
+        np.array([0.1202, 0.871, 0.02343, 0.005611, -0.0003911, 0.0002121, -0.0001144]),
+        np.array([-0.03058, -5.561, 6.612, 0.601, 0.1137, 0.0394, 0.03515, 0.006006, -0.0006064, 0.01499, -0.002865, 0.0002206, 7.186e-05, 6.018e-06]),
+        np.array([-2.158, -0.07087, 0.04834, 0.1184, -0.003943, 0.0103, -0.001032, 0.004801, 0.002519, 0.001141, 7.119e-06]),
+    ]
+    # fmt: on
+
+    # Fail if the absolute tolerance between any values in test vs. reference array is
+    # greater than 1e-10
+    assert np.allclose(
+        aims_out.get_change_of_total_energy(n_occurrence=None),
+        energy_diffs[int(aims_fixture_no(aims_out)) - 1],
+        atol=1e-10,
+    )
+
+
+def test_get_change_of_total_energy_3(aims_out):
+    """
+    Get the 1st energy change
+    """
+
+    first_energies = np.array(
+        [1.408, -0.1508, -0.1508, 0.871, 1.277, 0.1063, 1.19, 0.871, -5.561, -0.07087]
+    )
+
+    assert (
+        abs(
+            aims_out.get_change_of_total_energy(n_occurrence=1)
+            - first_energies[int(aims_fixture_no(aims_out)) - 1]
+        )
+        < 1e-3
+    )
+
+
+# TODO: Lukas can you check that this is correct
+def test_get_change_of_total_energy_4(aims_out):
+    """
+    Use an energy invalid indicator
+    """
+
+    # fmt: off
+    all_energies = [
+        np.array([0.4663, 1.408, -0.4107, 0.5095, 0.004077, 0.01574, 0.003194, 2.061e-05, 7.458e-06, -3.721e-07, 3.822e-07, 1.599e-08]),
+        np.array([0.2611, -0.1508, -0.8718, 0.2303, 0.05782, -0.001582, 0.0006921, -0.0002017, 8.818e-05, -7.301e-06, -1.198e-06, -5.717e-09, 1.611e-09]),
+        np.array([0.2611, -0.1508, -0.8718, 0.2303, 0.05782, -0.001582, 0.0006921, -0.0002017, 8.818e-05, -7.301e-06, -1.198e-06, -5.717e-09, 1.611e-09]),
+        np.array([0.1202, 0.871, 0.02343, 0.005611, -0.0003911, 0.0002121, -0.0001144, 1.971e-05, -3.046e-06, -1.492e-07]),
+        np.array([0.4426, 1.277, -0.3396, 0.453, -0.001744, 0.01792, 0.0002052, 8.435e-06, 1.013e-06, -2.988e-08, 1.168e-07, 0.002236, 0.0004654, 1.558e-05, 5.188e-09, -8.163e-07, -1.626e-07, -6.659e-09, -3.078e-10, 0.00177, 0.0003977, 2.452e-05, 3.896e-07, -7.184e-07, -3.316e-07, -9.563e-09, 3.674e-11, 3.323e-05, 9.511e-06, -1.416e-06, 1.403e-07, -3.84e-07, -1.012e-09, 6.632e-07, 2.993e-07,-2.037e-07, 1.171e-08, -5.833e-09]),
+        np.array([0.01644, 0.1063, 0.006359, 0.002794, 0.0001406, 2.873e-05, 5.028e-06, 4.511e-06, -8.154e-07, -3.882e-08, -2.815e-10, 6.156e-10, -5.771e-06, -2.262e-05, -6.403e-06, -1.75e-07, -2.497e-08, -4.832e-09, -9.886e-06, -4.329e-05, -1.378e-05, -1.58e-07, -1.163e-07, -4.241e-08, 3.703e-09]),
+        np.array([0.4295, 1.19, -0.3077, 0.4194, 0.004835, 0.01161, 0.001319, -2.423e-05, 2.34e-05, -7.693e-09, 1.223e-07, -8.323e-09, 4.424e-10, 2.738e-10, 1.856e-11, 2.32e-12, 7.734e-13, 0.0, 0.0, 0.00942, 0.002121, 0.0002073, 1.587e-05, -7.203e-07, -1.062e-06, 1.538e-08, 1.902e-09, -1.001e-09, -1.868e-10, 8.082e-11, -3.867e-12, 0.0, 0.0, -3.867e-13, 0.004698, 0.001127, 8.39e-05, 7.677e-06, -7.438e-07, -8.215e-07, 9.776e-09, -2.514e-11, -2.224e-10, -8.314e-11, 2.243e-11, -3.48e-12, -3.867e-13, 3.867e-13, -3.867e-13, 0.0001081, 2.93e-05, 1.509e-05]),
+        np.array([0.1202, 0.871, 0.02343, 0.005611, -0.0003911, 0.0002121, -0.0001144]),
+        np.array([-0.03058, -5.561, 6.612, 0.601, 0.1137, 0.0394, 0.03515, 0.006006, -0.0006064, 0.01499, -0.002865, 0.0002206, 7.186e-05, 6.018e-06]),
+        np.array([-2.158, -0.07087, 0.04834, 0.1184, -0.003943, 0.0103, -0.001032, 0.004801, 0.002519, 0.001141, 7.119e-06]),
+    ]
+    # fmt: on
+
+    assert np.allclose(
+        aims_out.get_change_of_total_energy(n_occurrence=1),
+        all_energies[int(aims_fixture_no(aims_out)) - 1],
+        atol=1e-10,
+    )
 
 
 # TODO: currently a palceholder
-def test_all_output_functions(aims_out_9):
-    aims = aims_out_9
-    
-    aims.get_geometry()
-    aims.get_parameters()
-    aims.check_exit_normal() 
-    aims.get_change_of_total_energy()
-    #aims.get_change_of_forces()
-    aims.get_change_of_sum_of_eigenvalues()
-    #aims.get_maximum_force()
-    aims.get_final_energy()
-    aims.get_energy_corrected()
-    aims.get_total_energy_T0()
-    aims.get_energy_uncorrected()
-    #aims.get_energy_without_vdw()
-    aims.get_HOMO_energy()
-    aims.get_LUMO_energy()
-    #aims.get_vdw_energy()
-    aims.get_exchange_correlation_energy()
-    aims.get_electrostatic_energy()
-    aims.get_kinetic_energy()
-    aims.get_sum_of_eigenvalues()
-    aims.get_cx_potential_correction()
-    aims.get_free_atom_electrostatic_energy()
-    aims.get_entropy_correction()
-    aims.get_hartree_energy_correction()
-    #aims.get_ionic_embedding_energy()
-    #aims.get_density_embedding_energy()
-    #aims.get_nonlocal_embedding_energy()
-    #aims.get_external_embedding_energy()
-    #aims.get_forces()
-    aims.check_spin_polarised()
-    aims.get_conv_params()
-    aims.get_n_relaxation_steps()
-    aims.get_n_scf_iters()
-    aims.get_i_scf_conv_acc()
-    aims.get_n_initial_ks_states()
-    #aims.get_all_ks_eigenvalues()# -> functionality does not work 
-    aims.get_final_ks_eigenvalues()
-    #aims.get_pert_soc_ks_eigenvalues()# -> not great but may work if that output is there
-        
-    
+# def test_all_output_functions(aims_out_9):, #     aims = aims_out_9
 
+#     aims.get_geometry()
+#     aims.get_parameters()
+#     aims.check_exit_normal()
+#     aims.get_change_of_total_energy()
+#     # aims.get_change_of_forces()
+#     aims.get_change_of_sum_of_eigenvalues()
+#     # aims.get_maximum_force()
+#     aims.get_final_energy()
+#     aims.get_energy_corrected()
+#     aims.get_total_energy_T0()
+#     aims.get_energy_uncorrected()
+#     # aims.get_energy_without_vdw()
+#     aims.get_HOMO_energy()
+#     aims.get_LUMO_energy()
+#     # aims.get_vdw_energy()
+#     aims.get_exchange_correlation_energy()
+#     aims.get_electrostatic_energy()
+#     aims.get_kinetic_energy()
+#     aims.get_sum_of_eigenvalues()
+#     aims.get_cx_potential_correction()
+#     aims.get_free_atom_electrostatic_energy()
+#     aims.get_entropy_correction()
+#     aims.get_hartree_energy_correction()
+#     # aims.get_ionic_embedding_energy()
+#     # aims.get_density_embedding_energy()
+#     # aims.get_nonlocal_embedding_energy()
+#     # aims.get_external_embedding_energy()
+#     # aims.get_forces()
+#     aims.check_spin_polarised()
+#     aims.get_conv_params()
+#     aims.get_n_relaxation_steps()
+#     aims.get_n_scf_iters()
+#     aims.get_i_scf_conv_acc()
+#     aims.get_n_initial_ks_states()
+#     # aims.get_all_ks_eigenvalues()# -> functionality does not work
+#     aims.get_final_ks_eigenvalues()
+#     # aims.get_pert_soc_ks_eigenvalues()# -> not great but may work if that output is there
 
 
 # @pytest.mark.parametrize(
