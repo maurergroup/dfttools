@@ -161,3 +161,4 @@ cython_debug/
 
 # Others 
 tests/fixtures/custom_bin_aims_calcs
+tests/.aims_bin_loc
