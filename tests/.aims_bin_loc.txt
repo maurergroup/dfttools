@@ -1,1 +1,0 @@
-/Users/dylanmorgan/Programming/mac_projects/FHIaims/build/aims.240507.scalapack.mpi.x
