@@ -160,6 +160,7 @@ cython_debug/
 #.idea/
 
 # Tests
+tests/.aims_bin_loc
 tests/fixtures/custom_bin_aims_calcs
 
 # Tutorials
