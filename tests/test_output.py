@@ -3,36 +3,42 @@ import pytest
 from dfttools.output import AimsOutput
 
 
-@pytest.fixture(scope="module", params=range(1, 11))
-def aims_out(request):
-    return AimsOutput(
-        aims_out=f"tests/fixtures/aims_calculations/{str(request.param)}/aims.out"
-    )
+class TestAimsOutput:
 
+    @pytest.fixture(params=range(1, 11), autouse=True)
+    def aims_out(self, request, run_aims):
 
-def aims_fixture_no(aims_out: AimsOutput) -> str:
-    """
-    Get the aims fixture number
+        cwd = os.path.dirname(os.path.realpath(__file__))
 
-    Parameters
-    ----------
-    aims_out : AimsOutput
-        AimsOutput object taken from the aims_out fixture
+        # Run the FHI-aims calculations if the run_aims option is specified but not if
+        # they already exist.
+        # Force it to run if the run_aims option is "change_bin"
+        # run_aims fixture is defined in conftest.py
+        if request.param == 1 and run_aims is not False:
+            binary = aims_bin_path_prompt(run_aims, cwd)
+            subprocess.run(["bash", f"{cwd}/run_aims.sh", binary, str(run_aims)])
+            aims_out_dir = "custom_bin_aims_calcs"
+        elif run_aims is not False:
+            aims_out_dir = "custom_bin_aims_calcs"
+        else:
+            aims_out_dir = "default_aims_calcs"
 
-    Returns
-    -------
-    str
-        The aims fixture number
-    """
+        self.ao = AimsOutput(
+            aims_out=f"{cwd}/fixtures/{aims_out_dir}/{str(request.param)}/aims.out"
+        )
 
-    return aims_out.aims_out_path.split("/")[3]
+        # Set class attribute to check in xfail tests
+        self._run_aims = False if run_aims is False else True
 
+    @property
+    def _aims_fixture_no(self) -> int:
+        return int(self.ao.aims_out_path.split("/")[-2])
 
-def test_get_number_of_atoms(aims_out):
-    if aims_fixture_no(aims_out) in ["4", "6", "8", "10"]:
-        assert aims_out.get_number_of_atoms() == 2
-    else:
-        assert aims_out.get_number_of_atoms() == 3
+    def test_get_number_of_atoms(self):
+        if self._aims_fixture_no in [4, 6, 8, 10]:
+            assert self.ao.get_number_of_atoms() == 2
+        else:
+            assert self.ao.get_number_of_atoms() == 3
 
 
 # TODO
