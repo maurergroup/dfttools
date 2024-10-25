@@ -56,6 +56,7 @@ class TestAimsOutput:
         else:
             assert self.ao.check_exit_normal() is True
 
+    # TODO Use yaml files for these expected values
     def test_get_time_per_scf(self):
         # fmt: off
         timings = [
@@ -106,6 +107,7 @@ class TestAimsOutput:
             < 1e-8
         )
 
+    # TODO Use yaml files for these expected values
     def test_get_change_of_total_energy_2(self):
         """Get every energy change"""
 
@@ -157,6 +159,7 @@ class TestAimsOutput:
         )
 
     # TODO: Lukas can you check that this is correct
+    # TODO Use yaml files for these expected values
     # def test_get_change_of_total_energy_4(self):
     #     """
     #     Use an energy invalid indicator
@@ -250,6 +253,7 @@ class TestAimsOutput:
         else:
             assert self.ao.check_spin_polarised() is False
 
+    # TODO Use yaml files for these expected values
     # @pytest.mark.parametrize(
     #     "aims_out, expected",
     #     [
@@ -377,21 +381,6 @@ class TestAimsOutput:
             == n_relaxation_steps[self._aims_fixture_no - 1]
         )
 
-    # @pytest.mark.parametrize(
-    #     "aims_out, expected",
-    #     [
-    #         (aims_out_1, 12),
-    #         (aims_out_2, 13),
-    #         (aims_out_3, 13),
-    #         (aims_out_4, 10),
-    #         (aims_out_5, 42),
-    #         (aims_out_6, 27),
-    #         (aims_out_7, 56),
-    #         (aims_out_8, 8),
-    #         (aims_out_9, 14),
-    #         (aims_out_10, 11),
-    #     ],
-    # )
     def test_get_n_scf_iters(self):
         n_scf_iters = [12, 13, 13, 10, 42, 27, 56, 8, 14, 11]
         assert self.ao.get_n_scf_iters() == n_scf_iters[self._aims_fixture_no - 1]
@@ -414,41 +403,9 @@ class TestAimsOutput:
             with pytest.warns(UserWarning):
                 compare_n_initial_ks_states()
 
-    # @pytest.mark.parametrize(
-    #     "aims_out, expected",
-    #     [
-    #         (aims_out_1, None),
-    #         (aims_out_2, None),
-    #         (aims_out_3, None),
-    #         (aims_out_4, None),
-    #         (aims_out_7, None),
-    #     ],
-    # )
-    # def get_all_ks_eigenvalues_test(aims_out, expected):
-    #     assert aims_out.get_all_ks_eigenvalues() == expected
+    # TODO Setup YAML files for storing the expected values for the following tests
+    # def test_get_all_ks_eigenvalues(self):
 
-    # @pytest.mark.parametrize(
-    #     "aims_out, expected",
-    #     [
-    #         (aims_out_1, None),
-    #         (aims_out_2, None),
-    #         (aims_out_3, None),
-    #         (aims_out_4, None),
-    #         (aims_out_7, None),
-    #     ],
-    # )
-    # def get_final_ks_eigenvalues_test(aims_out, expected):
-    #     assert aims_out.get_final_ks_eigenvalues() == expected
+    # def get_final_ks_eigenvalues_test(self):
 
-    # @pytest.mark.parametrize(
-    #     "aims_out, expected",
-    #     [
-    #         (aims_out_1, None),
-    #         (aims_out_2, None),
-    #         (aims_out_3, None),
-    #         (aims_out_4, None),
-    #         (aims_out_7, None),
-    #     ],
-    # )
-    # def get_pert_soc_ks_eigenvalues_test(aims_out, expected):
-    #     assert aims_out.get_pert_soc_ks_eigenvalues() == expected
+    # def get_pert_soc_ks_eigenvalues_test(self):

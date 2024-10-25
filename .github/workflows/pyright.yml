@@ -1,4 +1,4 @@
-name: Run the pyright checker
+name: pyright
 
 on:
   push:
