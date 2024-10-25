@@ -1,4 +1,4 @@
-name: Build and deploy Sphinx docs
+name: Sphinx
 
 on:
   # Runs on pushes targeting the default branch
@@ -32,14 +32,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Poetry
-        uses: abatilo/actions-poetry@v2
+      - uses: abatilo/actions-poetry@v2
       - name: Install the project dependencies
         run: poetry install --only=docs
       - name: Build HTML
