@@ -184,7 +184,9 @@ def get_cross_spectrum(
     return frequencies, cross_spectrum
 
 
-def mem_psd(signal_0: np.array, signal_1: np.array, time_step, p, n_freqs=512):
+def get_cross_spectrum_mem(
+    signal_0: np.array, signal_1: np.array, time_step, p, n_freqs=512
+):
     """
     Estimate the power spectral density (PSD) of a time series using the
     Maximum Entropy Method (MEM).
