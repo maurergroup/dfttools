@@ -555,21 +555,32 @@ class Vibrations:
         self,
         velocities: npt.NDArray[np.float64],
         time_step: float,
+        use_mem: bool = False,
         bootstrapping_blocks: int = 1,
         bootstrapping_overlap: int = 0,
+        model_order: int = 15,
     ):
 
         velocities_proj = self.get_normal_mode_decomposition(velocities)
 
         n_points = len(self.eigenvectors)
 
-        frequencies = vu.get_cross_spectrum(
-            velocities_proj[:, 0],
-            velocities_proj[:, 0],
-            time_step,
-            bootstrapping_blocks=bootstrapping_blocks,
-            bootstrapping_overlap=bootstrapping_overlap,
-        )[0]
+        if use_mem:
+            frequencies = vu.get_cross_spectrum_mem(
+                velocities_proj[:, 0],
+                velocities_proj[:, 0],
+                time_step,
+                model_order,
+                n_freqs=int(len(velocities_proj)),
+            )[0]
+        else:
+            frequencies = vu.get_cross_spectrum(
+                velocities_proj[:, 0],
+                velocities_proj[:, 0],
+                time_step,
+                bootstrapping_blocks=bootstrapping_blocks,
+                bootstrapping_overlap=bootstrapping_overlap,
+            )[0]
 
         cross_spectrum = np.zeros(
             (n_points, n_points, len(frequencies)), dtype=np.complex128
@@ -578,15 +589,25 @@ class Vibrations:
         for index_0 in range(n_points):
             for index_1 in range(n_points):
                 print(index_0, index_1)
-                cross_spectrum_block = vu.get_cross_spectrum(
-                    velocities_proj[:, index_0],
-                    velocities_proj[:, index_1],
-                    time_step,
-                    bootstrapping_blocks=bootstrapping_blocks,
-                    bootstrapping_overlap=bootstrapping_overlap,
-                )[1]
 
-                cross_spectrum[index_0, index_1, :] = cross_spectrum_block
+                if use_mem:
+                    cross_spectrum_ij = vu.get_cross_spectrum_mem(
+                        velocities_proj[:, index_0],
+                        velocities_proj[:, index_1],
+                        time_step,
+                        model_order,
+                        n_freqs=int(len(velocities_proj)),
+                    )[1]
+                else:
+                    cross_spectrum_ij = vu.get_cross_spectrum(
+                        velocities_proj[:, index_0],
+                        velocities_proj[:, index_1],
+                        time_step,
+                        bootstrapping_blocks=bootstrapping_blocks,
+                        bootstrapping_overlap=bootstrapping_overlap,
+                    )[1]
+
+                cross_spectrum[index_0, index_1, :] = cross_spectrum_ij
 
         return frequencies, cross_spectrum
 
@@ -594,8 +615,10 @@ class Vibrations:
         self,
         velocities: npt.NDArray[np.float64],
         time_step: float,
+        use_mem: bool = False,
         bootstrapping_blocks: int = 1,
         bootstrapping_overlap: int = 0,
+        model_order: int = 15,
         processes=1,
         frequency_cutoff=None,
         dirname="cross_spectrum",
@@ -605,13 +628,22 @@ class Vibrations:
 
         n_points = len(self.eigenvectors)
 
-        frequencies = vu.get_cross_spectrum(
-            velocities_proj[:, 0],
-            velocities_proj[:, 0],
-            time_step,
-            bootstrapping_blocks=bootstrapping_blocks,
-            bootstrapping_overlap=bootstrapping_overlap,
-        )[0]
+        if use_mem:
+            frequencies = vu.get_cross_spectrum_mem(
+                velocities_proj[:, 0],
+                velocities_proj[:, 0],
+                time_step,
+                model_order,
+                n_freqs=int(len(velocities_proj)),
+            )[0]
+        else:
+            frequencies = vu.get_cross_spectrum(
+                velocities_proj[:, 0],
+                velocities_proj[:, 0],
+                time_step,
+                bootstrapping_blocks=bootstrapping_blocks,
+                bootstrapping_overlap=bootstrapping_overlap,
+            )[0]
 
         if not os.path.isdir(dirname):
             os.mkdir(dirname)
@@ -638,8 +670,10 @@ class Vibrations:
             _output_cross_spectrum,
             velocities_proj=velocities_proj,
             time_step=time_step,
+            use_mem=use_mem,
             bootstrapping_blocks=bootstrapping_blocks,
             bootstrapping_overlap=bootstrapping_overlap,
+            model_order=model_order,
             cutoff=cutoff,
             dirname=dirname,
         )
@@ -696,20 +730,32 @@ def _output_cross_spectrum(
     index,
     velocities_proj,
     time_step,
+    use_mem,
     bootstrapping_blocks,
     bootstrapping_overlap,
+    model_order,
     cutoff,
     dirname,
 ) -> None:
     index_0 = index[0]
     index_1 = index[1]
-    cross_spectrum = vu.get_cross_spectrum(
-        velocities_proj[:, index_0],
-        velocities_proj[:, index_1],
-        time_step,
-        bootstrapping_blocks=bootstrapping_blocks,
-        bootstrapping_overlap=bootstrapping_overlap,
-    )[1]
+
+    if use_mem:
+        cross_spectrum = vu.get_cross_spectrum_mem(
+            velocities_proj[:, index_0],
+            velocities_proj[:, index_1],
+            time_step,
+            model_order,
+            n_freqs=int(len(velocities_proj)),
+        )[1]
+    else:
+        cross_spectrum = vu.get_cross_spectrum(
+            velocities_proj[:, index_0],
+            velocities_proj[:, index_1],
+            time_step,
+            bootstrapping_blocks=bootstrapping_blocks,
+            bootstrapping_overlap=bootstrapping_overlap,
+        )[1]
 
     np.savetxt(
         os.path.join(dirname, f"cross_spectrum_{index_0}_{index_1}.csv"),
