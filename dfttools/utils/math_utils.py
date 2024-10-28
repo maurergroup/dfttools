@@ -120,7 +120,9 @@ def get_mirror_matrix(normal_vector: np.array) -> np.array:
     return M
 
 
-def get_angle_between_vectors(vector_1: np.array, vector_2: np.array) -> np.array:
+def get_angle_between_vectors(
+    vector_1: np.array, vector_2: np.array
+) -> np.array:
     """
     Determines angle between two vectors.
 
@@ -136,7 +138,9 @@ def get_angle_between_vectors(vector_1: np.array, vector_2: np.array) -> np.arra
 
     """
     angle = (
-        np.dot(vector_1, vector_2) / np.linalg.norm(vector_1) / np.linalg.norm(vector_2)
+        np.dot(vector_1, vector_2)
+        / np.linalg.norm(vector_1)
+        / np.linalg.norm(vector_2)
     )
     return angle
 
@@ -164,7 +168,9 @@ def get_fractional_coords(
     return fractional_coords.T
 
 
-def get_cartesian_coords(frac_coords: np.array, lattice_vectors: np.array) -> np.array:
+def get_cartesian_coords(
+    frac_coords: np.array, lattice_vectors: np.array
+) -> np.array:
     """
     Transform fractional coordinates into cartesian coordinates.
 
@@ -211,17 +217,19 @@ def get_cross_correlation_function(
 
     # cross_correlation = np.correlate(signal_0, signal_1, mode='same')
     cross_correlation = np.correlate(signal_0, signal_1, mode="full")
-    cross_correlation = cross_correlation[cross_correlation.size//2:]
-    
+    cross_correlation = cross_correlation[cross_correlation.size // 2 :]
+
     # normalize by number of overlapping data points
     cross_correlation /= np.arange(cross_correlation.size, 0, -1)
-    cutoff = int(cross_correlation.size*0.75)
+    cutoff = int(cross_correlation.size * 0.75)
     cross_correlation = cross_correlation[:cutoff]
 
     return cross_correlation
 
 
-def get_autocorrelation_function_manual_lag(signal: np.array, max_lag: int) -> np.array:
+def get_autocorrelation_function_manual_lag(
+    signal: np.array, max_lag: int
+) -> np.array:
     """
     Alternative method to determine the autocorrelation function for a given
     signal that used numpy.corrcoef. This function allows to set the lag
@@ -307,8 +315,8 @@ def lorentzian(
         Outupt of a Lorentzian function.
 
     """
-    #f = c / (np.pi * b * (1.0 + ((x - a) / b) ** 2))  # +d
-    f = c / (1.0 + ((x - a) / (b/2.0) ) ** 2)  # +d
+    # f = c / (np.pi * b * (1.0 + ((x - a) / b) ** 2))  # +d
+    f = c / (1.0 + ((x - a) / (b / 2.0)) ** 2)  # +d
 
     return f
 
@@ -343,8 +351,8 @@ def norm_matrix_by_dagonal(matrix: np.array) -> np.array:
     )
 
     return new_matrix
-    
-    
+
+
 def mae(delta: np.ndarray) -> float:
     """
     Calculated the mean absolute error from a list of value differnces.
@@ -423,8 +431,8 @@ def rel_rmse(delta: np.ndarray, target_val: np.ndarray) -> float:
     """
     target_norm = np.sqrt(np.mean(np.square(target_val)))
     return np.sqrt(np.mean(np.square(delta))) / (target_norm + 1e-9)
-    
-    
+
+
 def get_moving_average(signal: npt.NDArray[np.float64], window_size: int):
     """
     Cacluated the moving average and the variance around the moving average.
@@ -444,12 +452,14 @@ def get_moving_average(signal: npt.NDArray[np.float64], window_size: int):
         Variance around the moving average.
 
     """
-    moving_avg = np.convolve(signal, np.ones(window_size)/window_size, mode='valid')
-    variance = np.array([np.var(signal[i:i+window_size]) for i in range(len(signal) - window_size + 1)])
-    
+    moving_avg = np.convolve(
+        signal, np.ones(window_size) / window_size, mode="valid"
+    )
+    variance = np.array(
+        [
+            np.var(signal[i : i + window_size])
+            for i in range(len(signal) - window_size + 1)
+        ]
+    )
+
     return moving_avg, variance
-    
-    
-    
-    
-    
