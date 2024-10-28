@@ -131,9 +131,18 @@ class Geometry:
     ###############################################################################
     #                             INPUT PARSER                                    #
     ###############################################################################
-    def read_from_file(self, filename):
+    def read_from_file(self, filename: str) -> None:
         """
         Parses a geometry file
+
+        Parameters
+        ----------
+        filename : str
+            Path to input file.
+
+        Returns
+        -------
+        None.
 
         """
         with open(filename) as f:
@@ -144,9 +153,18 @@ class Geometry:
     def parse(self, text):
         raise NotImplementedError
 
-    def add_top_comment(self, comment_string):
+    def add_top_comment(self, comment_string: str) -> None:
         """
         Adds comments that are saved at the top of the geometry file.
+
+        Parameters
+        ----------
+        comment_string : str
+            Comment string.
+
+        Returns
+        -------
+        None.
 
         """
         lines = comment_string.split("\n")
@@ -177,20 +195,25 @@ class Geometry:
     ###############################################################################
     #                            Data exchange with ASE                           #
     ###############################################################################
-    def get_from_ase_atoms_object(self, atoms):
-        """Reads an ASE.Atoms object. Taken from ase.io.aims and adapted. Only basic features are implemented.
-        Args:
-            atoms: ase.atoms.Atoms
-                structure to output to the file
-            scaled: bool
-                If True use fractional coordinates instead of Cartesian coordinates
-            info_str: str
-                A string to be added to the header of the file
-            wrap: bool
-                Wrap atom positions to cell before writing
+    def get_from_ase_atoms_object(self, atoms) -> None:
+        """
+        Reads an ASE.Atoms object. Taken from ase.io.aims and adapted. Only basic features are implemented.
+
+        Parameters
+        ----------
+        atoms : ASE atoms object
+            Atoms object from ASE that should be converted into geometry.
+
+        Raises
+        ------
+        RuntimeError
+            If atoms object is erroneous.
+
+        Returns
+        -------
+        None.
 
         """
-
         if isinstance(atoms, (list, tuple)):
             if len(atoms) > 1:
                 raise RuntimeError(
@@ -221,9 +244,13 @@ class Geometry:
         coords = np.array(coords)
         self.add_atoms(coords, species_list, constrain_relax)
 
-    def get_as_ase(self):
+    def get_as_ase(self) -> None:
         """
-        Convert geometry file to ASE object
+        Convert geometry file to ASE object.
+
+        Returns
+        -------
+        None.
 
         """
         # atoms_string = ""
@@ -281,11 +308,12 @@ class Geometry:
         species : list of strings
             element symbol for each atom
         constrain_relax : list of lists of bools (optional)
-            [bool,bool,bool] (for [x,y,z] axis) for all atoms that should be constrained during a geometry relaxation
+            [bool,bool,bool] (for [x,y,z] axis) for all atoms that should be
+            constrained during a geometry relaxation
 
         Retruns
         -------
-        None
+        None.
 
         """
         if constrain_relax is None or len(constrain_relax) == 0:
@@ -321,9 +349,20 @@ class Geometry:
         self.initial_moment += initial_moment
         self.initial_charge += initial_charge
 
-    def add_geometry(self, geometry):
-        """Adds full geometry to initial GeometryFile."""
+    def add_geometry(self, geometry) -> None:
+        """
+        Adds full geometry to initial geometry.
 
+        Parameters
+        ----------
+        geometry : Instance of geometry
+            New geometry to be added to current geometry.
+
+        Returns
+        -------
+        None.
+
+        """
         # check parts: (needs to be done before adding atoms to self)
         if hasattr(self, "geometry_parts") and hasattr(
             geometry, "geometry_parts"
@@ -377,15 +416,22 @@ class Geometry:
                     "Caution: The center of the first file will be used!"
                 )
 
-    def add_multipoles(self, multipoles):
+    def add_multipoles(self, multipoles) -> None:
         """
         Adds multipoles to the the geometry.
-        Each multipole is defined as a list: [x, y, z, order, charge]
-        With: x,y,z: cartesian coordinates
-              order: 0 for monopoles, 1 for dipoles
-              charge: charge
-        :param multipoles: list of float, or list of lists
-        :return:
+
+        Parameters
+        ----------
+        multipoles : list of float, or list of lists
+            Each multipole is defined as a list: [x, y, z, order, charge].
+            With: x,y,z: cartesian coordinates
+                  order: 0 for monopoles, 1 for dipoles
+                  charge: charge
+
+        Returns
+        -------
+        None.
+
         """
         # if multiple multipoles are given: indented lists
         if len(multipoles) == 0:
@@ -413,10 +459,9 @@ class Geometry:
 
         """
         if hasattr(self, "geometry_parts") and len(self.geometry_parts) > 0:
-            # (AE): added "len(self.geometry_parts) > 0" to suppress this frequent warning when it is supposely not relevant (?)
             warnings.warn(
-                "CAUTION: geometry_parts indices are not updated after atom deletion!!\n \
-                           You are welcome to implement this!!"
+                "CAUTION: geometry_parts indices are not updated after atom"
+                "deletion!!\n You are welcome to implement this!!"
             )
         mask = np.ones(len(self.species), dtype=bool)
         mask[atom_inds] = False
@@ -504,12 +549,27 @@ class Geometry:
         xlim=(-np.inf, np.inf),
         ylim=(-np.inf, np.inf),
         zlim=(-np.inf, np.inf),
-        auto_margin=False,
+        auto_margin: bool = False,
     ) -> None:
         """
         Removes all atoms that are outside specified bounds.
-        If auto_margin == True then an additional margin of the maximum covalent radius
-        is added to all borders
+
+
+        Parameters
+        ----------
+        xlim : tuple, optional
+            Limit in x-direction. The default is (-np.inf, np.inf).
+        ylim : tuple, optional
+            Limit in y-direction. The default is (-np.inf, np.inf).
+        zlim : tuple, optional
+            Limit in z-direction. The default is (-np.inf, np.inf).
+        auto_margin : TYPE, optional
+            If auto_margin == True then an additional margin of the maximum
+            covalent radius is added to all borders. The default is False.
+
+        Returns
+        -------
+        None.
 
         """
         indices_to_remove = self.get_cropping_indices(
@@ -524,9 +584,27 @@ class Geometry:
         zlim=(-np.inf, np.inf),
         auto_margin=False,
     ) -> None:
-        """Removes all atoms that are inside specified bounds.
-        If auto_margin == True then an additional margin of the maximum covalent radius
-        is added to all borders"""
+        """
+        Removes all atoms that are inside specified bounds.
+
+
+        Parameters
+        ----------
+        xlim : tuple, optional
+            Limit in x-direction. The default is (-np.inf, np.inf).
+        ylim : tuple, optional
+            Limit in y-direction. The default is (-np.inf, np.inf).
+        zlim : tuple, optional
+            Limit in z-direction. The default is (-np.inf, np.inf).
+        auto_margin : TYPE, optional
+            If auto_margin == True then an additional margin of the maximum
+            covalent radius is added to all borders. The default is False.
+
+        Returns
+        -------
+        None.
+
+        """
         indices_to_keep = self.get_cropping_indices(
             xlim, ylim, zlim, auto_margin
         )
@@ -536,8 +614,24 @@ class Geometry:
         self.remove_atoms(indices_to_remove)
 
     def crop_to_unit_cell(self, lattice=None, frac_coord_factors=[0, 1]):
-        """Removes all atoms that are outside the given unit cell. Similar to self.crop() but allows for arbitrary unit cells"""
-        # Atoms that have fractional coordinates outside the defined frac_coord_factors are removed. Per default frac_coord_factors=[0,1]
+        """
+        Removes all atoms that are outside the given unit cell. Similar to
+        self.crop() but allows for arbitrary unit cells
+
+        Parameters
+        ----------
+        lattice : array like, optional
+            Lattice vectors. The default is None.
+        frac_coord_factors : list, optional
+            The default is [0, 1].
+
+        Returns
+        -------
+        None.
+
+        """
+        # Atoms that have fractional coordinates outside the defined frac_coord
+        # factors are removed. Per default frac_coord_factors=[0,1]
 
         if lattice is None:
             lattice = self.lattice_vectors
@@ -656,12 +750,27 @@ class Geometry:
         self.remove_atoms(np.array(to_be_killed))
 
     def remove_metal_atoms(self) -> None:
-        "Removes all atoms with atomic number > 18 and atomic numbers 3,4,11,12,13,14"
+        """
+        Removes all atoms with atomic number > 18 and atomic numbers
+        3,4,11,12,13,14
+
+        Returns
+        -------
+        None.
+
+        """
         metal_atoms = self.get_indices_of_metal()
         self.remove_atoms(metal_atoms)
 
     def remove_non_metallic_atoms(self) -> None:
-        "Removes all atoms that are not metal"
+        """
+        Removes all atoms that are not metal
+
+        Returns
+        -------
+        None.
+
+        """
         mol_inds = self.get_indices_of_molecules()
         self.remove_atoms(mol_inds)
 
@@ -690,6 +799,10 @@ class Geometry:
         """
         Removes all atoms that are not part of the substrate
 
+        Returns
+        -------
+        None.
+
         """
         adsorbate_indices = self.get_adsorbate_indices(
             primitive_substrate=primitive_substrate
@@ -699,15 +812,21 @@ class Geometry:
     def remove_collisions(
         self, keep_latest: Union[bool, slice] = True
     ) -> None:
-        """Removes all atoms that are in a collision group as given by GeometryFile.getCollidingGroups.
+        """
+        Removes all atoms that are in a collision group as given by
+        GeometryFile.getCollidingGroups.
 
-        Args:
-            keep_latest (Union[bool, slice], optional): Whether to keep the earliest or latest added.
-                If a slice object is given, the selection is used to determine which atoms to keep.
-                Defaults to True.
+        Parameters
+        ----------
+        keep_latest : Union[bool, slice], optional
+            Whether to keep the earliest or latest added. If a slice object is
+            given, the selection is used to determine which atoms to keep.
+            Defaults to True.
 
-        Raises:
-            ValueError: Raised when keep_latest is neither a bool nor a slice object.
+        Returns
+        -------
+        None.
+
         """
         indices = []
         if isinstance(keep_latest, bool):
@@ -727,16 +846,22 @@ class Geometry:
     ###############################################################################
     def map_to_first_unit_cell(
         self, lattice_vectors=None, dimensions=np.array(range(3))
-    ):
+    ) -> None:
         """
-        Maps the coordinate of a geometry in multiples of the substrate lattice
+        aps the coordinate of a geometry in multiples of the substrate lattice
         vectors to a point that is closest to the origin
 
-        lattice_vectors : float-array
-            lattice vectors of the substrate
+        Parameters
+        ----------
+        lattice_vectors : float-array, optional
+            Lattice vectors of the substrate. The default is None.
+        dimensions : float-array, optional
+            Dimensions (x, y, z) where the mapping should be done. The default
+            is np.array(range(3)).
 
-        dimensions : float-array
-            dimensions (x, y, z) where the mapping should be done
+        Returns
+        -------
+        None.
 
         """
         if lattice_vectors is None:
@@ -847,16 +972,31 @@ class Geometry:
 
     def rotate_coords_around_axis(
         self,
-        angle_in_degree,
+        angle_in_degree: float,
         axis: npt.NDArray[np.float64] = np.array([0.0, 0.0, 1.0]),
         center=None,
         indices=None,
     ) -> None:
-        """Rotates structure COUNTERCLOCKWISE around a point defined by <center>.
+        """
+        Rotates structure COUNTERCLOCKWISE around a point defined by <center>.
 
-        If center == None, the geometric center of the structure (as defined by
-        self.get_geometric_center())
-        is used as the pivot for the rotation.
+        Parameters
+        ----------
+        angle_in_degree : float
+            Angle of rotation.
+        axis : npt.NDArray[np.float64], optional
+            Axis of rotation. The default is np.array([0.0, 0.0, 1.0]).
+        center : npt.NDArray[np.float64], optional
+            If center == None, the geometric center of the structure (as
+            defined by self.get_geometric_center()). The default is None.
+        indices : list, optional
+            Indices of atoms to be manipulated. If indices == None, all atoms
+            will be used. The default is None.
+
+        Returns
+        -------
+        None.
+
         """
         # ??? <aj, 25.2.2020> not sure if center should be the geometric center or [0,0,0], both
         # have their pros and cons, former version was [0,0,0], new version is geometric center
