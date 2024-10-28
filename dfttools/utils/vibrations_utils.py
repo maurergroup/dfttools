@@ -185,7 +185,7 @@ def get_cross_spectrum(
 
 
 def get_cross_spectrum_mem(
-    signal_0: np.array, signal_1: np.array, time_step, p, n_freqs=512
+    signal_0: np.array, signal_1: np.array, time_step, model_order, n_freqs=512
 ):
     """
     Estimate the power spectral density (PSD) of a time series using the
@@ -202,10 +202,12 @@ def get_cross_spectrum_mem(
     """
     # Calculate the autocorrelation of the time series
     autocorr = np.correlate(signal_0, signal_1, mode="full") / len(signal_0)
-    autocorr = autocorr[len(autocorr) // 2 : len(autocorr) // 2 + p + 1]
+    autocorr = autocorr[
+        len(autocorr) // 2 : len(autocorr) // 2 + model_order + 1
+    ]
 
     # Create a Toeplitz matrix from the autocorrelation function
-    R = toeplitz(autocorr[:-1])
+    # R = toeplitz(autocorr[:-1])
     r = autocorr[1:]
 
     # Solve for the model coefficients using the Yule-Walker equations
@@ -220,7 +222,7 @@ def get_cross_spectrum_mem(
     for i, f in enumerate(freqs):
         z = np.exp(-2j * np.pi * f)
         denominator = 1 - np.dot(
-            model_coeffs, [z ** (-k) for k in range(1, p + 1)]
+            model_coeffs, [z ** (-k) for k in range(1, model_order + 1)]
         )
         psd[i] = 1.0 / np.abs(denominator) ** 2
 
