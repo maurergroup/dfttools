@@ -8,67 +8,58 @@ class Parameters(BaseParser):
     """
     Handle files that control parameters for electronic structure calculations.
 
-    Parameters
+    If contributing a new parser, please subclass this class, add the new supported file
+    type to _supported_files, call the super().__init__ method, include the new file
+    type as a kwarg in the super().__init__ call. Optionally include the self.lines line
+    in examples.
+
+    ...
+
+    Attributes
     ----------
     _supported_files : list
         List of supported file types.
-    file_paths : dict
-        The paths to the files to be parsed.
-    file_contents : dict
-        The contents of the files to be parsed.
     """
 
-    # FHI-aims, ...
-    _supported_files = ["control_in"]
+    def __init__(self, **kwargs: str):
+        # FHI-aims, ...
+        self._supported_files = ["control_in"]
 
-    def __init__(self, **kwargs):
-        super().__init__(self._supported_files, **kwargs)
-
+        # Check that only supported files were provided
         for val in kwargs.keys():
             fu.check_required_files(self._supported_files, val)
 
+        super().__init__(self._supported_files, **kwargs)
+
     @property
-    def supported_files(self):
+    def supported_files(self) -> List[str]:
         return self._supported_files
-
-    @property
-    def lines(self):
-        return self._lines
-
-    @lines.setter
-    def lines(self, lines: List[str]):
-        self._lines = lines
-
-    @property
-    def path(self):
-        return self._file_path
-
-    @path.setter
-    def path(self, file_path: str):
-        self._file_path = file_path
 
 
 class AimsControl(Parameters):
     """
     FHI-aims control file parser.
 
+    ...
+
     Attributes
     ----------
-    lines
-    _supported_files : list
-        List of supported file types.
-    file_paths : dict
-        The paths to the files to be parsed.
-    file_contents : dict
-        The contents of the files to be parsed.
+    lines : List[str]
+        The contents of the control.in file.
+    path : str
+        The path to the control.in file.
     """
 
-    def __init__(self, control_in: str = "control.in") -> None:
-        super().__init__(control_in=control_in)
-        self.lines = self.file_contents["control_in"]
-        self.path = self.file_paths["control_in"]
+    def __init__(self, control_in: str = "control.in", parse_file: bool = True):
+        if parse_file:
+            super().__init__(control_in=control_in)
+            self.lines = self.file_contents["control_in"]
+            self.path = self.file_paths["control_in"]
 
-    def add_control_keywords(self, **kwargs: dict) -> None:
+            # Check if the control.in file was provided
+            fu.check_required_files(self._supported_files, "control_in")
+
+    def add_keywords(self, **kwargs: dict) -> None:
         """
         Add keywords to the control.in file.
 
