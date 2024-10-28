@@ -1,0 +1,11 @@
+lattice_vector     1.27349850     2.20576400     0.00000000
+lattice_vector     -1.27349850     2.20576400     0.00000000
+lattice_vector     0.00000000     0.00000000     68.33693789
+atom     -0.00000002     1.47049920     0.00000000 Cu
+constrain_relaxation .true.
+atom     0.00000000     0.00000000     2.07961400 Cu
+constrain_relaxation .true.
+atom     0.00000000     2.94102000     4.15922800 Cu
+constrain_relaxation .true.
+atom     -0.00000002     1.47049920     6.23160806 Cu
+atom     0.00000002     -0.00000809     8.30498122 Cu

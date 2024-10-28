@@ -1,0 +1,4 @@
+lattice_vector     1.798     1.798     0.00000000
+lattice_vector     1.798     0.000     1.798
+lattice_vector     0.000     1.798     1.798
+atom     0.0     0.0     0.0 Cu
