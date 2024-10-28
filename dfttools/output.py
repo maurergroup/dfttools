@@ -1,5 +1,5 @@
 import warnings
-from typing import Tuple, Union
+from typing import List, Tuple, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -8,6 +8,8 @@ import scipy.sparse as sp
 import dfttools.utils.file_utils as fu
 from dfttools.base_parser import BaseParser
 from dfttools.geometry import AimsGeometry
+from dfttools.parameters import AimsControl
+from dfttools.utils.exceptions import ItemNotFoundError
 
 
 class Output(BaseParser):
@@ -95,44 +97,45 @@ class AimsOutput(Output):
 
         return n_atoms
 
-    def get_geometry(self):
+    def get_geometry(self) -> AimsGeometry:
         """
-        Extract the geometry file from the aims output and return it as a
-        Geometry object
+        Extract the geometry file from the aims output and return it as a Geometry
+        object
 
         Returns
         -------
-        Geometry
+        AimsGeometry
             Geometry object
         """
+
         geometry_lines = []
-        geometry_file_reached = False
         for l in self.lines:
             if (
                 "Parsing geometry.in (first pass over file, find array dimensions only)."
                 in l
             ):
-                geometry_file_reached = True
-            if geometry_file_reached:
                 geometry_lines.append(l)
+
             if "Completed first pass over input file geometry.in ." in l:
                 break
+
         geometry_text = "\n".join(geometry_lines[6:-3])
         geometry = AimsGeometry()
         geometry.parse(geometry_text)
 
         return geometry
 
-    def get_parameters(self) -> str:
+    def get_parameters(self) -> AimsControl:
         """
-        Extract the control file from the aims output and return it as a
-        parameters object
+        Extract the control file from the aims output and return it as an AimsControl
+        object
 
         Returns
         -------
-        str
-            The control file as a string
+        AimsControl
+            AimsControl object
         """
+
         control_lines = []
         control_file_reached = False
         for l in self.lines:
@@ -141,14 +144,18 @@ class AimsOutput(Output):
                 in l
             ):
                 control_file_reached = True
+
             if control_file_reached:
                 control_lines.append(l)
+
             if "Completed first pass over input file control.in ." in l:
                 break
 
-        control_text = "\n".join(control_lines[6:-3])
+        ac = AimsControl(parse_file=False)
+        ac.lines = control_lines[6:-3]
+        ac.path = None
 
-        return control_text
+        return ac
 
     def check_exit_normal(self) -> bool:
         """
@@ -195,31 +202,31 @@ class AimsOutput(Output):
     ###############################################################################
     def _get_energy(
         self,
-        n_occurrence,
-        search_string,
-        token_nr=None,
-        energy_invalid_indicator=None,
-        energy_valid_indicator=None,
+        n_occurrence: Union[int, None],
+        search_string: str,
+        token_nr: Union[int, None] = None,
+        energy_invalid_indicator: Union[list, int, str, None] = None,
+        energy_valid_indicator: Union[list, int, str, None] = None,
     ) -> Union[float, npt.NDArray[np.float64]]:
         """
         Generalized energy parser
 
         Parameters
         ----------
-        n_occurrence : int or None
+        n_occurrence : Union[int, None]
             If there are multiple energies in a file (e.g. during a geometry optimization)
             this parameters allows to select which energy is returned.
             If set to -1 the last one is returned (e.g. result of a geometry optimization),
             if set to None, all values will be returned as a numpy array.
         search_string : str
             string to be searched in the output file
-        token_nr : int
+        token_nr : Union[int, None]
             take n-th element of found line
-        energy_invalid_indicator
+        energy_invalid_indicator : Union[list, int, str, None] = None
             In some cases an energy value can be found in the output file although it is invalid -> ignore this value
             example: a line having 'restarting mixer to attempt better convergence'
                         indicates that this scf-cycle leads to invalid energies
-        param energy_valid_indicator
+        param energy_valid_indicator : Union[list, int, str, None] = None
             In some cases the value is only valid after a certain phrase is used -> ignore all values before
             example: The post-SCF vdW energy correction is 0.00 until the SCF is converged.
 
@@ -238,20 +245,17 @@ class AimsOutput(Output):
             "AIMSOutput._get_energy: usage of skip_next_energy and "
             "use_next_energy at the same function call is undefined!"
         )
-        # energy (in)valid indicator allows now for multiple values, if a list is provided. Otherwise, verything works out as before.
+        # energy (in)valid indicator allows now for multiple values, if a list is
+        # provided. Otherwise, everything works out as before.
         if energy_valid_indicator is not None and not isinstance(
             energy_valid_indicator, list
         ):
-            energy_valid_indicator = [
-                energy_valid_indicator,
-            ]
+            energy_valid_indicator = [energy_valid_indicator]
 
         if energy_invalid_indicator is not None and not isinstance(
             energy_invalid_indicator, list
         ):
-            energy_invalid_indicator = [
-                energy_invalid_indicator,
-            ]
+            energy_invalid_indicator = [energy_invalid_indicator]
 
         energies = []
 
@@ -291,7 +295,7 @@ class AimsOutput(Output):
             return energies[n_occurrence]
 
     def get_change_of_total_energy(
-        self, n_occurrence=-1, energy_invalid_indicator=None
+        self, n_occurrence: Union[int, None] = -1, energy_invalid_indicator=None
     ) -> Union[float, npt.NDArray[np.float64]]:
         return self._get_energy(
             n_occurrence,
@@ -659,7 +663,7 @@ class AimsOutput(Output):
                 all_force_values.append(np.array(force_values))
 
         if len(all_force_values) == 0:
-            raise ValueError(f"Forces not found in {self.aims_out_path} file")
+            raise ValueError(f"Forces not found in {self.path} file")
 
         if n_occurrence is None:
             return np.array(all_force_values)
@@ -968,7 +972,8 @@ class AimsOutput(Output):
         # return eigenvalues
 
     def get_all_ks_eigenvalues(self) -> Union[dict, Tuple[dict, dict]]:
-        """Get all Kohn-Sham eigenvalues from a calculation.
+        """
+        Get all Kohn-Sham eigenvalues from a calculation.
 
         Returns
         -------
@@ -989,6 +994,11 @@ class AimsOutput(Output):
 
         # Check if the calculation was spin polarised
         spin_polarised = self.check_spin_polarised()
+
+        # Check if output_level full was specified in the calculation
+        required_item = ("output_level", "full")
+        if required_item not in self.get_parameters().get_keywords().items():
+            raise ItemNotFoundError(required_item)
 
         # Get the number of KS states and scf iterations
         # Add 2 to SCF iters as if output_level full is specified, FHI-aims prints the
@@ -1011,7 +1021,7 @@ class AimsOutput(Output):
                 if target_line in line:
                     n += 1
                     # Get the KS states from this line until the next empty line
-                    self._get_ks_states(i, eigenvalues, n, n_ks_states)
+                    self._get_ks_states(i + 1, eigenvalues, n, n_ks_states)
 
             return eigenvalues
 
