@@ -2,6 +2,7 @@ xc                           pbe
 spin                         collinear
 default_initial_moment       1
 include_spin_orbit           non_self_consistent
+output_level                 full
 ################################################################################
 #
 #  FHI-aims code project

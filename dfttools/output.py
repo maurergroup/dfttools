@@ -969,8 +969,6 @@ class AimsOutput(Output):
             eigenvalues["occupation"][scf_iter][i] = float(values[1])
             eigenvalues["eigenvalue_eV"][scf_iter][i] = float(values[3])
 
-        # return eigenvalues
-
     def get_all_ks_eigenvalues(self) -> Union[dict, Tuple[dict, dict]]:
         """
         Get all Kohn-Sham eigenvalues from a calculation.
@@ -988,8 +986,10 @@ class AimsOutput(Output):
 
         Raises
         ------
+        ItemNotFoundError
+            the 'output_level full' keyword was not found in the calculation
         ValueError
-            the calculation was not spin polarised
+            could not determine if the calculation was spin polarised
         """
 
         # Check if the calculation was spin polarised
@@ -1019,9 +1019,9 @@ class AimsOutput(Output):
             n = 0  # Count the current SCF iteration
             for i, line in enumerate(self.lines):
                 if target_line in line:
-                    n += 1
                     # Get the KS states from this line until the next empty line
                     self._get_ks_states(i + 1, eigenvalues, n, n_ks_states)
+                    n += 1
 
             return eigenvalues
 
@@ -1083,6 +1083,8 @@ class AimsOutput(Output):
         ------
         ValueError
             the calculation was not spin polarised
+        ValueError
+            the final KS states were not found in aims.out file
         """
 
         # Check if the calculation was spin polarised
@@ -1095,10 +1097,14 @@ class AimsOutput(Output):
         target_line = "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
 
         # Iterate backwards from end of aims.out to find the final KS eigenvalues
+        final_ev_start = None
         for i, line in enumerate(reversed(self.lines)):
             if target_line == line.strip():
                 final_ev_start = -i
                 break
+
+        if final_ev_start is None:
+            raise ValueError("Final KS states not found in aims.out file.")
 
         if not spin_polarised:
             eigenvalues = {
@@ -1143,6 +1149,11 @@ class AimsOutput(Output):
         -------
         dict
             The perturbative SOC kohn-sham eigenvalues
+
+        Raises
+        ------
+        ValueError
+            the final KS states were not found in aims.out file
         """
 
         # Get the number of KS states
@@ -1153,14 +1164,16 @@ class AimsOutput(Output):
             "    Eigenvalue [eV]    Level Spacing [eV]"
         )
 
-        print(target_line)
-
         # Iterate backwards from end of aims.out to find the perturbative SOC
         # eigenvalues
+        final_ev_start = None
         for i, line in enumerate(reversed(self.lines)):
             if target_line == line.strip():
                 final_ev_start = -i
                 break
+
+        if final_ev_start is None:
+            raise ValueError("Final KS states not found in aims.out file.")
 
         eigenvalues = {
             "state": np.zeros(n_ks_states, dtype=int),

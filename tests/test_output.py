@@ -35,9 +35,6 @@ class TestAimsOutput:
         with open(f"{cwd}/test_references.yaml", "r") as references:
             self.ref_data = yaml.safe_load(references)
 
-        # Set class attribute to check in xfail tests
-        # self._run_aims = False if run_aims is False else True
-
     @property
     def _aims_fixture_no(self) -> int:
         return int(self.ao.aims_out_path.split("/")[-2])
@@ -161,49 +158,8 @@ class TestAimsOutput:
             with pytest.raises(ValueError):
                 self.ao.get_change_of_forces()
 
-    def get_change_of_sum_of_eigenvalues(self):
-        pass
-
-    # TODO: currently a palceholder
-    # def test_all_output_functions(self_9):, #     aims = aims_out_9
-
-    #     aims.get_geometry()
-    #     aims.get_parameters()
-    #     aims.check_exit_normal()
-    #     aims.get_change_of_total_energy()
-    #     # aims.get_change_of_forces()
-    #     aims.get_change_of_sum_of_eigenvalues()
-    #     # aims.get_maximum_force()
-    #     aims.get_final_energy()
-    #     aims.get_energy_corrected()
-    #     aims.get_total_energy_T0()
-    #     aims.get_energy_uncorrected()
-    #     # aims.get_energy_without_vdw()
-    #     aims.get_HOMO_energy()
-    #     aims.get_LUMO_energy()
-    #     # aims.get_vdw_energy()
-    #     aims.get_exchange_correlation_energy()
-    #     aims.get_electrostatic_energy()
-    #     aims.get_kinetic_energy()
-    #     aims.get_sum_of_eigenvalues()
-    #     aims.get_cx_potential_correction()
-    #     aims.get_free_atom_electrostatic_energy()
-    #     aims.get_entropy_correction()
-    #     aims.get_hartree_energy_correction()
-    #     # aims.get_ionic_embedding_energy()
-    #     # aims.get_density_embedding_energy()
-    #     # aims.get_nonlocal_embedding_energy()
-    #     # aims.get_external_embedding_energy()
-    #     # aims.get_forces()
-    #     aims.check_spin_polarised()
-    #     aims.get_conv_params()
-    #     aims.get_n_relaxation_steps()
-    #     aims.get_n_scf_iters()
-    #     aims.get_i_scf_conv_acc()
-    #     aims.get_n_initial_ks_states()
-    #     # aims.get_all_ks_eigenvalues()# -> functionality does not work
-    #     aims.get_final_ks_eigenvalues()
-    #     # aims.get_pert_soc_ks_eigenvalues()# -> not great but may work if that output is there
+    # TODO
+    # def get_change_of_sum_of_eigenvalues(self):
 
     def test_check_spin_polarised(self):
         if self._aims_fixture_no in [2, 3]:
@@ -268,9 +224,30 @@ class TestAimsOutput:
             with pytest.warns(UserWarning):
                 compare_n_initial_ks_states()
 
-    # TODO Setup YAML files for storing the expected values for the following tests
-    # def test_get_all_ks_eigenvalues(self):
+    def test_get_all_ks_eigenvalues(self):
+        if self._aims_fixture_no == 1:
+            assert self.ao.get_all_ks_eigenvalues() == self.ref_data["eigenvalues"]
+        elif self._aims_fixture_no == 2:
+            spin_up, spin_down = self.ao.get_all_ks_eigenvalues()
+            assert spin_up == self.ref_data["su_eigenvalues"]
+            assert spin_down == self.ref_data["sd_eigenvalues"]
+        else:
+            with pytest.raises(ValueError):
+                self.ao.get_all_ks_eigenvalues()
 
+    # TODO
     # def get_final_ks_eigenvalues_test(self):
 
-    # def get_pert_soc_ks_eigenvalues_test(self):
+    def test_get_pert_soc_ks_eigenvalues(self):
+        if self._aims_fixture_no == 3:
+            assert (
+                self.ao.get_pert_soc_ks_eigenvalues()
+                == self.ref_data["pert_soc_eigenvalues"]
+            )
+        else:
+            with pytest.raises(ValueError):
+                self.ao.get_pert_soc_ks_eigenvalues()
+
+
+# TODO
+# class TestELSIOutput:

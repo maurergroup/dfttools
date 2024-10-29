@@ -1,6 +1,7 @@
 xc                           pbe 
 spin                         collinear
 default_initial_moment       1
+output_level                 full
 ################################################################################
 #
 #  FHI-aims code project
