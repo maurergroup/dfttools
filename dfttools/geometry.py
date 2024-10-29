@@ -423,8 +423,8 @@ class Geometry:
         Parameters
         ----------
         multipoles : list of float, or list of lists
-            Each multipole is defined as a list: [x, y, z, order, charge].
-            With: x,y,z: cartesian coordinates
+            Each multipole is defined as a list -> [x, y, z, order, charge].
+            With x,y,z cartesian coordinates
                   order: 0 for monopoles, 1 for dipoles
                   charge: charge
 
