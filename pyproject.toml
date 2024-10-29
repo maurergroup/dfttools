@@ -17,6 +17,7 @@ ase = "^3.22.1"
 pyyaml = "^6.0.1"
 spglib = "^2.5.0"
 networkx = "^3.3"
+numba = "^0.60.0"
 
 [tool.poetry.group.dev]
 optional = true
