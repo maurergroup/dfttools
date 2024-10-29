@@ -921,6 +921,7 @@ class Geometry:
     def move_all_atoms(self, shift):
         """
         Translates the whole geometry by vector 'shift'
+
         """
         self.coords += shift
 
