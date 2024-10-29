@@ -19,9 +19,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+    # strategy:
+    #   matrix:
+    #     python-version: ["3.10", "3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
@@ -32,4 +32,11 @@ jobs:
       - name: Install the project dependencies
         run: poetry install --with=dev
       - name: Run the tests
-        run: pytest tests
+        run: pytest tests --cov=dfttools --cov-report xml
+
+      # TODO when approved for the maurergroup organisation
+      # - name: Coveralls GitHub Action
+      #   uses: coverallsapp/github-action@v2.3.4
+      #   with:
+      #     github-token: ${{ secrets.GITHUB_TOKEN }}
+      #     parallel: true  # Enable parallel support for Coveralls if needed
