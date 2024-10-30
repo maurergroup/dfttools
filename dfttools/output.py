@@ -23,8 +23,8 @@ class Output(BaseParser):
 
     Attributes
     ----------
-    supported_files
-    lines
+    supported_files : List[str]
+        List of supported file types.
 
     Examples
     --------
@@ -34,26 +34,19 @@ class Output(BaseParser):
             self.lines = self._file_contents["aims_out"]
     """
 
-    # FHI-aims, ELSI, ...
-    _supported_files = ["aims_out", "elsi_out"]
-
     def __init__(self, **kwargs: str):
-        super().__init__(self._supported_files, **kwargs)
+        # FHI-aims, ELSI, ...
+        self._supported_files = ["aims_out", "elsi_out"]
 
+        # Check that only supported files were provided
         for val in kwargs.keys():
             fu.check_required_files(self._supported_files, val)
 
+        super().__init__(self._supported_files, **kwargs)
+
     @property
-    def supported_files(self):
+    def supported_files(self) -> List[str]:
         return self._supported_files
-
-    @property
-    def lines(self):
-        return self._lines
-
-    @lines.setter
-    def lines(self, value):
-        self._lines = value
 
 
 class AimsOutput(Output):
@@ -64,18 +57,25 @@ class AimsOutput(Output):
 
     Attributes
     ----------
-    lines
-    aims_out : str
-        The path to the aims.out file
+    lines : List[str]
+        The contents of the aims.out file.
+    path : str
+        The path to the aims.out file.
+
+    Examples
+    --------
+    >>> ao = AimsOutput(aims_out="./aims.out")
     """
 
     def __init__(self, aims_out: str = "aims.out"):
         super().__init__(aims_out=aims_out)
         self.lines = self.file_contents["aims_out"]
+        self.path = self.file_paths["aims_out"]
 
         # Check if the aims.out file was provided
         fu.check_required_files(self._supported_files, "aims_out")
 
+<<<<<<< HEAD
         # Enforce the the first file parsed in self.file_paths is the aims.out file
         if list(self.file_paths.keys())[0] != "aims_out":
             raise ValueError(
@@ -84,6 +84,8 @@ class AimsOutput(Output):
 
         self.aims_out_path = self.file_paths["aims_out"]
 
+=======
+>>>>>>> 433f34f (Reorganised parsers)
     def get_number_of_atoms(self) -> int:
         """
         Return number of atoms in unit cell
