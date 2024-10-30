@@ -128,9 +128,9 @@ class Geometry:
         new_geometry.__dict__ = self.__dict__
         return new_geometry
 
-    ###############################################################################
-    #                             INPUT PARSER                                    #
-    ###############################################################################
+    ###########################################################################
+    #                             INPUT PARSER                                #
+    ###########################################################################
     def read_from_file(self, filename: str) -> None:
         """
         Parses a geometry file
@@ -173,9 +173,9 @@ class Geometry:
                 l = "# " + l
             self.comment_lines.append(l)
 
-    ###############################################################################
-    #                             OUTPUT PARSER                                   #
-    ###############################################################################
+    ###########################################################################
+    #                             OUTPUT PARSER                               #
+    ###########################################################################
     def save_to_file(self, filename, **kwargs):
 
         geometry_type = get_file_format_from_ending(filename)
@@ -192,9 +192,9 @@ class Geometry:
     def get_text(self, **kwargs):
         raise NotImplementedError
 
-    ###############################################################################
-    #                            Data exchange with ASE                           #
-    ###############################################################################
+    ###########################################################################
+    #                          Data exchange with ASE                         #
+    ###########################################################################
     def get_from_ase_atoms_object(self, atoms) -> None:
         """
         Reads an ASE.Atoms object. Taken from ase.io.aims and adapted. Only basic features are implemented.
@@ -285,9 +285,9 @@ class Geometry:
 
         return ase_system
 
-    ###############################################################################
-    #                    Adding and removing atoms (in place)                     #
-    ###############################################################################
+    ###########################################################################
+    #                    Adding and removing atoms (in place)                 #
+    ###########################################################################
     def add_atoms(
         self,
         cartesian_coords,
@@ -662,13 +662,17 @@ class Geometry:
         self.remove_atoms(remove_inds)
         self.lattice_vectors = lattice
 
-        # In the following all redundant atoms, i.e. atoms that are multiplied at the same position when the unitcell is repeated periodically, are removed from the new unit cell
+        # In the following all redundant atoms, i.e. atoms that are multiplied
+        # at the same position when the unitcell is repeated periodically, are
+        # removed from the new unit cell
         epsilon = 0.1
-        # Distance in Angstrom for which two atoms are assumed to be in the same position
+        # Distance in Angstrom for which two atoms are assumed to be in the
+        # same position
         init_geom = self
         allcoords = init_geom.coords
 
-        # generate all possible translation vectors that could map an atom of the unit cell into itsself
+        # generate all possible translation vectors that could map an atom of
+        # the unit cell into itsself
         prim_lat_vec = []
         for i in range(3):
             prim_lat_vec.append(
@@ -709,7 +713,8 @@ class Geometry:
                                         single_addition_vector
                                     )
 
-        ## Find the indices of those atoms that are equivalent, i.e. atoms that are doubled when the unit cell is repeated periodically
+        # Find the indices of those atoms that are equivalent, i.e. atoms that
+        # are doubled when the unit cell is repeated periodically
 
         doubleindices = []  # list of pairs of atom indices that are equivalent
         for i, coords_i in enumerate(allcoords):
@@ -841,9 +846,9 @@ class Geometry:
             indices += group[selection]
         self.remove_atoms(np.array(indices))
 
-    ###############################################################################
-    #                         Transformations (in place)                          #
-    ###############################################################################
+    ###########################################################################
+    #                         Transformations (in place)                      #
+    ###########################################################################
     def map_to_first_unit_cell(
         self, lattice_vectors=None, dimensions=np.array(range(3))
     ) -> None:
@@ -999,8 +1004,6 @@ class Geometry:
         None.
 
         """
-        # ??? <aj, 25.2.2020> not sure if center should be the geometric center or [0,0,0], both
-        # have their pros and cons, former version was [0,0,0], new version is geometric center
         if indices is None:
             indices = np.arange(self.n_atoms)
         if center is None:
@@ -1020,13 +1023,35 @@ class Geometry:
     ) -> None:
         """
         Mirrors the geometry through the plane defined by the normal vector.
+
+        Parameters
+        ----------
+        normal_vector : npt.NDArray[np.float64]
+            Normal vector of mirror plane.
+
+        Returns
+        -------
+        None.
+
         """
         mirror_matrix = utils.get_mirror_matrix(normal_vector=normal_vector)
         self.transform(mirror_matrix)
 
     def align_into_xy_plane(self, atom_indices):
-        """Rotates a planar molecule (defined by 3 atom indices) into the XY plane.
-        Double check results, use with caution"""
+        """
+        Rotates a planar molecule (defined by 3 atom indices) into the XY
+        plane. Double check results, use with caution
+
+        Parameters
+        ----------
+        atom_indices
+            Indices of atoms that should be aligned.
+
+        Returns
+        -------
+        None.
+
+        """
         p1 = self.coords[atom_indices[0]]
         p2 = self.coords[atom_indices[1]]
         p3 = self.coords[atom_indices[2]]
@@ -1100,11 +1125,17 @@ class Geometry:
         """
         Aligns a vector and the atomic coordiantes to a given vector.
 
+        Parameters
+        ----------
         vector : npt.NDArray[np.float64]
             vector for alignment
 
         vector_to_align : npt.NDArray[np.float64]
             index of the lattice vector that should be aligned
+
+        Returns
+        -------
+        None
 
         """
         vector_to_align_normed = vector_to_align / np.linalg.norm(
@@ -1122,11 +1153,17 @@ class Geometry:
         """
         Aligns a lattice vector and the atomic coordiantes to a given axis.
 
+        Parameters
+        ----------
         vector : array
             vector for alignment
 
         lattice_vector_index : int
             index of the lattice vector that should be aligned
+
+        Returns
+        -------
+        None
 
         """
         lattice_vector_normed = self.lattice_vectors[
@@ -1139,6 +1176,8 @@ class Geometry:
         """
         Aligns a lattice vector and the atomic coordiantes to a given axis.
 
+        Parameters
+        ----------
         vector : array
             vector for alignment
 
@@ -1293,8 +1332,10 @@ class Geometry:
         """
         Symmetrizes Geometry with given list of symmetry operation matrices
         after transferring it to the origin.
-        Do not include the unity matrix for symmetrizing, as it is already the first geometry!
-        ATTENTION: use symmetrize_periodic to reliably symmetrize periodic structures
+        Do not include the unity matrix for symmetrizing, as it is already the
+        first geometry!
+        ATTENTION: use symmetrize_periodic to reliably symmetrize periodic
+        structures
 
         """
         if center is not None:
@@ -1320,7 +1361,8 @@ class Geometry:
 
         Parameters
         ----------
-        other_geometries: List of Geometrys ... might be nice to accept list of coords too
+        other_geometries: List of Geometrys ... might be nice to accept list of
+        coords too
 
         Returns
         -------
@@ -1337,7 +1379,8 @@ class Geometry:
                 geom = copy.deepcopy(other_geom)
                 # center all other geometries to remove offset
                 geom.center_coordinates()
-                # all geometries have to be ordered like first geometry in order to sum them
+                # all geometries have to be ordered like first geometry in
+                # order to sum them
                 geom.reorder_atoms(self.get_transformation_indices(geom))
                 self.coords += geom.coords
             self.coords /= (
@@ -1426,9 +1469,9 @@ class Geometry:
             m[1] += shift[1]
             m[2] += shift[2]
 
-    ###############################################################################
-    #                      Set Properties of the Geometry                         #
-    ###############################################################################
+    ###########################################################################
+    #                      Set Properties of the Geometry                     #
+    ###########################################################################
     def set_vacuum_height(
         self, vac_height, bool_shift_to_bottom=False
     ) -> None:
@@ -1441,8 +1484,8 @@ class Geometry:
         if vac_height < min_z:
             raise Exception(
                 """set_vacuum_height: the defined vacuum height is smaller than
-                height of the lowest atom. Shift unit cell either manually or by
-                the keyword bool_shift_to_bottom towards the bottom
+                height of the lowest atom. Shift unit cell either manually or
+                by the keyword bool_shift_to_bottom towards the bottom
                 of the unit cell."""
             )
         self.lattice_vectors[-1, -1] = max_z + vac_height - min_z
@@ -1497,9 +1540,9 @@ class Geometry:
         set which dimension(s) should be constrained for which molecule.
         By default all dimensions are to be constrained for all atoms are
         constrained. If the dimension to constrain should be set individually
-        for different atoms, you need to provide a list of booleans of the shape
-        len(indices_of_atoms_to_constrain) x 3, which contains the constrain
-        flags for each dimension for each atom.
+        for different atoms, you need to provide a list of booleans of the
+        shap len(indices_of_atoms_to_constrain) x 3, which contains the
+        constrain flags for each dimension for each atom.
 
         Parameters
         ----------
@@ -1624,9 +1667,9 @@ class Geometry:
         set which dimension(s) should be constrained for which molecule.
         By default all dimensions are to be constrained for all atoms are
         constrained. If the dimension to constrain should be set individually
-        for different atoms, you need to provide a list of booleans of the shape
-        len(indices_of_atoms_to_constrain) x 3, which contains the constrain
-        flags for each dimension for each atom.
+        for different atoms, you need to provide a list of booleans of the
+        shape len(indices_of_atoms_to_constrain) x 3, which contains the
+        constrain flags for each dimension for each atom.
 
         Parameters
         ----------
@@ -2043,15 +2086,21 @@ class Geometry:
         center_of_mass = self.coords.T.dot(masses_np) / masses_np.sum()
         return center_of_mass
 
-    def get_symmetries(self, save_directory=None, symmetry_precision=1e-05):
+    def get_symmetries(
+        self,
+        symmetry_precision: float = 1e-05,
+        remove_refelction_in_z: bool = False,
+    ):
         """
         Returns symmetries (rotation and translation matrices) from spglig.
-        works only for unitcell and supercell geometries (lattice vecotrs must not be 0)
+        works only for unitcell and supercell geometries (lattice vecotrs must
+                                                          not be 0)
 
         Beware: The returned symmetry matrices are given with respect to
         fractional coordinates, not Cartesian ones!
 
-        See https://atztogo.github.io/spglib/python-spglib.html#get-symmetry for details
+        See https://atztogo.github.io/spglib/python-spglib.html#get-symmetry
+        for details
 
         Parameters:
         -----------
@@ -2069,20 +2118,15 @@ class Geometry:
         unit_cell = self.get_spglib_cell()
         symmetry = spglib.get_symmetry(unit_cell, symprec=symmetry_precision)
 
-        if save_directory is not None:
-            if not os.path.exists(save_directory):
-                print("symmetry not saved; save_directory does not exist")
-            else:
-                save_directory = os.path.join(
-                    save_directory, "symmetry.pickle"
-                )
-                pickle.dump(
-                    symmetry,
-                    open(save_directory, "wb"),
-                    protocol=pickle.HIGHEST_PROTOCOL,
-                )
+        rotations = symmetry["rotations"]
+        translations = symmetry["translations"]
 
-        return symmetry
+        if remove_refelction_in_z:
+            upside = rotations[:, 2, 2] == 1
+            rotations = rotations[upside, :, :]
+            translations = translations[upside, :]
+
+        return rotations, translations
 
     def get_atomic_numbers_of_atoms(self) -> npt.NDArray[np.float64]:
         """Get the atomic numbers of all atoms in the geometry file"""
@@ -2965,14 +3009,24 @@ class Geometry:
 
         Parameters
         ----------
-        geom
-        get_translation: additionally return the found translation
-        tolerance
-        check_neightbouring_cells: for periodic structures, recognizes two structures as equivalent, even if one\
-         of them has its atoms distributed in different unit cells compared to the other. More complete, but slower.
+        geom : geometry
+            Geometry to compare to.
+        get_translation : bool
+            Additionally return the found translation
+        tolerance : float
+            Tolerance threshold for larget mismatch between two atoms, below
+            which they are still considered to be at the sameposition.
+        check_neightbouring_cells : bool
+            For periodic structures, recognizes two structures as equivalent,
+            even if one of them has its atoms distributed in different
+            unit cells compared to the other. More complete, but slower.
+
         Returns
         -------
-
+            is_equivalent : bool
+                True if equivalent.
+            translation : np.array
+                Translation vetror between equivalent geometries
         """
         # shift both geometries to origin, get their relative translation.
         # Ignore center attribute (GeometryFile.center), if defined
@@ -2996,9 +3050,9 @@ class Geometry:
         else:
             return is_equivalent
 
-    ###############################################################################
-    #                          Get Part of a Geometry                             #
-    ###############################################################################
+    ###########################################################################
+    #                          Get Part of a Geometry                         #
+    ###########################################################################
     def get_atoms_by_indices(
         self, atom_indices: npt.NDArray[np.int64]
     ) -> "Geometry":
@@ -3295,7 +3349,8 @@ class Geometry:
         Parameters
         ----------
         distance_threshold: float
-            maximum distance between atoms below which they are counted as duplicates
+            maximum distance between atoms below which they are counted as
+            duplicates
 
         Returns
         -------
@@ -3368,8 +3423,8 @@ class Geometry:
         explicit_replications: Union[list, None] = None,
     ):
         """
-        Return a new geometry file that is a periodic replica of the original file.
-        repeats the geometry N-1 times in all given directions:
+        Return a new geometry file that is a periodic replica of the original
+        file. Repeats the geometry N-1 times in all given directions:
         (1,1,1) returns the original file
 
         Parameters
@@ -3383,7 +3438,8 @@ class Geometry:
             geometry file are used.
         explicit_replications : iterable of iterables
              a way to explicitly define which replicas should be made.
-             example: [[-1, 0, 1], [0, 1, 2, 3], [0]] will repeat 3 times in x (centered) and 4 times in y (not centered)
+             example: [[-1, 0, 1], [0, 1, 2, 3], [0]] will repeat 3 times in x
+             (centered) and 4 times in y (not centered)
 
         Returns
         -------
@@ -3585,9 +3641,9 @@ class Geometry:
 
         return sub.get_layers(layer_indices=layer_indices, threshold=threshold)
 
-    ###############################################################################
-    #                           Evaluation Functions                              #
-    ###############################################################################
+    ###########################################################################
+    #                           Evaluation Functions                          #
+    ###########################################################################
     def check_symmetry(
         self,
         tolerance: float,
