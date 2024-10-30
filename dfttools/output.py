@@ -159,6 +159,7 @@ class AimsOutput(Output):
                 in l
             ):
                 state = 1
+                geometry_lines = []
 
             if state > 0 and "atom " in l:
                 state = 3
