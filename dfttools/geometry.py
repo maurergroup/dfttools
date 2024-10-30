@@ -2,8 +2,6 @@ import ast
 import colorsys
 import copy
 import itertools
-import os
-import pickle
 import re
 import warnings
 from collections import defaultdict
@@ -46,10 +44,10 @@ class Geometry:
             Path to text file of geometry.
 
         center: dict
-            atom indices and linear combination of them to define the center of a molecule.
-            Used only for mapping to first unit cell.
-            Example: if the center should be the middle between the first three atoms,
-            center would be {1:1/3,2:1/3,3:1/3}
+            atom indices and linear combination of them to define the center of
+            a molecule. Used only for mapping to first unit cell.
+            Example: if the center should be the middle between the first three
+            atoms, center would be {1:1/3,2:1/3,3:1/3}
         """
         self.species = []
         self.lattice_vectors = np.zeros([3, 3])
