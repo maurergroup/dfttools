@@ -75,7 +75,7 @@ class AimsControl(Parameters):
         # TODO finish this
         raise NotImplementedError
 
-    def remove_control_keywords(self, *args: str) -> None:
+    def remove_keywords(self, *args: str) -> None:
         """
         Remove keywords from the control.in file.
 
@@ -92,3 +92,29 @@ class AimsControl(Parameters):
 
         with open(self.path, "w") as f:
             f.writelines(self.lines)
+
+    def get_keywords(self) -> dict:
+        """
+        Get the keywords from the control.in file.
+
+        Returns
+        -------
+        dict
+            A dictionary of the keywords in the control.in file.
+        """
+
+        keywords = {}
+
+        for line in self.lines:
+            spl = line.split()
+
+            if "#" * 80 in line:
+                break
+
+            if len(spl) > 0 and spl[0] != "#":
+                if len(spl) == 1:
+                    keywords[spl[0]] = None
+                else:
+                    keywords[spl[0]] = " ".join(spl[1:])
+
+        return keywords
