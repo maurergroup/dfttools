@@ -132,9 +132,7 @@ class AimsOutput(Output):
 
         return geometry
 
-    def get_geometry_steps_of_optimisation(
-        self, nr_of_occurrence=None
-    ) -> list:
+    def get_geometry_steps_of_optimisation(self, n_occurrence=None) -> list:
         """
         Get a list of all geometry steps performed.
 
@@ -182,7 +180,7 @@ class AimsOutput(Output):
                 state = 0
                 geometry_text = "".join(geometry_lines[2:-1])
                 g = AimsGeometry()
-                g.parseTextAIMS(geometry_text)
+                g.parse(geometry_text)
                 geometry_files.append(g)
 
         return geometry_files
