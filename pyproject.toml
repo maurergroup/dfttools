@@ -10,14 +10,21 @@ license = "GPL-3.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
+<<<<<<< HEAD
 python = ">=3.10,<3.13"
+=======
+python = "<=3.10,<3.13"
+>>>>>>> 713ec041136a7098f8ef2e6fe5a8f654b1c32c3b
 numpy = "^1.26.4"
 scipy = "^1.13.0"
 ase = "^3.22.1"
 pyyaml = "^6.0.1"
 spglib = "^2.5.0"
 networkx = "^3.3"
+<<<<<<< HEAD
 numba = "^0.60.0"
+=======
+>>>>>>> 713ec041136a7098f8ef2e6fe5a8f654b1c32c3b
 click = "^8.1.7"
 
 [tool.poetry.group.dev]
