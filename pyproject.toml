@@ -10,7 +10,7 @@ license = "GPL-3.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.10,<3.13"
 numpy = "^1.26.4"
 scipy = "^1.13.0"
 ase = "^3.22.1"
@@ -29,6 +29,7 @@ pyright = "^1.1.373"
 ptpython = "^3.0.26"
 pytest = "^8.2.0"
 pytest-cov = "^5.0.0"
+coveralls = "^4.0.1"
 
 [tool.poetry.group.docs]
 optional = true
