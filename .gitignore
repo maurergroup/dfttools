@@ -159,15 +159,9 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-<<<<<<< HEAD
 # Tests
 tests/.aims_bin_loc
 tests/fixtures/custom_bin_aims_calcs
 
 # Tutorials
 tutorials/temp/
-=======
-# Others 
-tests/fixtures/custom_bin_aims_calcs
-tests/.aims_bin_loc
->>>>>>> 713ec041136a7098f8ef2e6fe5a8f654b1c32c3b

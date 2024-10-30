@@ -125,7 +125,6 @@ class AimsOutput(Output):
 
         return geometry
 
-<<<<<<< HEAD
     def get_geometry_steps_of_optimisation(self, n_occurrence=None) -> list:
         """
         Get a list of all geometry steps performed.
@@ -188,18 +187,6 @@ class AimsOutput(Output):
         AimsControl
             AimsControl object
         """
-=======
-    def get_parameters(self) -> AimsControl:
-        """
-        Extract the control file from the aims output and return it as an AimsControl
-        object
-
-        Returns
-        -------
-        AimsControl
-            AimsControl object
-        """
->>>>>>> 713ec041136a7098f8ef2e6fe5a8f654b1c32c3b
 
         control_lines = []
         control_file_reached = False
@@ -218,11 +205,7 @@ class AimsOutput(Output):
 
         ac = AimsControl(parse_file=False)
         ac.lines = control_lines[6:-3]
-<<<<<<< HEAD
         ac.path = ""
-=======
-        ac.path = None
->>>>>>> 713ec041136a7098f8ef2e6fe5a8f654b1c32c3b
 
         return ac
 
