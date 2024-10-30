@@ -759,7 +759,7 @@ class AimsOutput(Output):
 
         return spin_polarised
 
-    def get_conv_params(self) -> dict:
+    def get_convergence_parameters(self) -> dict:
         """
         Get the convergence parameters from the aims.out file.
 
