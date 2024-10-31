@@ -4,11 +4,11 @@ on:
   # Runs on pushes targeting the default branch
   push:
     branches:
-      - master
+      - main
       - docs
   pull_request:
     branches:
-      - master
+      - main
       - docs
 
   # Allows you to run this workflow manually from the Actions tab
