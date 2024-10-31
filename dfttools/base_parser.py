@@ -1,4 +1,5 @@
 import os.path
+from typing import List
 
 
 class BaseParser:
@@ -39,3 +40,25 @@ class BaseParser:
             else:
                 with open(kwargs[kwarg], "r") as f:
                     self.file_contents[kwarg] = f.readlines()
+
+    def __str__(self) -> str:
+        if self.lines is None or self.lines == "":
+            raise ValueError("Could not find file contents.")
+        else:
+            return "".join(self.lines)
+
+    @property
+    def lines(self) -> List[str]:
+        return self._lines
+
+    @lines.setter
+    def lines(self, value: List[str]):
+        self._lines = value
+
+    @property
+    def path(self) -> str:
+        return self._path
+
+    @path.setter
+    def path(self, value: str):
+        self._path = value

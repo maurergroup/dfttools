@@ -1,0 +1,43 @@
+name: pytest
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+  # Only run after linting has finished
+  # workflow_run:
+  #   workflows: ['ruff']
+  #   types: [completed]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # TODO run on all supported versions of the project
+    # strategy:
+    #   matrix:
+    #     python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: abatilo/actions-poetry@v2
+      - name: Install the project dependencies
+        run: poetry install --with=dev
+      - name: Run the tests
+        run: poetry run -- pytest tests --cov=dfttools --cov-report xml
+
+      # TODO when approved for the maurergroup organisation
+      # - name: Coveralls GitHub Action
+      #   uses: coverallsapp/github-action@v2.3.4
+      #   with:
+      #     github-token: ${{ secrets.GITHUB_TOKEN }}
+      #     parallel: true  # Enable parallel support for Coveralls if needed

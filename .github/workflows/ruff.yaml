@@ -1,4 +1,4 @@
-name: Run the ruff linter and formatter
+name: ruff
 
 on:
   push:
@@ -12,6 +12,7 @@ on:
 jobs:
   ruff-lint:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
       - uses: chartboost/ruff-action@v1
@@ -22,6 +23,7 @@ jobs:
   ruff-format:
     runs-on: ubuntu-latest
     needs: ruff-lint
+
     steps:
       - uses: actions/checkout@v4
       - uses: chartboost/ruff-action@v1
