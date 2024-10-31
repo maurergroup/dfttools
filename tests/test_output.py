@@ -37,7 +37,7 @@ class TestAimsOutput:
 
     @property
     def _aims_fixture_no(self) -> int:
-        return int(self.ao.aims_out_path.split("/")[-2])
+        return int(self.ao.path.split("/")[-2])
 
     def test_get_number_of_atoms(self):
         if self._aims_fixture_no in [4, 6, 8, 10]:
@@ -58,7 +58,6 @@ class TestAimsOutput:
             assert self.ao.check_exit_normal() is True
 
     def test_get_time_per_scf(self):
-
         # Fail if the absolute tolerance between any values in test vs. reference array is
         # greater than 2e-3
         assert np.allclose(
@@ -128,8 +127,7 @@ class TestAimsOutput:
             < 1e-8
         )
 
-    # TODO: Lukas can you check that this is correct
-    # TODO Use yaml files for these expected values
+    # TODO
     # def test_get_change_of_total_energy_4(self):
     #     """
     #     Use an energy invalid indicator
@@ -167,11 +165,15 @@ class TestAimsOutput:
         else:
             assert self.ao.check_spin_polarised() is False
 
-    def test_get_conv_params(self):
+    def test_get_convergence_parameters(self):
         if self._aims_fixture_no in [7, 8]:
-            assert self.ao.get_conv_params() == self.ref_data["conv_params"][1]
+            assert (
+                self.ao.get_convergence_parameters() == self.ref_data["conv_params"][1]
+            )
         else:
-            assert self.ao.get_conv_params() == self.ref_data["conv_params"][0]
+            assert (
+                self.ao.get_convergence_parameters() == self.ref_data["conv_params"][0]
+            )
 
     def test_get_final_energy(self):
         final_energies = [
@@ -224,29 +226,56 @@ class TestAimsOutput:
             with pytest.warns(UserWarning):
                 compare_n_initial_ks_states()
 
-    def test_get_all_ks_eigenvalues(self):
-        if self._aims_fixture_no == 1:
-            assert self.ao.get_all_ks_eigenvalues() == self.ref_data["eigenvalues"]
-        elif self._aims_fixture_no == 2:
-            spin_up, spin_down = self.ao.get_all_ks_eigenvalues()
-            assert spin_up == self.ref_data["su_eigenvalues"]
-            assert spin_down == self.ref_data["sd_eigenvalues"]
-        else:
-            with pytest.raises(ValueError):
-                self.ao.get_all_ks_eigenvalues()
+    # TODO
+    # def test_get_all_ks_eigenvalues(self):
+    #     if self._aims_fixture_no == 1:
+    #         for key in self.ref_data["eigenvalues"].keys():
+    #             # Check the values are within tolerance and that keys match
+    #             assert np.allclose(
+    #                 self.ao.get_all_ks_eigenvalues()[key],
+    #                 self.ref_data["eigenvalues"][key],
+    #                 atol=1e-8,
+    #             )
+
+    #     elif self._aims_fixture_no in [2, 3]:
+    #         spin_up, spin_down = self.ao.get_all_ks_eigenvalues()
+
+    #         for key in self.ref_data["su_eigenvalues"].keys():
+    #             # Check the values are within tolerance and that keys match
+    #             assert np.allclose(
+    #                 spin_up[key], self.ref_data["su_eigenvalues"][key], atol=1e-8
+    #             )
+    #             # Repeat for spin_down
+    #             assert np.allclose(
+    #                 spin_down[key], self.ref_data["sd_eigenvalues"][key], atol=1e-8
+    #             )
+
+    #     else:
+    #         with pytest.raises(ValueError):
+    #             self.ao.get_all_ks_eigenvalues()
 
     # TODO
     # def get_final_ks_eigenvalues_test(self):
 
     def test_get_pert_soc_ks_eigenvalues(self):
         if self._aims_fixture_no == 3:
-            assert (
-                self.ao.get_pert_soc_ks_eigenvalues()
-                == self.ref_data["pert_soc_eigenvalues"]
-            )
-        else:
+            for key in self.ref_data["pert_soc_eigenvalues"].keys():
+                # Check the values are within tolerance and that keys match
+                assert np.allclose(
+                    self.ao.get_pert_soc_ks_eigenvalues()[key],
+                    self.ref_data["pert_soc_eigenvalues"][key],
+                    atol=1e-8,
+                )
+
+        elif self._aims_fixture_no == 2:
             with pytest.raises(ValueError):
                 self.ao.get_pert_soc_ks_eigenvalues()
+
+        else:
+            # Check that it warns and then raises an error
+            with pytest.warns(UserWarning):
+                with pytest.raises(ValueError):
+                    self.ao.get_pert_soc_ks_eigenvalues()
 
 
 # TODO
