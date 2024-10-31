@@ -21,7 +21,9 @@ class TestAimsOutput:
         # run_aims fixture is defined in conftest.py
         if request.param == 1 and run_aims is not False:
             binary = aims_bin_path_prompt(run_aims, cwd)
-            subprocess.run(["bash", f"{cwd}/run_aims.sh", binary, str(run_aims)])
+            subprocess.run(
+                ["bash", f"{cwd}/run_aims.sh", binary, str(run_aims)]
+            )
             aims_out_dir = "custom_bin_aims_calcs"
         elif run_aims is not False:
             aims_out_dir = "custom_bin_aims_calcs"
@@ -45,8 +47,15 @@ class TestAimsOutput:
         else:
             assert self.ao.get_number_of_atoms() == 3
 
-    # TODO
-    # def test_get_geometry(self):
+    def test_get_geometry(self):
+        geom = self.ao.get_geometry()
+
+        if self._aims_fixture_no in [1, 2, 3, 5, 7, 9]:
+            assert len(geom) == 3
+            assert geom.get_is_periodic() == False
+        else:
+            assert len(geom) == 2
+            assert geom.get_is_periodic() == True
 
     # TODO
     # def test_get_parameters(self):
@@ -148,7 +157,10 @@ class TestAimsOutput:
 
         if self._aims_fixture_no in [5, 6, 7]:
             assert (
-                abs(self.ao.get_change_of_forces() - forces[self._aims_fixture_no - 5])
+                abs(
+                    self.ao.get_change_of_forces()
+                    - forces[self._aims_fixture_no - 5]
+                )
                 < 1e-8
             )
 
@@ -168,11 +180,13 @@ class TestAimsOutput:
     def test_get_convergence_parameters(self):
         if self._aims_fixture_no in [7, 8]:
             assert (
-                self.ao.get_convergence_parameters() == self.ref_data["conv_params"][1]
+                self.ao.get_convergence_parameters()
+                == self.ref_data["conv_params"][1]
             )
         else:
             assert (
-                self.ao.get_convergence_parameters() == self.ref_data["conv_params"][0]
+                self.ao.get_convergence_parameters()
+                == self.ref_data["conv_params"][0]
             )
 
     def test_get_final_energy(self):
@@ -195,7 +209,10 @@ class TestAimsOutput:
             assert final_energy is None
 
         else:
-            assert abs(final_energy - final_energies[self._aims_fixture_no - 1]) < 1e-8
+            assert (
+                abs(final_energy - final_energies[self._aims_fixture_no - 1])
+                < 1e-8
+            )
 
     def get_n_relaxation_steps_test(self):
         n_relaxation_steps = [1, 1, 1, 1, 4, 2, 3, 0, 1, 1]
@@ -206,7 +223,9 @@ class TestAimsOutput:
 
     def test_get_n_scf_iters(self):
         n_scf_iters = [12, 13, 13, 10, 42, 27, 56, 8, 14, 11]
-        assert self.ao.get_n_scf_iters() == n_scf_iters[self._aims_fixture_no - 1]
+        assert (
+            self.ao.get_n_scf_iters() == n_scf_iters[self._aims_fixture_no - 1]
+        )
 
     # TODO
     # def get_i_scf_conv_acc_test(self):
