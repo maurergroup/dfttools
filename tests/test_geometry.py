@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from dfttools.geometry import AimsGeometry
+from dfttoolkit.geometry import AimsGeometry
 
 
 class TestAimsGeometry:

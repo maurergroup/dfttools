@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "dfttools"
+name = "dfttoolkit"
 version = "0.2.0"
 description = "A collection of python modules and libraries for several DFT codes to handle input and output."
 authors = [
@@ -48,7 +48,7 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.sphinx-pyproject]
-project = "dfttools"
+project = "dfttoolkit"
 author = "Lukas Hoermann, Dylan Morgan"
 copyright = "2024, Lukas Hoermann, Dylan Morgan"
 html_theme = "furo"
@@ -77,11 +77,11 @@ target-version = "py310"
 ignore = ["E741", ]
 
 [tool.pyright]
-include = ["dfttools"]
+include = ["dfttoolkit"]
 exclude = ["**/__pycache__"]
 
 [tool.pytest.ini_options]
-pythonpath = "dfttools"
+pythonpath = "dfttoolkit"
 testpaths = ["tests"]
 addopts = [
     "--import-mode=importlib",

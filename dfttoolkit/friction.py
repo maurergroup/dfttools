@@ -2,7 +2,7 @@ from os.path import join
 
 import numpy as np
 
-from dfttools.geometry import AimsGeometry
+from dfttoolkit.geometry import AimsGeometry
 
 
 class FrictionTensor:

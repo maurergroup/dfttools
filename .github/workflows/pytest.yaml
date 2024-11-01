@@ -33,7 +33,7 @@ jobs:
       - name: Install the project dependencies
         run: poetry install --with=dev
       - name: Run the tests
-        run: poetry run -- pytest tests --cov=dfttools --cov-report xml
+        run: poetry run -- pytest tests --cov=dfttoolkit --cov-report xml
 
       # TODO when approved for the maurergroup organisation
       # - name: Coveralls GitHub Action
