@@ -165,3 +165,6 @@ tests/fixtures/custom_bin_aims_calcs
 
 # Tutorials
 tutorials/temp/
+
+# Others 
+*.tmp
