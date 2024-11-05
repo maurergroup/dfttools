@@ -8,7 +8,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from copy import deepcopy
 from fractions import Fraction
-from typing import Tuple, Union
+from typing import Iterator, List, Tuple, Union
 
 import ase
 import matplotlib as mpl
@@ -25,9 +25,9 @@ import spglib
 from ase.constraints import FixAtoms
 from scipy.spatial import distance_matrix
 
-import dfttools.utils.math_utils as utils
-import dfttools.utils.units as units
-from dfttools.utils.periodic_table import PeriodicTable
+import dfttoolkit.utils.math_utils as utils
+import dfttoolkit.utils.units as units
+from dfttoolkit.utils.periodic_table import PeriodicTable
 
 
 class Geometry:
@@ -399,21 +399,21 @@ class Geometry:
             elif self.center is not None and geometry.center is not None:
                 warnings.warn("Caution: The center of the first file will be used!")
 
-    def add_multipoles(self, multipoles) -> None:
+    def add_multipoles(self, multipoles: Union[List[float], List[list]]) -> None:
         """
         Adds multipoles to the the geometry.
 
         Parameters
         ----------
-        multipoles : list of float, or list of lists
-            Each multipole is defined as a list -> [x, y, z, order, charge].
+        multipoles: Union[List[float], List[list]]
+            Each multipole is defined as a list -> [x, y, z, order, charge]
             With x,y,z cartesian coordinates
-                  order: 0 for monopoles, 1 for dipoles
-                  charge: charge
+            order: 0 for monopoles, 1 for dipoles
+            charge: charge
 
         Returns
         -------
-        None.
+        None
 
         """
         # if multiple multipoles are given: indented lists
@@ -1717,14 +1717,24 @@ class Geometry:
         )
         return self
 
-    def get_scaled_copy(self, scaling_factor):
+    def get_scaled_copy(self, scaling_factor: Union[float, List]) -> object:
         """
         Returns a copy of the geometry, scaled by scaling_factor.
-        Both the coordinates of the atoms and the length of the lattice vectors are affected
-        :param scaling_factor: int or iterable of length 3
-                if int: the VOLUME will be scaled accordingly
-                if iterable: the LENGTH of the lattice vectors will be scaled accordingly
-        :return: Geometry
+
+        Both the coordinates of the atoms and the length of the lattice vectors are
+        affected
+
+        Parameters
+        ----------
+        scaling_factor : Union[float, Iterator]
+            Scaling factor for the geometry. If float, the volume of the geometry
+            will be scaled accordingly. If iterable, the length of the lattice vectors
+            will be scaled accordingly.
+
+        Returns
+        -------
+        scaled_geometry : Geometry
+            Geometry object with scaled coordinates and lattice vectors
         """
 
         assert hasattr(
@@ -1735,9 +1745,11 @@ class Geometry:
             scaling_factors = [
                 scaling_factor ** (1 / 3),
             ] * 3
+
         else:
             assert len(scaling_factor) == 3
             scaling_factors = scaling_factor
+
         scaled_geom = deepcopy(self)
         lattice_vectors = deepcopy(self.lattice_vectors)
         lattice_vectors[0] *= scaling_factors[0]
@@ -2305,7 +2317,9 @@ class Geometry:
 
         return a, b, c, alpha, beta, gamma
 
-    def get_spglib_cell(self):
+    def get_spglib_cell(
+        self,
+    ) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.int64], list]:
         """
         Returns the unit cell in a format that can be used in spglib (to find symmetries)
 
@@ -2323,15 +2337,20 @@ class Geometry:
     def get_orientation_of_main_axis(self) -> float:
         """
         Get the orientation of the main axis relative to the x axis
-        the main axis is transformed such that it always points in the upper half of cartesian space
+
+        This is transformed such that it always points in the upper half of cartesian
+        space
 
         Returns:
+        --------
         float
             angle between main axis and x axis in degree
         """
         main_ax = self.get_main_axes()[1][:, 0]
+
         if main_ax[1] < 0:
             main_ax *= -1
+
         return np.arctan2(main_ax[1], main_ax[0]) * 180 / np.pi
 
     def get_constrained_atoms(self) -> npt.NDArray[np.int64]:
@@ -3632,27 +3651,26 @@ class Geometry:
         large number of options. In most cases the following examples will
         work well:
 
-        - Just look at the geometry:
-            geometry.visualise()
+        - Visualise the geometry:
+        geometry.visualise()
 
         - Turn aff axis:
-            geometry.visualise(hide_axes=True)
+        geometry.visualise(hide_axes=True)
 
         - Turn off axis and set limits:
-            geometry.visualise(hide_axes=True,
-                               xlim=(-10, 10))
+        geometry.visualise(hide_axes=True, xlim=(-10, 10))
 
         - If you want to look at the geoemtry in the xz-plane:
-            geometry.visualise(axes=[0,2],
-                               hide_axes=True,
-                               xlim=(-10, 10))
+        geometry.visualise(axes=[0,2], hide_axes=True, xlim=(-10, 10))
 
         Visualise is one of the most useful things about geometry. Reading
         through this code you may think that it is very ugly and on to of that
         if has it's own imports. Still it is a great function and it must be
         part of geometry. If you think otherwise you are wrong.
 
-
+        Note from Dylan: I completely agree if you think it's ugly and should be killed
+        with fire. Do not listen to Lukas. He is wrong. Fortunately I managed to
+        convince him to get rid of the function-scoped imports so you're welcome.
 
         Parameter:
         ----------
@@ -3662,8 +3680,9 @@ class Geometry:
             the "top" (our viewpoint is at z = +infinity) when we visualize the xy plane;
             the "right" (our viewpoint is at x = +infinity) when we visualize the yz plane;
             the "front" (our viewpoint is at y = -infinity) when we visualize the xz plane.
-            In order to visualize the geometry from the opposite viewpoints, one needs to use the reverse_sort_inds flag,
-            and invert the axis when necessary (= set axis limits so that the first value is larger than the second value)
+            In order to visualize the geometry from the opposite viewpoints, one needs
+            to use the reverse_sort_inds flag, and invert the axis when necessary
+            (= set axis limits so that the first value is larger than the second value)
 
         min_zorder : int
             plotting layer
@@ -3687,13 +3706,15 @@ class Geometry:
             defines the ratio between xlim and ylim if auto_limits is enabled
 
         brightness_modifier : float or list/array with length equal to the number of atoms
-            modifies the brightness of selected atoms. If brightness_modifier is a list/array, then
-            brightness_modifier[i] sets the brightness for atom i, otherwise all atoms are set to the same brightness value.
-            This is done by tweaking the 'lightness' value of said atoms' color in the HSL (hue-saturation-lightness) colorspace.
-            Effect of brightness_modifier in detail:
-              -1.0 <= brightness_modifier < 0.0  : darker color
-              brightness_modifier == 0.0 or None : original color
-              0.0 < brightness_modifier <= 1.0   :  brighter color
+            modifies the brightness of selected atoms. If brightness_modifier is a
+            list/array, then brightness_modifier[i] sets the brightness for atom i,
+            otherwise all atoms are set to the same brightness value. This is done by
+            tweaking the 'lightness' value of said atoms' color in the HSL
+            (hue-saturation-lightness) colorspace. Effect of brightness_modifier in
+            detail:
+            -1.0 <= brightness_modifier < 0.0  : darker color
+            brightness_modifier == 0.0 or None : original color
+            0.0 < brightness_modifier <= 1.0   :  brighter color
 
         print_lattice_vectors : bool
             display lattice vectors
@@ -3704,25 +3725,39 @@ class Geometry:
         alpha : float between 0 and 1
 
         color_list : list or string
-            choose colors for visualizing each atom. If only one color is passed, all atoms will have that color.
+            choose colors for visualizing each atom. If only one color is passed, all
+            atoms will have that color.
 
         plot_method: str
             circles: show filled circles for each atom
             wireframe: show molecular wireframe, standard settings: don't show H,
 
         reverse_sort_inds: bool
-            if set to True, inverts the order at which atoms are visualized, allowing to visualize the geometry from the "bottom", from the "left" or from the "back".
-            Example: if one wants to visualize the geometry from the "left" (= viewpoint at x=-infinity), atoms at lower x values should be visualized after atoms at high x values, and hide them.
-            This is the opposite of the default behavior of this function, and can be achieved with reverse_sort_inds=True
-            NOTE: in order to correctly visualize the structure from these non-default points of view, setting this flag to True is not sufficient: one must also invert the XY axes of the plot where needed.
-            Example: when visualizing from the "left", atoms with negative y values should appear on the right side of the plot, and atoms with positive y values should appear on the left side of the plot.
-            But if one simply sets reverse_sort_inds=True, atoms with negative y values will appear on the left side of the plot (because the x axis of the plot, the horizontal axis, goes from left to right!) and viceversa.
-            This is equivalent to visualizing a mirrored image of the structure.
-            To visualize the structure correctly, one should then set the x_limits of the plot with a first value smaller than the second value, so the x axis is inverted, and shows y-negative values on the left and viceversa.
+            if set to True, inverts the order at which atoms are visualized, allowing
+            to visualise the geometry from the "bottom", from the "left" or from the
+            "back".
+            Example: if one wants to visualise the geometry from the "left"
+            (= viewpoint at x=-infinity), atoms at lower x values should be
+            visualised after atoms at high x values, and hide them. This is the
+            opposite of the default behavior of this function, and can be achieved with
+            reverse_sort_inds=True
+            NOTE: in order to correctly visualize the structure from these non-default
+            points of view, setting this flag to True is not sufficient: one must also
+            invert the XY axes of the plot where needed.
+            Example: when visualising from the "left", atoms with negative y values
+            should appear on the right side of the plot, and atoms with positive y
+            values should appear on the left side of the plot. But if one simply sets
+            reverse_sort_inds=True, atoms with negative y values will appear on the left
+            side of the plot (because the x axis of the plot, the horizontal axis, goes
+            from left to right!) and vice-versa. This is equivalent to visualising a
+            mirrored image of the structure. To visualise the structure correctly, one
+            should then set the x_limits of the plot with a first value smaller than the
+            second value, so the x axis is inverted, and shows y-negative values on the
+            left and viceversa.
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -4468,46 +4503,53 @@ class AimsGeometry(Geometry):
 
 class VaspGeometry(Geometry):
     def parse(self, text):
-        """Read the VASP structure definition in the typical POSCAR format
-            (also used by CONTCAR files, for example) from the file with the given filename.
+        """
+        Read the VASP structure definition in the typical POSCAR format
+        (also used by CONTCAR files, for example) from the file with the given filename
 
-        Return a dict containing the following information:
-        systemname
+        Returns:
+        --------
+        dic:
+            The dictionary holds the following keys:
+            systemname:
             The name of the system as given in the first line of the POSCAR file.
-        vecs
+            vecs:
             The unit cell vector as a 3x3 numpy.array. vecs[0,:] is the first unit
             cell vector, vecs[:,0] are the x-coordinates of the three unit cell cevtors.
-        scaling
+            scaling:
             The scaling factor of the POSCAR as given in the second line. However, this
             information is not processed, it is up to the user to use this information
             to scale whatever needs to be scaled.
-        coordinates
+            coordinates:
             The coordinates of all the atoms. Q[k,:] are the coordinates of the k-th atom
-            (the index starts with 0, as usual). Q[:,0] are the x-coordinates of all the atoms.
-            These coordinates are always given in Cartesian coordinates.
-        elementtypes
-            A list of as many entries as there are atoms. Gives the type specification for every
-            atom (typically the atom name). elementtypes[k] is the species of the k-th atom.
-        typenames
+            (the index starts with 0, as usual). Q[:,0] are the x-coordinates of all the atoms. These coordinates are always given in Cartesian coordinates.
+            elementtypes:
+            A list of as many entries as there are atoms. Gives the type specification
+            for every atom (typically the atom name). elementtypes[k] is the species of
+            the k-th atom.
+            typenames:
             The names of all the species. This list contains as many elements as there are species.
-        numberofelements
+            numberofelements:
             Gives the number of atoms per species. This list contains as many elements as there are species.
-        elementid
-            Gives the index (from 0 to the number of atoms-1) of the first atom of a certain
-            species. This list contains as many elements as there are species.
-        cartesian
-            A logical value whether the coordinates were given in Cartesian form (True) or as direct
-            coordinates (False).
-        originalcoordinates
-            The original coordinates as read from the POSCAR file. It has the same format as coordinates.
-            For Cartesian coordinates (cartesian == True) this is identical to coordinates, for direct
-            coordinates (cartesian == False) this contains the direct coordinates.
-        selective
+            elementid:
+            Gives the index (from 0 to the number of atoms-1) of the first atom of a
+            certain species. This list contains as many elements as there are species.
+            cartesian:
+            A logical value whether the coordinates were given in Cartesian form (True)
+            or as direct coordinates (False).
+            originalcoordinates:
+            The original coordinates as read from the POSCAR file. It has the same
+            format as coordinates. For Cartesian coordinates (cartesian == True) this
+            is identical to coordinates, for direct coordinates (cartesian == False)
+            this contains the direct coordinates.
+            selective:
             True or False: whether selective dynamics is on.
-        selectivevals
-            Consists of as many rows as there are atoms, three colums: True if selective dynamics is on
-            for this coordinate for the atom, else False. Only if selective is True.
+            selectivevals:
+            Consists of as many rows as there are atoms, three colums: True if
+            selective dynamics is on for this coordinate for the atom, else False.
+            Only if selective is True.
         """
+
         lino = 0
         vecs = []
         scaling = 1.0

@@ -1,15 +1,16 @@
 import os
 import warnings
-import numpy as np
-import dfttools.utils.math_utils as mu
 from ast import literal_eval
-from scipy.optimize import curve_fit, root
-from scipy.signal import csd, argrelextrema
-from numba import jit, njit, prange
-from scipy.interpolate import interp1d
-from scipy.optimize import brentq
-from scipy.linalg import toeplitz, solve_toeplitz
+from typing import Tuple
 
+import dfttoolkit.utils.math_utils as mu
+import numpy as np
+import numpy.typing as npt
+from numba import njit, prange
+from scipy.interpolate import interp1d
+from scipy.linalg import solve_toeplitz
+from scipy.optimize import brentq, curve_fit
+from scipy.signal import argrelextrema
 
 # get environment variable for parallelisation in numba
 parallel_numba = os.environ.get("parallel_numba")
@@ -21,8 +22,8 @@ else:
 
 
 def get_cross_correlation_function(
-    signal_0: np.array, signal_1: np.array, bootstrapping_blocks: int = 1
-) -> np.array:
+    signal_0: npt.NDArray, signal_1: npt.NDArray, bootstrapping_blocks: int = 1
+) -> npt.NDArray:
 
     assert (
         signal_0.size == signal_1.size
@@ -56,8 +57,8 @@ def get_cross_correlation_function(
 
 
 def get_cross_spectrum(
-    signal_0: np.array,
-    signal_1: np.array,
+    signal_0: npt.NDArray,
+    signal_1: npt.NDArray,
     time_step: float,
     bootstrapping_blocks: int = 1,
     bootstrapping_overlap: int = 0,
@@ -114,11 +115,7 @@ def get_cross_spectrum(
     block_size = int(
         np.floor(
             signal_length
-            / (
-                1
-                + bootstrapping_blocks * bootstrapping_overlap
-                - bootstrapping_overlap
-            )
+            / (1 + bootstrapping_blocks * bootstrapping_overlap - bootstrapping_overlap)
         )
     )
 
@@ -127,9 +124,7 @@ def get_cross_spectrum(
 
     for block in range(bootstrapping_blocks):
 
-        block_start = int(
-            np.ceil(block * block_size * (1 - bootstrapping_overlap))
-        )
+        block_start = int(np.ceil(block * block_size * (1 - bootstrapping_overlap)))
         if block_start < 0:
             block_start = 0
 
@@ -192,7 +187,7 @@ def get_cross_spectrum(
 
 
 def get_cross_spectrum_mem(
-    signal_0: np.array, signal_1: np.array, time_step, model_order, n_freqs=512
+    signal_0: npt.NDArray, signal_1: npt.NDArray, time_step, model_order, n_freqs=512
 ):
     """
     Estimate the power spectral density (PSD) of a time series using the
@@ -209,9 +204,7 @@ def get_cross_spectrum_mem(
     """
     # Calculate the autocorrelation of the time series
     autocorr = np.correlate(signal_0, signal_1, mode="full") / len(signal_0)
-    autocorr = autocorr[
-        len(autocorr) // 2 : len(autocorr) // 2 + model_order + 1
-    ]
+    autocorr = autocorr[len(autocorr) // 2 : len(autocorr) // 2 + model_order + 1]
 
     # Create a Toeplitz matrix from the autocorrelation function
     # R = toeplitz(autocorr[:-1])
@@ -222,9 +215,7 @@ def get_cross_spectrum_mem(
     # model_coeffs = solve_toeplitz((R, R.T), r)
 
     # Compute the PSD from the model coefficients
-    freqs = np.linspace(
-        0, 0.5, n_freqs
-    )  # Normalized frequency (Nyquist = 0.5)
+    freqs = np.linspace(0, 0.5, n_freqs)  # Normalized frequency (Nyquist = 0.5)
     psd = np.zeros(n_freqs)
     for i, f in enumerate(freqs):
         z = np.exp(-2j * np.pi * f)
@@ -236,7 +227,7 @@ def get_cross_spectrum_mem(
     return freqs / time_step, psd
 
 
-def get_last_maximum(x: np.array):
+def get_last_maximum(x: npt.NDArray):
 
     maxima = argrelextrema(x, np.greater_equal)[0]
     # roots = argrelextrema(-np.abs(x), np.greater_equal)[0]
@@ -316,9 +307,7 @@ def get_line_widths(
     res = [np.nan, np.nan, np.nan]
 
     if use_lorentzian:
-        res = lorentzian_fit(
-            frequencies, power_spectrum, filter_maximum=filter_maximum
-        )
+        res = lorentzian_fit(frequencies, power_spectrum, filter_maximum=filter_maximum)
 
     if np.isnan(res[0]):
         res = get_peak_parameters(frequencies, power_spectrum)
@@ -331,10 +320,10 @@ def get_line_widths(
 
 
 def get_normal_mode_decomposition(
-    velocities: np.array,
-    eigenvectors: np.array,
+    velocities: npt.NDArray,
+    eigenvectors: npt.NDArray,
     use_numba: bool = True,
-) -> np.array:
+) -> npt.NDArray:
     """
     Calculate the normal-mode-decomposition of the velocities. This is done
     by projecting the atomic velocities onto the vibrational eigenvectors.

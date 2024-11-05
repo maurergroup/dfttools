@@ -1,69 +1,69 @@
-dfttools.utils package
+dfttoolkit.utils package
 ======================
 
 Submodules
 ----------
 
-dfttools.utils.file\_crawler module
+dfttoolkit.utils.file\_crawler module
 -----------------------------------
 
-.. automodule:: dfttools.utils.file_crawler
+.. automodule:: dfttoolkit.utils.file_crawler
    :members:
    :undoc-members:
    :show-inheritance:
 
-dfttools.utils.file\_utils module
+dfttoolkit.utils.file\_utils module
 ---------------------------------
 
-.. automodule:: dfttools.utils.file_utils
+.. automodule:: dfttoolkit.utils.file_utils
    :members:
    :undoc-members:
    :show-inheritance:
 
-dfttools.utils.geometry\_utils module
+dfttoolkit.utils.geometry\_utils module
 -------------------------------------
 
-.. automodule:: dfttools.utils.geometry_utils
+.. automodule:: dfttoolkit.utils.geometry_utils
    :members:
    :undoc-members:
    :show-inheritance:
 
-dfttools.utils.math\_utils module
+dfttoolkit.utils.math\_utils module
 ---------------------------------
 
-.. automodule:: dfttools.utils.math_utils
+.. automodule:: dfttoolkit.utils.math_utils
    :members:
    :undoc-members:
    :show-inheritance:
 
-dfttools.utils.periodic\_table module
+dfttoolkit.utils.periodic\_table module
 -------------------------------------
 
-.. automodule:: dfttools.utils.periodic_table
+.. automodule:: dfttoolkit.utils.periodic_table
    :members:
    :undoc-members:
    :show-inheritance:
 
-dfttools.utils.run\_utils module
+dfttoolkit.utils.run\_utils module
 --------------------------------
 
-.. automodule:: dfttools.utils.run_utils
+.. automodule:: dfttoolkit.utils.run_utils
    :members:
    :undoc-members:
    :show-inheritance:
 
-dfttools.utils.units module
+dfttoolkit.utils.units module
 ---------------------------
 
-.. automodule:: dfttools.utils.units
+.. automodule:: dfttoolkit.utils.units
    :members:
    :undoc-members:
    :show-inheritance:
 
-dfttools.utils.vibrations\_utils module
+dfttoolkit.utils.vibrations\_utils module
 ---------------------------------------
 
-.. automodule:: dfttools.utils.vibrations_utils
+.. automodule:: dfttoolkit.utils.vibrations_utils
    :members:
    :undoc-members:
    :show-inheritance:
@@ -71,7 +71,7 @@ dfttools.utils.vibrations\_utils module
 Module contents
 ---------------
 
-.. automodule:: dfttools.utils
+.. automodule:: dfttoolkit.utils
    :members:
    :undoc-members:
    :show-inheritance:

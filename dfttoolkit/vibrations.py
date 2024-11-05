@@ -8,9 +8,9 @@ import numpy as np
 import numpy.typing as npt
 from scipy.signal import argrelextrema
 
-import dfttools.utils.units as units
-import dfttools.utils.vibrations_utils as vu
-from dfttools.geometry import AimsGeometry, VaspGeometry
+import dfttoolkit.utils.units as units
+import dfttoolkit.utils.vibrations_utils as vu
+from dfttoolkit.geometry import AimsGeometry, VaspGeometry
 
 
 class Vibrations:
@@ -32,9 +32,7 @@ class Vibrations:
         return self._vibration_coords
 
     @vibration_coords.setter
-    def vibration_coords(
-        self, vibration_coords: List[npt.NDArray[np.float64]]
-    ):
+    def vibration_coords(self, vibration_coords: List[npt.NDArray[np.float64]]):
         self._vibration_coords = vibration_coords
 
     @property
@@ -42,9 +40,7 @@ class Vibrations:
         return self._vibration_forces
 
     @vibration_forces.setter
-    def vibration_forces(
-        self, vibration_forces: List[npt.NDArray[np.float64]]
-    ):
+    def vibration_forces(self, vibration_forces: List[npt.NDArray[np.float64]]):
         self._vibration_forces = vibration_forces
 
     @property
@@ -173,9 +169,7 @@ class Vibrations:
 
         for row in range(H.shape[0]):
             if n_forces[row] > 0:
-                H[row, :] /= n_forces[
-                    row
-                ]  # prevent div by zero for unknown forces
+                H[row, :] /= n_forces[row]  # prevent div by zero for unknown forces
 
         if set_constrained_atoms_zero:
             constrained = self.constrain_relax.flatten()  # pyright:ignore
@@ -210,9 +204,7 @@ class Vibrations:
         constrained_inds = [i for i, c in enumerate(constrain) if c]
         constrained_inds = np.array(constrained_inds)
 
-        unconstrained_inds = np.array(
-            list(set(all_inds) - set(constrained_inds))
-        )
+        unconstrained_inds = np.array(list(set(all_inds) - set(constrained_inds)))
 
         for i in unconstrained_inds:
             for j in unconstrained_inds:
@@ -313,8 +305,7 @@ class Vibrations:
         omega = np.sign(omega2) * np.sqrt(np.abs(omega2))  # pyright:ignore
 
         conversion = np.sqrt(
-            (units.EV_IN_JOULE)
-            / (units.ATOMIC_MASS_IN_KG * units.ANGSTROM_IN_METER**2)
+            (units.EV_IN_JOULE) / (units.ATOMIC_MASS_IN_KG * units.ANGSTROM_IN_METER**2)
         )
         omega_SI = omega * conversion
 
@@ -350,9 +341,7 @@ class Vibrations:
         masses = self.get_mass_of_all_atoms()  # pyright:ignore
         tolerance = 0.001
 
-        primitive_cell_inverse = np.linalg.inv(
-            self.lattice_vectors
-        )  # pyright:ignore
+        primitive_cell_inverse = np.linalg.inv(self.lattice_vectors)  # pyright:ignore
 
         atom_type_index = np.array([None] * n_atoms)
         counter = 0
@@ -378,9 +367,7 @@ class Vibrations:
                     difference_in_cell_coordinates,
                 )
                 separation = pow(
-                    np.linalg.norm(
-                        projected_coordinates_atom_j - coordinates_atom_i
-                    ),
+                    np.linalg.norm(projected_coordinates_atom_j - coordinates_atom_i),
                     2,
                 )
 
@@ -654,9 +641,7 @@ class Vibrations:
             L = f_inv_cm < frequency_cutoff
             cutoff = np.sum(L)
 
-        np.savetxt(
-            os.path.join(dirname, "frequencies.csv"), frequencies[:cutoff]
-        )
+        np.savetxt(os.path.join(dirname, "frequencies.csv"), frequencies[:cutoff])
 
         index = []
         for index_0 in range(n_points):
@@ -704,9 +689,7 @@ class Vibrations:
         for index_0 in range(n_points):
             for index_1 in range(n_points):
 
-                power_spectrum_index = np.real(
-                    power_spectrum[index_0, index_1, :]
-                )
+                power_spectrum_index = np.real(power_spectrum[index_0, index_1, :])
 
                 max_f = argrelextrema(power_spectrum_index, np.greater)[0]
 
@@ -714,14 +697,10 @@ class Vibrations:
 
                 f_couple = omega[index_search] / (2 * np.pi)
 
-                coupling_index_0 = np.argmin(
-                    np.abs(frequencies[max_f] - f_couple)
-                )
+                coupling_index_0 = np.argmin(np.abs(frequencies[max_f] - f_couple))
                 coupling_index = max_f[coupling_index_0]
 
-                coupling_matrix[index_0, index_1] = power_spectrum_index[
-                    coupling_index
-                ]
+                coupling_matrix[index_0, index_1] = power_spectrum_index[coupling_index]
 
         return coupling_matrix
 

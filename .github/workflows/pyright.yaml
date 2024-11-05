@@ -3,11 +3,11 @@ name: pyright
 on:
   push:
     branches:
-      - master
+      - main
 
   pull_request:
     branches:
-      - master
+      - main
 
 jobs:
   check:
@@ -21,4 +21,4 @@ jobs:
       - run: echo "$(poetry env info --path)/bin" >> $GITHUB_PATH
       - uses: jakebailey/pyright-action@v2
         with:
-          working-directory: "./dfttools"
+          working-directory: "./dfttoolki"

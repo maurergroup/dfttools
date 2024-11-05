@@ -3,7 +3,7 @@ import numpy as np
 from matplotlib import axes, figure
 from matplotlib.ticker import MaxNLocator
 
-from dfttools.output import AimsOutput
+from dfttoolkit.output import AimsOutput
 
 
 class VisualiseAims(AimsOutput):
@@ -177,7 +177,7 @@ class VisualiseAims(AimsOutput):
             system name to include in title
         """
 
-        # see NOTE in dfttools.output.AimsOutput.get_i_scf_conv_acc()
+        # see NOTE in dfttoolkit.output.AimsOutput.get_i_scf_conv_acc()
         # ax.plot(delta_forces, label=r"$\Delta$ forces")
         ax.plot(forces_on_atoms, label="forces on atoms")
 
@@ -319,7 +319,7 @@ class VisualiseAims(AimsOutput):
 
         # Plot the forces
         if forces:
-            # see NOTE in dfttools.output.AimsOutput.get_i_scf_conv_acc()
+            # see NOTE in dfttoolkit.output.AimsOutput.get_i_scf_conv_acc()
             # delta_forces = self.scf_conv_acc_params["change_of_forces"]
             # delta_forces = np.delete(delta_forces, np.argwhere(delta_forces == 0.0))
             forces_on_atoms = self.scf_conv_acc_params["forces_on_atoms"]

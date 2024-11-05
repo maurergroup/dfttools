@@ -5,11 +5,11 @@ import numpy.typing as npt
 import scipy
 
 
-def get_rotation_matrix(vec_start: np.array, vec_end: np.array) -> np.array:
+def get_rotation_matrix(vec_start: npt.NDArray, vec_end: npt.NDArray) -> npt.NDArray:
     """
     Given a two (unit) vectors, vec_start and vec_end, this function calculates
     the rotation matrix U, so that
-     U * vec_start = vec_end.
+    U * vec_start = vec_end.
 
     U the is rotation matrix that rotates vec_start to point in the direction
     of vec_end.
@@ -18,37 +18,40 @@ def get_rotation_matrix(vec_start: np.array, vec_end: np.array) -> np.array:
 
     Parameters
     ----------
-        vec_start, vec_end <np.array<float>>: array of shape (3,). Represent
-            the two vectors and must have l2-norm of 1!
+    vec_start, vec_end : npt.NDArray[np.float64]
+        Two vectors that should be aligned. Both vectors must have a l2-norm of 1.
 
     Returns:
     --------
-        The rotation matrix U as np.array with shape (3,3)
+    R
+        The rotation matrix U as npt.NDArray with shape (3,3)
     """
     assert np.isclose(np.linalg.norm(vec_start), 1) and np.isclose(
         np.linalg.norm(vec_end), 1
     ), "vec_start and vec_end must be unit vectors!"
+
     v = np.cross(vec_start, vec_end)
     c = np.dot(vec_start, vec_end)
     v_x = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
     R = np.eye(3) + v_x + v_x.dot(v_x) / (1 + c)
+
     return R
 
 
-def get_rotation_matrix_around_axis(axis: np.array, phi: float) -> np.array:
+def get_rotation_matrix_around_axis(axis: npt.NDArray, phi: float) -> npt.NDArray:
     """
     Generates a rotation matrix around a given vector.
 
     Parameters
     ----------
-    axis : np.array
+    axis : npt.NDArray
         Axis around which the rotation is done.
     phi : float
         Angle of rotation around axis in radiants.
 
     Returns
     -------
-    R : np.array
+    R : npt.NDArray
         Rotation matrix
 
     """
@@ -70,7 +73,7 @@ def get_rotation_matrix_around_axis(axis: np.array, phi: float) -> np.array:
     return R
 
 
-def get_rotation_matrix_around_z_axis(phi: float) -> np.array:
+def get_rotation_matrix_around_z_axis(phi: float) -> npt.NDArray:
     """
     Generates a rotation matrix around the z axis.
 
@@ -81,26 +84,26 @@ def get_rotation_matrix_around_z_axis(phi: float) -> np.array:
 
     Returns
     -------
-    np.array
+    npt.NDArray
         Rotation matrix
 
     """
     return get_rotation_matrix_around_axis(np.array([0.0, 0.0, 1.0]), phi)
 
 
-def get_mirror_matrix(normal_vector: np.array) -> np.array:
+def get_mirror_matrix(normal_vector: npt.NDArray) -> npt.NDArray:
     """
     Generates a transformation matrix for mirroring through plane given by the
     normal vector.
 
     Parameters
     ----------
-    normal_vector : np.array
+    normal_vector : npt.NDArray
         Normal vector of the mirror plane.
 
     Returns
     -------
-    M : np.array
+    M : npt.NDArray
         Mirror matrix
 
     """
@@ -121,15 +124,15 @@ def get_mirror_matrix(normal_vector: np.array) -> np.array:
 
 
 def get_angle_between_vectors(
-    vector_1: np.array, vector_2: np.array
-) -> np.array:
+    vector_1: npt.NDArray, vector_2: npt.NDArray
+) -> npt.NDArray:
     """
     Determines angle between two vectors.
 
     Parameters
     ----------
-    vector_1 : np.array
-    vector_2 : np.array
+    vector_1 : npt.NDArray
+    vector_2 : npt.NDArray
 
     Returns
     -------
@@ -138,16 +141,14 @@ def get_angle_between_vectors(
 
     """
     angle = (
-        np.dot(vector_1, vector_2)
-        / np.linalg.norm(vector_1)
-        / np.linalg.norm(vector_2)
+        np.dot(vector_1, vector_2) / np.linalg.norm(vector_1) / np.linalg.norm(vector_2)
     )
     return angle
 
 
 def get_fractional_coords(
-    cartesian_coords: np.array, lattice_vectors: np.array
-) -> np.array:
+    cartesian_coords: npt.NDArray, lattice_vectors: npt.NDArray
+) -> npt.NDArray:
     """
     Transform cartesian coordinates into fractional coordinates.
 
@@ -169,8 +170,8 @@ def get_fractional_coords(
 
 
 def get_cartesian_coords(
-    frac_coords: np.array, lattice_vectors: np.array
-) -> np.array:
+    frac_coords: npt.NDArray, lattice_vectors: npt.NDArray
+) -> npt.NDArray:
     """
     Transform fractional coordinates into cartesian coordinates.
 
@@ -191,23 +192,23 @@ def get_cartesian_coords(
 
 
 def get_cross_correlation_function(
-    signal_0: np.array,
-    signal_1: np.array,
+    signal_0: npt.NDArray,
+    signal_1: npt.NDArray,
     detrend: bool = False,
-) -> np.array:
+) -> npt.NDArray:
     """
     Calculate the autocorrelation function for a given signal.
 
     Parameters
     ----------
-    signal_0 : 1D np.array
+    signal_0 : 1D npt.NDArray
         First siganl for which the correlation function should be calculated.
-    signal_1 : 1D np.array
+    signal_1 : 1D npt.NDArray
         Second siganl for which the correlation function should be calculated.
 
     Returns
     -------
-    correlation : np.array
+    correlation : npt.NDArray
         Autocorrelation function from 0 to max_lag.
 
     """
@@ -228,8 +229,8 @@ def get_cross_correlation_function(
 
 
 def get_autocorrelation_function_manual_lag(
-    signal: np.array, max_lag: int
-) -> np.array:
+    signal: npt.NDArray, max_lag: int
+) -> npt.NDArray:
     """
     Alternative method to determine the autocorrelation function for a given
     signal that used numpy.corrcoef. This function allows to set the lag
@@ -237,7 +238,7 @@ def get_autocorrelation_function_manual_lag(
 
     Parameters
     ----------
-    signal : 1D np.array
+    signal : 1D npt.NDArray
         Siganl for which the autocorrelation function should be calculated.
     max_lag : Union[None, int], optional
         Autocorrelation will be calculated for a range of 0 to max_lag,
@@ -246,11 +247,11 @@ def get_autocorrelation_function_manual_lag(
 
     Returns
     -------
-    autocorrelation : np.array
+    autocorrelation : npt.NDArray
         Autocorrelation function from 0 to max_lag.
 
     """
-    lag = np.array(range(max_lag))
+    lag = npt.NDArray(range(max_lag))
 
     autocorrelation = np.array([np.nan] * max_lag)
 
@@ -265,20 +266,20 @@ def get_autocorrelation_function_manual_lag(
     return autocorrelation
 
 
-def get_fourier_transform(signal: np.array, time_step: float) -> tuple:
+def get_fourier_transform(signal: npt.NDArray, time_step: float) -> tuple:
     """
     Calculate the fourier transform of a given siganl.
 
     Parameters
     ----------
-    signal : 1D np.array
+    signal : 1D npt.NDArray
         Siganl for which the autocorrelation function should be calculated.
     time_step : float
         Time step of the signal in seconds.
 
     Returns
     -------
-    (np.array, np.array)
+    (npt.NDArray, npt.NDArray)
         Frequencs and absolute values of the fourier transform.
 
     """
@@ -293,14 +294,14 @@ def get_fourier_transform(signal: np.array, time_step: float) -> tuple:
 
 
 def lorentzian(
-    x: Union[float, np.array], a: float, b: float, c: float
-) -> Union[float, np.array]:
+    x: Union[float, npt.NDArray], a: float, b: float, c: float
+) -> Union[float, npt.NDArray]:
     """
     Returns a Lorentzian function.
 
     Parameters
     ----------
-    x : Union[float, np.array]
+    x : Union[float, npt.NDArray]
         Argument x of f(x) --> y.
     a : float
         Maximum of Lorentzian.
@@ -311,7 +312,7 @@ def lorentzian(
 
     Returns
     -------
-    f : Union[float, np.array]
+    f : Union[float, npt.NDArray]
         Outupt of a Lorentzian function.
 
     """
@@ -414,12 +415,12 @@ def norm_matrix_by_dagonal(matrix: np.array) -> np.array:
 
     Parameters
     ----------
-    matrix : np.array
+    matrix : npt.NDArray
         Matrix that should be normed.
 
     Returns
     -------
-    matrix : np.array
+    matrix : npt.NDArray
         Normed matrix.
 
     """
@@ -535,9 +536,7 @@ def get_moving_average(signal: npt.NDArray[np.float64], window_size: int):
         Variance around the moving average.
 
     """
-    moving_avg = np.convolve(
-        signal, np.ones(window_size) / window_size, mode="valid"
-    )
+    moving_avg = np.convolve(signal, np.ones(window_size) / window_size, mode="valid")
     variance = np.array(
         [
             np.var(signal[i : i + window_size])

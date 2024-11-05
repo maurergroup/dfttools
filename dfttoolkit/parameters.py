@@ -1,7 +1,7 @@
 from typing import List
 
-import dfttools.utils.file_utils as fu
-from dfttools.base_parser import BaseParser
+import dfttoolkit.utils.file_utils as fu
+from dfttoolkit.base_parser import BaseParser
 
 
 class Parameters(BaseParser):

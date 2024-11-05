@@ -1,3 +1,3 @@
 #!/bin/bash
-sphinx-apidoc -o source/ ../dfttools
-sphinx-apidoc -o source/ ../dfttools/utils
+sphinx-apidoc -o source/ ../dfttoolkit
+sphinx-apidoc -o source/ ../dfttoolkit/utils

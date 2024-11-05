@@ -1,7 +1,7 @@
-dfttools
+dfttoolkit
 ========
 
 .. toctree::
    :maxdepth: 4
 
-   dfttools
+   dfttoolkit

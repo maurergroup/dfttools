@@ -1,7 +1,7 @@
 import numpy as np
 import numpy.typing as npt
-from dfttools.output import AimsOutput
-import dfttools.utils.file_utils as fu
+from dfttoolkit.output import AimsOutput
+import dfttoolkit.utils.file_utils as fu
 
 from typing import List
 

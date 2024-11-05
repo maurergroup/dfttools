@@ -1,77 +1,77 @@
-dfttools package
+dfttoolkit package
 ================
 
 Submodules
 ----------
 
-dfttools.base\_parser module
+dfttoolkit.base\_parser module
 ----------------------------
 
-.. automodule:: dfttools.base_parser
+.. automodule:: dfttoolkit.base_parser
    :members:
    :undoc-members:
    :show-inheritance:
 
-dfttools.benchmarking module
+dfttoolkit.benchmarking module
 ----------------------------
 
-.. automodule:: dfttools.benchmarking
+.. automodule:: dfttoolkit.benchmarking
    :members:
    :undoc-members:
    :show-inheritance:
 
-dfttools.custom\_ase module
+dfttoolkit.custom\_ase module
 ---------------------------
 
-.. automodule:: dfttools.custom_ase
+.. automodule:: dfttoolkit.custom_ase
    :members:
    :undoc-members:
    :show-inheritance:
 
-dfttools.friction\_tensor module
+dfttoolkit.friction\_tensor module
 --------------------------------
 
-.. automodule:: dfttools.friction_tensor
+.. automodule:: dfttoolkit.friction_tensor
    :members:
    :undoc-members:
    :show-inheritance:
 
-dfttools.geometry module
+dfttoolkit.geometry module
 ------------------------
 
-.. automodule:: dfttools.geometry
+.. automodule:: dfttoolkit.geometry
    :members:
    :undoc-members:
    :show-inheritance:
 
-dfttools.output module
+dfttoolkit.output module
 ----------------------
 
-.. automodule:: dfttools.output
+.. automodule:: dfttoolkit.output
    :members:
    :undoc-members:
    :show-inheritance:
 
-dfttools.parameters module
+dfttoolkit.parameters module
 --------------------------
 
-.. automodule:: dfttools.parameters
+.. automodule:: dfttoolkit.parameters
    :members:
    :undoc-members:
    :show-inheritance:
 
-dfttools.vibrations module
+dfttoolkit.vibrations module
 --------------------------
 
-.. automodule:: dfttools.vibrations
+.. automodule:: dfttoolkit.vibrations
    :members:
    :undoc-members:
    :show-inheritance:
 
-dfttools.visualise module
+dfttoolkit.visualise module
 -------------------------
 
-.. automodule:: dfttools.visualise
+.. automodule:: dfttoolkit.visualise
    :members:
    :undoc-members:
    :show-inheritance:
@@ -79,7 +79,7 @@ dfttools.visualise module
 Module contents
 ---------------
 
-.. automodule:: dfttools
+.. automodule:: dfttoolkit
    :members:
    :undoc-members:
    :show-inheritance:
