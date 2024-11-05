@@ -63,6 +63,7 @@ def get_cross_spectrum(
     bootstrapping_overlap: int = 0,
     zero_padding: int = 0,
     cutoff_at_last_maximum: bool = False,
+    window_function: str = "none",
 ) -> (np.array, np.array):
     """
     Determine the cross spectrum for a given signal using bootstrapping:
@@ -141,6 +142,13 @@ def get_cross_spectrum(
         signal_0_block = signal_0[block_start:block_end]
         signal_1_block = signal_1[block_start:block_end]
 
+        if window_function == "gaussian":
+            signal_0_block = mu.apply_gaussian_window(signal_0_block)
+            signal_1_block = mu.apply_gaussian_window(signal_1_block)
+        elif window_function == "hann":
+            signal_0_block = mu.apply_hann_window(signal_0_block)
+            signal_1_block = mu.apply_hann_window(signal_1_block)
+
         cross_correlation = mu.get_cross_correlation_function(
             signal_0_block, signal_1_block
         )
@@ -148,7 +156,6 @@ def get_cross_spectrum(
         # truncate cross correlation function at last maximum
         if cutoff_at_last_maximum:
             cutoff_index = get_last_maximum(cross_correlation)
-            # print(block, cutoff_index, len(cross_correlation))
             cross_correlation = cross_correlation[:cutoff_index]
 
         # add zero padding

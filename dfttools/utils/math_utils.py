@@ -321,6 +321,89 @@ def lorentzian(
     return f
 
 
+def gaussian_window(N, std=0.4):
+    """
+    Generate a Gaussian window.
+
+    Parameters
+    ----------
+    N : int
+        Number of points in the window.
+    std : float
+        Standard deviation of the Gaussian window, normalized
+        such that the maximum value occurs at the center of the window.
+
+    Returns
+    -------
+    window : np.array
+        Gaussian window of length N.
+
+    """
+    n = np.linspace(-1, 1, N)
+    window = np.exp(-0.5 * (n / std) ** 2)
+    return window
+
+
+def apply_gaussian_window(data, std=0.4):
+    """
+    Apply a Gaussian window to an array.
+
+    Parameters
+    ----------
+    data : np.array
+        Input data array to be windowed.
+    std : float
+        Standard deviation of the Gaussian window.
+
+    Returns
+    -------
+    windowed_data : np.array
+        Windowed data array.
+
+    """
+    N = len(data)
+    window = gaussian_window(N, std)
+    windowed_data = data * window
+    return windowed_data
+
+
+def hann_window(N):
+    """
+    Generate a Hann window.
+
+    Parameters
+    ----------
+    N : int
+        Number of points in the window.
+
+    Returns
+    -------
+    np.ndarray
+        Hann window of length N.
+    """
+    return 0.5 * (1 - np.cos(2 * np.pi * np.arange(N) / (N - 1)))
+
+
+def apply_hann_window(data):
+    """
+    Apply a Hann window to an array.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Input data array to be windowed.
+
+    Returns
+    -------
+    np.ndarray
+        Windowed data array.
+    """
+    N = len(data)
+    window = hann_window(N)
+    windowed_data = data * window
+    return windowed_data
+
+
 def norm_matrix_by_dagonal(matrix: np.array) -> np.array:
     """
     Norms a matrix such that the diagonal becomes 1.
