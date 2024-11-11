@@ -114,8 +114,8 @@ def get_cross_spectrum(
     signal_length = len(signal_0)
     block_size = int(
         np.floor(
-            signal_length
-            / (1 + bootstrapping_blocks * bootstrapping_overlap - bootstrapping_overlap)
+            signal_length * (1 + bootstrapping_overlap)
+            / (bootstrapping_blocks + bootstrapping_overlap)
         )
     )
 
@@ -123,8 +123,8 @@ def get_cross_spectrum(
     cross_spectrum = []
 
     for block in range(bootstrapping_blocks):
-
-        block_start = int(np.ceil(block * block_size * (1 - bootstrapping_overlap)))
+        block_start = int(np.ceil(block * block_size /
+                          (1 + bootstrapping_overlap)))
         if block_start < 0:
             block_start = 0
 
@@ -204,7 +204,8 @@ def get_cross_spectrum_mem(
     """
     # Calculate the autocorrelation of the time series
     autocorr = np.correlate(signal_0, signal_1, mode="full") / len(signal_0)
-    autocorr = autocorr[len(autocorr) // 2 : len(autocorr) // 2 + model_order + 1]
+    autocorr = autocorr[len(autocorr) //
+                        2: len(autocorr) // 2 + model_order + 1]
 
     # Create a Toeplitz matrix from the autocorrelation function
     # R = toeplitz(autocorr[:-1])
@@ -215,7 +216,8 @@ def get_cross_spectrum_mem(
     # model_coeffs = solve_toeplitz((R, R.T), r)
 
     # Compute the PSD from the model coefficients
-    freqs = np.linspace(0, 0.5, n_freqs)  # Normalized frequency (Nyquist = 0.5)
+    # Normalized frequency (Nyquist = 0.5)
+    freqs = np.linspace(0, 0.5, n_freqs)
     psd = np.zeros(n_freqs)
     for i, f in enumerate(freqs):
         z = np.exp(-2j * np.pi * f)
@@ -307,7 +309,8 @@ def get_line_widths(
     res = [np.nan, np.nan, np.nan]
 
     if use_lorentzian:
-        res = lorentzian_fit(frequencies, power_spectrum, filter_maximum=filter_maximum)
+        res = lorentzian_fit(frequencies, power_spectrum,
+                             filter_maximum=filter_maximum)
 
     if np.isnan(res[0]):
         res = get_peak_parameters(frequencies, power_spectrum)
@@ -369,28 +372,52 @@ def _get_normal_mode_decomposition_numba(
     velocities_projected, velocities, eigenvectors
 ) -> None:
 
-    number_of_cell_atoms = velocities.shape[1]
+    # number_of_cell_atoms = velocities.shape[1]
+    # number_of_frequencies = eigenvectors.shape[0]
+
+    # for k in range(number_of_frequencies):
+    #     for n in range(velocities.shape[0]):
+    #         for i in prange(number_of_cell_atoms):
+    #             for m in prange(velocities.shape[2]):
+    #                 velocities_projected[n, k] += (
+    #                     velocities[n, i, m] * eigenvectors[k, i, m]
+    #                 )
+
+    number_of_timesteps, number_of_cell_atoms, velocity_components = velocities.shape
     number_of_frequencies = eigenvectors.shape[0]
 
-    for k in range(number_of_frequencies):
-        for n in range(velocities.shape[0]):
-            for i in prange(number_of_cell_atoms):
-                for m in prange(velocities.shape[2]):
-                    velocities_projected[n, k] += (
-                        velocities[n, i, m] * eigenvectors[k, i, m]
-                    )
+    # Loop over all frequencies
+    for k in prange(number_of_frequencies):
+        # Loop over all timesteps
+        for n in prange(number_of_timesteps):
+            # Temporary variable to accumulate the projection result for this frequency and timestep
+            projection_sum = 0.0
+
+            # Loop over atoms and components
+            for i in range(number_of_cell_atoms):
+                for m in range(velocity_components):
+                    projection_sum += velocities[n,
+                                                 i, m] * eigenvectors[k, i, m]
+
+            # Store the result in the projected velocities array
+            velocities_projected[n, k] = projection_sum
 
 
 def _get_normal_mode_decomposition_numpy(
     velocities_projected, velocities, eigenvectors
 ) -> None:
 
-    number_of_cell_atoms = velocities.shape[1]
-    number_of_frequencies = eigenvectors.shape[0]
+    # Use einsum to perform the double summation over cell atoms and time steps
+    velocities_projected += np.einsum(
+        'tij,kij->tk', velocities, eigenvectors.conj()
+    )
 
-    # Projection in phonon coordinate
-    for k in range(number_of_frequencies):
-        for i in range(number_of_cell_atoms):
-            velocities_projected[:, k] += np.dot(
-                velocities[:, i, :], eigenvectors[k, i, :].conj()
-            )
+    # number_of_cell_atoms = velocities.shape[1]
+    # number_of_frequencies = eigenvectors.shape[0]
+
+    # # Projection in phonon coordinate
+    # for k in range(number_of_frequencies):
+    #     for i in range(number_of_cell_atoms):
+    #         velocities_projected[:, k] += np.dot(
+    #             velocities[:, i, :], eigenvectors[k, i, :].conj()
+    #         )
