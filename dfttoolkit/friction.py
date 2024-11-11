@@ -16,7 +16,27 @@ class FrictionTensor:
     def friction_tensor(self):
         return self.friction_tensor_raw
 
-    def read_friction_tensor(self, filename):
+    @friction_tensor.setter
+    def friction_tensor(self, friction_tensor_raw):
+        self.friction_tensor_raw = friction_tensor_raw
+
+    def read_friction_tensor(self, filename: str):
+        """
+        Reads the friction tensor when given a calculation directroy; Saves a
+        full size firction tensor (elements for all atoms) where atom-pairs
+        without friction are assigned a friction value of 0.
+
+        Parameters
+        ----------
+        filename : str
+            Path to directry.
+
+        Returns
+        -------
+        friction_tensor : np.array
+            Friction tensor for all atoms.
+
+        """
         atom_indices = []
         friction_tensor_0 = []
 
@@ -60,7 +80,8 @@ class FrictionTensor:
 
     def get_life_time(self, vibration):
         """
-        returns life time in ps
+        Returns life time in ps
+
         """
         vibration /= np.linalg.norm(vibration)
 
