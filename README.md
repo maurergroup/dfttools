@@ -1,4 +1,5 @@
 # DFTToolkit
+[![Coverage Status](https://coveralls.io/repos/github/maurergroup/dfttoolkit/badge.svg?branch=main)](https://coveralls.io/github/maurergroup/dfttoolkit?branch=main)
 
 ## Installation
 
