@@ -50,10 +50,10 @@ class TestAimsOutput:
 
         if self._aims_fixture_no in [1, 2, 3, 5, 7, 9]:
             assert len(geom) == 3
-            assert geom.get_is_periodic() == False
+            assert geom.get_is_periodic() is False
         else:
             assert len(geom) == 2
-            assert geom.get_is_periodic() == True
+            assert geom.get_is_periodic() is True
 
     # TODO
     # def test_get_parameters(self):

@@ -967,9 +967,9 @@ class AimsOutput(Output):
 
         Parameters
         ----------
-        include_spin_polarised : bool, optional
+        include_spin_polarised : bool, default=True
             Whether to include the spin-down states in the count if the calculation is
-            spin polarised (the default is True).
+            spin polarised.
 
         Returns
         -------
