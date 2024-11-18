@@ -240,10 +240,10 @@ def get_autocorrelation_function_manual_lag(
     ----------
     signal : 1D npt.NDArray
         Siganl for which the autocorrelation function should be calculated.
-    max_lag : Union[None, int], optional
+    max_lag : Union[None, int]
         Autocorrelation will be calculated for a range of 0 to max_lag,
         where max_lag is the largest lag for the calculation of the
-        autocorrelation function. The default is None.
+        autocorrelation function
 
     Returns
     -------

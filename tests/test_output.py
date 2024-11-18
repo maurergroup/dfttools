@@ -15,9 +15,9 @@ class TestAimsOutput:
 
         cwd = os.path.dirname(os.path.realpath(__file__))
 
-        # Run the FHI-aims calculations if the run_aims option is specified but not if
+        # Run the FHI-aims calculations if the run-aims option is specified but not if
         # they already exist.
-        # Force it to run if the run_aims option is "change_bin"
+        # Force it to run if the run-aims option is "change_bin"
         # run_aims fixture is defined in conftest.py
         if request.param == 1 and run_aims is not False:
             binary = aims_bin_path_prompt(run_aims, cwd)
@@ -50,10 +50,10 @@ class TestAimsOutput:
 
         if self._aims_fixture_no in [1, 2, 3, 5, 7, 9]:
             assert len(geom) == 3
-            assert geom.get_is_periodic() == False
+            assert geom.get_is_periodic() is False
         else:
             assert len(geom) == 2
-            assert geom.get_is_periodic() == True
+            assert geom.get_is_periodic() is True
 
     # TODO
     # def test_get_parameters(self):

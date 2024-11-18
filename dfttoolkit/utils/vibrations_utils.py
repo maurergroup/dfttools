@@ -56,6 +56,7 @@ def get_cross_correlation_function(
     return cross_correlation
 
 
+# TODO Fix docstrings and types
 def get_cross_spectrum(
     signal_0: npt.NDArray,
     signal_1: npt.NDArray,
@@ -83,16 +84,16 @@ def get_cross_spectrum(
         Second siganl for which the correlation function should be calculated.
     time_step : float
         DESCRIPTION.
-    bootstrapping_blocks : int, optional
-        DESCRIPTION. The default is 1.
-    bootstrapping_overlap : int, optional
-        DESCRIPTION. The default is 0.
-    zero_padding : int, optional
+    bootstrapping_blocks : int, default=1
+        DESCRIPTION
+    bootstrapping_overlap : int, default=0
+        DESCRIPTION
+    zero_padding : int, default=0
         Pad the cross correlation function with zeros to increase the frequency
         resolution of the FFT. This also avoids the effect of varying spectral
         leakage. However, it artificially broadens the resulting cross spectrum
         and introduces wiggles.
-    cutoff_at_last_maximum : bool, optional
+    cutoff_at_last_maximum : bool, default=False
         Cut off the cross correlation function at the last maximum to hide
         spectral leakage.
 
@@ -114,7 +115,8 @@ def get_cross_spectrum(
     signal_length = len(signal_0)
     block_size = int(
         np.floor(
-            signal_length * (1 + bootstrapping_overlap)
+            signal_length
+            * (1 + bootstrapping_overlap)
             / (bootstrapping_blocks + bootstrapping_overlap)
         )
     )
@@ -123,8 +125,7 @@ def get_cross_spectrum(
     cross_spectrum = []
 
     for block in range(bootstrapping_blocks):
-        block_start = int(np.ceil(block * block_size /
-                          (1 + bootstrapping_overlap)))
+        block_start = int(np.ceil(block * block_size / (1 + bootstrapping_overlap)))
         if block_start < 0:
             block_start = 0
 
@@ -204,8 +205,7 @@ def get_cross_spectrum_mem(
     """
     # Calculate the autocorrelation of the time series
     autocorr = np.correlate(signal_0, signal_1, mode="full") / len(signal_0)
-    autocorr = autocorr[len(autocorr) //
-                        2: len(autocorr) // 2 + model_order + 1]
+    autocorr = autocorr[len(autocorr) // 2 : len(autocorr) // 2 + model_order + 1]
 
     # Create a Toeplitz matrix from the autocorrelation function
     # R = toeplitz(autocorr[:-1])
@@ -309,8 +309,7 @@ def get_line_widths(
     res = [np.nan, np.nan, np.nan]
 
     if use_lorentzian:
-        res = lorentzian_fit(frequencies, power_spectrum,
-                             filter_maximum=filter_maximum)
+        res = lorentzian_fit(frequencies, power_spectrum, filter_maximum=filter_maximum)
 
     if np.isnan(res[0]):
         res = get_peak_parameters(frequencies, power_spectrum)
@@ -396,8 +395,7 @@ def _get_normal_mode_decomposition_numba(
             # Loop over atoms and components
             for i in range(number_of_cell_atoms):
                 for m in range(velocity_components):
-                    projection_sum += velocities[n,
-                                                 i, m] * eigenvectors[k, i, m]
+                    projection_sum += velocities[n, i, m] * eigenvectors[k, i, m]
 
             # Store the result in the projected velocities array
             velocities_projected[n, k] = projection_sum
@@ -408,9 +406,7 @@ def _get_normal_mode_decomposition_numpy(
 ) -> None:
 
     # Use einsum to perform the double summation over cell atoms and time steps
-    velocities_projected += np.einsum(
-        'tij,kij->tk', velocities, eigenvectors.conj()
-    )
+    velocities_projected += np.einsum("tij,kij->tk", velocities, eigenvectors.conj())
 
     # number_of_cell_atoms = velocities.shape[1]
     # number_of_frequencies = eigenvectors.shape[0]

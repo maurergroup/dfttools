@@ -5,7 +5,7 @@ def pytest_addoption(parser):
     """Add custom command line options to the pytest command."""
 
     parser.addoption(
-        "--run_aims",
+        "--run-aims",
         nargs="?",
         const=True,
         default=False,
@@ -20,4 +20,4 @@ def pytest_addoption(parser):
 
 @pytest.fixture(scope="session")
 def run_aims(request):
-    return request.config.getoption("--run_aims")
+    return request.config.getoption("--run-aims")
