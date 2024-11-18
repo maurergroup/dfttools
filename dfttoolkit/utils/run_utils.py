@@ -1,14 +1,18 @@
 import os.path
-import warnings
 from functools import wraps
 
 
-def no_repeat(func):
+def no_repeat(calc_dir="./", force=False):
     """
     Don't repeat the calculation if aims.out exists in the calculation directory.
 
-    A kwarg must be given to the decorated function called `calc_dir` which is the
-    directory where the calculation is to be performed.
+    Parameters
+    ----------
+    calc_dir : str, default="./"
+        The directory where the calculation is performed
+    force : bool, default=False
+        If True, the calculation is performed even if aims.out exists in the calculation
+        directory.
 
     Raises
     -------
@@ -16,25 +20,18 @@ def no_repeat(func):
         if the `calc_dir` kwarg is not a directory
     """
 
-    @wraps(func)
-    def wrapper_no_repeat(*args, **kwargs):
-        if "calc_dir" in kwargs and "force" in kwargs:
-            if not os.path.isdir(kwargs["calc_dir"]):
-                raise ValueError(f"{kwargs.get('calc_dir')} is not a directory.")
-
-            if kwargs["force"]:
+    def _no_repeat(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if not os.path.isdir(calc_dir):
+                raise ValueError(f"{calc_dir} is not a directory.")
+            if force:
                 return func(*args, **kwargs)
-            if not os.path.isfile(f"{kwargs.get('calc_dir')}/aims.out"):
+            if not os.path.isfile(f"{calc_dir}/aims.out"):
                 return func(*args, **kwargs)
             else:
-                print(
-                    f"aims.out already exists in {kwargs.get('calc_dir')}. Skipping "
-                    "calculation."
-                )
+                print(f"aims.out already exists in {calc_dir}. Skipping calculation.")
 
-        else:
-            warnings.warn(
-                "'calc_dir' and/or 'force' kwarg not provided: ignoring decorator"
-            )
+        return wrapper
 
-    return wrapper_no_repeat
+    return _no_repeat
