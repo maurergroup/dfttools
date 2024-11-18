@@ -60,10 +60,10 @@ It is also possible to generate `aims.out` files using an FHI-aims binary, which
 To do this, call
 
 ``` shell
-pytest -s --run_aims
+pytest -s --run-aims
 ```
 
-This will automatically prompt the user for the location of the FHI-aims binary using `$EDITOR`. Then, it will create a copy of the aims fixture directory but without the `aims.out` files, and run them using the custom FHI-aims binary. The tests will then run on these new generated files. As `dfttoolkit` stores the FHI-aims binary location so the user isn't prompted for its location every time `pytest` is run like this, `--run_aims` takes an optional argument `change_bin`, which will prompt the user again for the binary location and re-run the custom tests, regardless of whether they have been run before or not. 
+This will automatically prompt the user for the location of the FHI-aims binary using `$EDITOR`. Then, it will create a copy of the aims fixture directory but without the `aims.out` files, and run them using the custom FHI-aims binary. The tests will then run on these new generated files. As `dfttoolkit` stores the FHI-aims binary location so the user isn't prompted for its location every time `pytest` is run like this, `--run-aims` takes an optional argument `change_bin`, which will prompt the user again for the binary location and re-run the custom tests, regardless of whether they have been run before or not. 
 
 Currently, it is necessary to also run this with `-s` in order to capture the STDOUT to show the prompt. Also note that this will likely take some time to run this calculation, and it runs with 4 threads by default using `mpirun`. Finally, it is almost certain that several tests will fail, especially those relating to timing of calculations
 
