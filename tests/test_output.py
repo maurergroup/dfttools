@@ -1,35 +1,20 @@
 import os
-import subprocess
 
 import numpy as np
 import pytest
 import yaml
 from dfttoolkit.output import AimsOutput
-from dfttoolkit.utils.file_utils import aims_bin_path_prompt
 
 
 class TestAimsOutput:
 
     @pytest.fixture(params=range(1, 11), autouse=True)
-    def aims_out(self, request, run_aims):
+    def aims_out(self, request, aims_calc_dir):
 
         cwd = os.path.dirname(os.path.realpath(__file__))
 
-        # Run the FHI-aims calculations if the run-aims option is specified but not if
-        # they already exist.
-        # Force it to run if the run-aims option is "change_bin"
-        # run_aims fixture is defined in conftest.py
-        if request.param == 1 and run_aims is not False:
-            binary = aims_bin_path_prompt(run_aims, cwd)
-            subprocess.run(["bash", f"{cwd}/run_aims.sh", binary, str(run_aims)])
-            aims_out_dir = "custom_bin_aims_calcs"
-        elif run_aims is not False:
-            aims_out_dir = "custom_bin_aims_calcs"
-        else:
-            aims_out_dir = "default_aims_calcs"
-
         self.ao = AimsOutput(
-            aims_out=f"{cwd}/fixtures/{aims_out_dir}/{str(request.param)}/aims.out"
+            aims_out=f"{cwd}/fixtures/{aims_calc_dir}/{str(request.param)}/aims.out"
         )
 
         with open(f"{cwd}/test_references.yaml", "r") as references:

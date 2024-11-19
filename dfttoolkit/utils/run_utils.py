@@ -31,14 +31,20 @@ def no_repeat(
     def _no_repeat(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            if not os.path.isdir(calc_dir):
-                raise ValueError(f"{calc_dir} is not a directory.")
+            # Override calc_dir in decorator call if given in func
+            if "calc_dir" in kwargs:
+                check_dir = kwargs["calc_dir"]
+            else:
+                check_dir = calc_dir
+
+            if not os.path.isdir(check_dir):
+                raise ValueError(f"{check_dir} is not a directory.")
             if force:
                 return func(*args, **kwargs)
-            if not os.path.isfile(f"{calc_dir}/{output_file}"):
+            if not os.path.isfile(f"{check_dir}/{output_file}"):
                 return func(*args, **kwargs)
             else:
-                print(f"aims.out already exists in {calc_dir}. Skipping calculation.")
+                print(f"aims.out already exists in {check_dir}. Skipping calculation.")
 
         return wrapper
 
