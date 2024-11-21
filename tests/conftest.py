@@ -46,3 +46,11 @@ def aims_calc_dir(run_aims):
         return "custom_bin_aims_calcs"
     else:
         return "default_aims_calcs"
+
+
+@pytest.fixture(scope="session")
+def tmp_dir(tmp_path_factory):
+    """Temporary directory for all tests to write files to"""
+
+    d = tmp_path_factory.mktemp("tmp")
+    return d
