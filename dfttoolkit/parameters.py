@@ -85,10 +85,15 @@ class AimsControl(Parameters):
         ----------
         *args : str
             Keywords to be removed from the control.in file.
-        output : Literal['overwrite', 'print', 'return'], default='overwrite'
+        output : Literal["overwrite", "print", "return"], default="overwrite"
             Overwrite the original file, print the modified file to STDOUT, or return
             the modified file as a list of '\\n' separated strings.
 
+        Returns
+        -------
+        Union[None, List[str]]
+            If output is "return", the modified file is returned as a list of '\\n'
+            separated strings.
         """
 
         for keyword in args:
