@@ -1,5 +1,6 @@
-from typing import Union
 from copy import deepcopy
+from typing import Union
+
 import numpy as np
 import numpy.typing as npt
 import scipy
@@ -405,7 +406,7 @@ def apply_hann_window(data):
     return windowed_data
 
 
-def norm_matrix_by_dagonal(matrix: np.array) -> np.array:
+def norm_matrix_by_dagonal(matrix: npt.NDArray) -> npt.NDArray:
     """
     Norms a matrix such that the diagonal becomes 1.
 
@@ -437,7 +438,7 @@ def norm_matrix_by_dagonal(matrix: np.array) -> np.array:
     return new_matrix
 
 
-def mae(delta: np.ndarray) -> float:
+def mae(delta: np.ndarray) -> np.floating:
     """
     Calculated the mean absolute error from a list of value differnces.
 
@@ -455,7 +456,7 @@ def mae(delta: np.ndarray) -> float:
     return np.mean(np.abs(delta))
 
 
-def rel_mae(delta: np.ndarray, target_val: np.ndarray) -> float:
+def rel_mae(delta: np.ndarray, target_val: np.ndarray) -> np.floating:
     """
     Calculated the relative mean absolute error from a list of value differnces,
     given the target values.
