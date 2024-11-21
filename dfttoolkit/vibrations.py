@@ -32,7 +32,9 @@ class Vibrations:
         return self._vibration_coords
 
     @vibration_coords.setter
-    def vibration_coords(self, vibration_coords: List[npt.NDArray[np.float64]]):
+    def vibration_coords(
+        self, vibration_coords: List[npt.NDArray[np.float64]]
+    ):
         self._vibration_coords = vibration_coords
 
     @property
@@ -40,7 +42,9 @@ class Vibrations:
         return self._vibration_forces
 
     @vibration_forces.setter
-    def vibration_forces(self, vibration_forces: List[npt.NDArray[np.float64]]):
+    def vibration_forces(
+        self, vibration_forces: List[npt.NDArray[np.float64]]
+    ):
         self._vibration_forces = vibration_forces
 
     @property
@@ -169,7 +173,9 @@ class Vibrations:
 
         for row in range(H.shape[0]):
             if n_forces[row] > 0:
-                H[row, :] /= n_forces[row]  # prevent div by zero for unknown forces
+                H[row, :] /= n_forces[
+                    row
+                ]  # prevent div by zero for unknown forces
 
         if set_constrained_atoms_zero:
             constrained = self.constrain_relax.flatten()  # pyright:ignore
@@ -204,7 +210,9 @@ class Vibrations:
         constrained_inds = [i for i, c in enumerate(constrain) if c]
         constrained_inds = np.array(constrained_inds)
 
-        unconstrained_inds = np.array(list(set(all_inds) - set(constrained_inds)))
+        unconstrained_inds = np.array(
+            list(set(all_inds) - set(constrained_inds))
+        )
 
         for i in unconstrained_inds:
             for j in unconstrained_inds:
@@ -305,7 +313,8 @@ class Vibrations:
         omega = np.sign(omega2) * np.sqrt(np.abs(omega2))  # pyright:ignore
 
         conversion = np.sqrt(
-            (units.EV_IN_JOULE) / (units.ATOMIC_MASS_IN_KG * units.ANGSTROM_IN_METER**2)
+            (units.EV_IN_JOULE)
+            / (units.ATOMIC_MASS_IN_KG * units.ANGSTROM_IN_METER**2)
         )
         omega_SI = omega * conversion
 
@@ -341,7 +350,9 @@ class Vibrations:
         masses = self.get_mass_of_all_atoms()  # pyright:ignore
         tolerance = 0.001
 
-        primitive_cell_inverse = np.linalg.inv(self.lattice_vectors)  # pyright:ignore
+        primitive_cell_inverse = np.linalg.inv(
+            self.lattice_vectors
+        )  # pyright:ignore
 
         atom_type_index = np.array([None] * n_atoms)
         counter = 0
@@ -367,7 +378,9 @@ class Vibrations:
                     difference_in_cell_coordinates,
                 )
                 separation = pow(
-                    np.linalg.norm(projected_coordinates_atom_j - coordinates_atom_i),
+                    np.linalg.norm(
+                        projected_coordinates_atom_j - coordinates_atom_i
+                    ),
                     2,
                 )
 
@@ -476,8 +489,6 @@ class Vibrations:
 
         velocities_mass_averaged = self.get_velocity_mass_average(velocities)
 
-        # velocities_proj_0 = vibrations.project_onto_wave_vector(velocities, q_vector)
-
         velocities_projected = vu.get_normal_mode_decomposition(
             velocities_mass_averaged,
             self.eigenvectors,
@@ -486,20 +497,26 @@ class Vibrations:
 
         return velocities_projected
 
-    def get_cross_correlation_function(
+    def get_cross_spectrum(
         self,
         velocities: npt.NDArray[np.float64],
+        index_pair: tuple,
         time_step: float,
         bootstrapping_blocks: int = 1,
         bootstrapping_overlap: int = 0,
+        cutoff_at_last_maximum: bool = True,
+        window_function: str = "hann",
     ):
         """
         Parameters
         ----------
         velocities : npt.NDArray[np.float64]
-            DESCRIPTION.
+            Velocity time series.
+        index_pair : tuple
+            Indices of the two vibration between which the corss spectrum
+            should be calculated. For instance (1, 4).
         time_step : float
-            DESCRIPTION.
+            Time step in the velocity time series.
         bootstrapping_blocks : int, optional
             DESCRIPTION. The default is 1.
         bootstrapping_overlap : int, optional
@@ -507,94 +524,25 @@ class Vibrations:
 
         Returns
         -------
-        autocorr_t : np.array
+        frequencies : np.array
             DESCRIPTION.
-        autocorr : np.array
+        cross_spectrum : np.array
             DESCRIPTION.
 
         """
-        velocities_proj = self.get_normal_mode_decomposition(velocities)
-
-        n_points = len(self.eigenvectors)
-
-        autocorr_t = None
-        autocorr = {}
-
-        for index_0 in range(n_points):
-            for index_1 in range(n_points):
-                autocorr_block = vu.get_cross_correlation_function(
-                    velocities_proj[:, index_0],
-                    velocities_proj[:, index_1],
-                    bootstrapping_blocks=bootstrapping_blocks,
-                    bootstrapping_overlap=bootstrapping_overlap,
-                )
-
-                autocorr_t_block = np.linspace(
-                    0, len(autocorr_block) * time_step, len(autocorr_block)
-                )
-
-                autocorr_t = autocorr_t_block
-                autocorr[(index_0, index_1)] = autocorr_block
-
-        return autocorr_t, autocorr
-
-    def get_cross_spectrum(
-        self,
-        velocities: npt.NDArray[np.float64],
-        time_step: float,
-        use_mem: bool = False,
-        bootstrapping_blocks: int = 1,
-        bootstrapping_overlap: int = 0,
-        model_order: int = 15,
-    ):
+        index_0, index_1 = index_pair
 
         velocities_proj = self.get_normal_mode_decomposition(velocities)
 
-        n_points = len(self.eigenvectors)
-
-        if use_mem:
-            frequencies = vu.get_cross_spectrum_mem(
-                velocities_proj[:, 0],
-                velocities_proj[:, 0],
-                time_step,
-                model_order,
-                n_freqs=int(len(velocities_proj)),
-            )[0]
-        else:
-            frequencies = vu.get_cross_spectrum(
-                velocities_proj[:, 0],
-                velocities_proj[:, 0],
-                time_step,
-                bootstrapping_blocks=bootstrapping_blocks,
-                bootstrapping_overlap=bootstrapping_overlap,
-            )[0]
-
-        cross_spectrum = np.zeros(
-            (n_points, n_points, len(frequencies)), dtype=np.complex128
+        frequencies, cross_spectrum = vu.get_cross_spectrum(
+            velocities_proj[:, index_0],
+            velocities_proj[:, index_1],
+            time_step,
+            bootstrapping_blocks=bootstrapping_blocks,
+            bootstrapping_overlap=bootstrapping_overlap,
+            cutoff_at_last_maximum=cutoff_at_last_maximum,
+            window_function=window_function,
         )
-
-        for index_0 in range(n_points):
-            for index_1 in range(n_points):
-                print(index_0, index_1)
-
-                if use_mem:
-                    cross_spectrum_ij = vu.get_cross_spectrum_mem(
-                        velocities_proj[:, index_0],
-                        velocities_proj[:, index_1],
-                        time_step,
-                        model_order,
-                        n_freqs=int(len(velocities_proj)),
-                    )[1]
-                else:
-                    cross_spectrum_ij = vu.get_cross_spectrum(
-                        velocities_proj[:, index_0],
-                        velocities_proj[:, index_1],
-                        time_step,
-                        bootstrapping_blocks=bootstrapping_blocks,
-                        bootstrapping_overlap=bootstrapping_overlap,
-                    )[1]
-
-                cross_spectrum[index_0, index_1, :] = cross_spectrum_ij
 
         return frequencies, cross_spectrum
 
@@ -641,7 +589,9 @@ class Vibrations:
             L = f_inv_cm < frequency_cutoff
             cutoff = np.sum(L)
 
-        np.savetxt(os.path.join(dirname, "frequencies.csv"), frequencies[:cutoff])
+        np.savetxt(
+            os.path.join(dirname, "frequencies.csv"), frequencies[:cutoff]
+        )
 
         index = []
         for index_0 in range(n_points):
@@ -665,44 +615,6 @@ class Vibrations:
 
         with mp.Pool(processes) as pool:
             pool.map(func, index)
-
-    def get_coupling_matrix(
-        self,
-        velocities: npt.NDArray[np.float64],
-        time_step: float,
-        bootstrapping_blocks: int = 1,
-        bootstrapping_overlap: int = 0,
-    ):
-
-        omega = self.get_eigenvalues_in_Hz()
-
-        frequencies, power_spectrum = self.get_cross_spectrum(
-            velocities,
-            time_step,
-            bootstrapping_blocks=bootstrapping_blocks,
-            bootstrapping_overlap=bootstrapping_overlap,
-        )
-
-        n_points = len(self.eigenvectors)
-        coupling_matrix = np.zeros((n_points, n_points))
-
-        for index_0 in range(n_points):
-            for index_1 in range(n_points):
-
-                power_spectrum_index = np.real(power_spectrum[index_0, index_1, :])
-
-                max_f = argrelextrema(power_spectrum_index, np.greater)[0]
-
-                index_search = np.max([index_0, index_1])
-
-                f_couple = omega[index_search] / (2 * np.pi)
-
-                coupling_index_0 = np.argmin(np.abs(frequencies[max_f] - f_couple))
-                coupling_index = max_f[coupling_index_0]
-
-                coupling_matrix[index_0, index_1] = power_spectrum_index[coupling_index]
-
-        return coupling_matrix
 
 
 def _output_cross_spectrum(

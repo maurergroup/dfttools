@@ -11,6 +11,7 @@ from scipy.interpolate import interp1d
 from scipy.linalg import solve_toeplitz
 from scipy.optimize import brentq, curve_fit
 from scipy.signal import argrelextrema
+from concurrent.futures import ThreadPoolExecutor
 
 # get environment variable for parallelisation in numba
 parallel_numba = os.environ.get("parallel_numba")
@@ -114,7 +115,8 @@ def get_cross_spectrum(
     signal_length = len(signal_0)
     block_size = int(
         np.floor(
-            signal_length * (1 + bootstrapping_overlap)
+            signal_length
+            * (1 + bootstrapping_overlap)
             / (bootstrapping_blocks + bootstrapping_overlap)
         )
     )
@@ -123,8 +125,9 @@ def get_cross_spectrum(
     cross_spectrum = []
 
     for block in range(bootstrapping_blocks):
-        block_start = int(np.ceil(block * block_size /
-                          (1 + bootstrapping_overlap)))
+        block_start = int(
+            np.ceil(block * block_size / (1 + bootstrapping_overlap))
+        )
         if block_start < 0:
             block_start = 0
 
@@ -187,7 +190,11 @@ def get_cross_spectrum(
 
 
 def get_cross_spectrum_mem(
-    signal_0: npt.NDArray, signal_1: npt.NDArray, time_step, model_order, n_freqs=512
+    signal_0: npt.NDArray,
+    signal_1: npt.NDArray,
+    time_step,
+    model_order,
+    n_freqs=512,
 ):
     """
     Estimate the power spectral density (PSD) of a time series using the
@@ -204,8 +211,9 @@ def get_cross_spectrum_mem(
     """
     # Calculate the autocorrelation of the time series
     autocorr = np.correlate(signal_0, signal_1, mode="full") / len(signal_0)
-    autocorr = autocorr[len(autocorr) //
-                        2: len(autocorr) // 2 + model_order + 1]
+    autocorr = autocorr[
+        len(autocorr) // 2 : len(autocorr) // 2 + model_order + 1
+    ]
 
     # Create a Toeplitz matrix from the autocorrelation function
     # R = toeplitz(autocorr[:-1])
@@ -309,17 +317,18 @@ def get_line_widths(
     res = [np.nan, np.nan, np.nan]
 
     if use_lorentzian:
-        res = lorentzian_fit(frequencies, power_spectrum,
-                             filter_maximum=filter_maximum)
+        res = lorentzian_fit(
+            frequencies, power_spectrum, filter_maximum=filter_maximum
+        )
 
     if np.isnan(res[0]):
         res = get_peak_parameters(frequencies, power_spectrum)
 
     frequency = res[0]
     line_width = res[1]
-    life_time = 1.0 / line_width
+    lifetime = 1.0 / (np.pi * line_width)
 
-    return frequency, line_width, life_time
+    return frequency, line_width, lifetime
 
 
 def get_normal_mode_decomposition(
@@ -383,21 +392,25 @@ def _get_normal_mode_decomposition_numba(
     #                     velocities[n, i, m] * eigenvectors[k, i, m]
     #                 )
 
-    number_of_timesteps, number_of_cell_atoms, velocity_components = velocities.shape
+    number_of_timesteps, number_of_cell_atoms, velocity_components = (
+        velocities.shape
+    )
     number_of_frequencies = eigenvectors.shape[0]
 
     # Loop over all frequencies
     for k in prange(number_of_frequencies):
         # Loop over all timesteps
         for n in prange(number_of_timesteps):
-            # Temporary variable to accumulate the projection result for this frequency and timestep
+            # Temporary variable to accumulate the projection result for this
+            # frequency and timestep
             projection_sum = 0.0
 
             # Loop over atoms and components
             for i in range(number_of_cell_atoms):
                 for m in range(velocity_components):
-                    projection_sum += velocities[n,
-                                                 i, m] * eigenvectors[k, i, m]
+                    projection_sum += (
+                        velocities[n, i, m] * eigenvectors[k, i, m]
+                    )
 
             # Store the result in the projected velocities array
             velocities_projected[n, k] = projection_sum
@@ -409,15 +422,113 @@ def _get_normal_mode_decomposition_numpy(
 
     # Use einsum to perform the double summation over cell atoms and time steps
     velocities_projected += np.einsum(
-        'tij,kij->tk', velocities, eigenvectors.conj()
+        "tij,kij->tk", velocities, eigenvectors.conj()
     )
 
-    # number_of_cell_atoms = velocities.shape[1]
-    # number_of_frequencies = eigenvectors.shape[0]
 
-    # # Projection in phonon coordinate
-    # for k in range(number_of_frequencies):
-    #     for i in range(number_of_cell_atoms):
-    #         velocities_projected[:, k] += np.dot(
-    #             velocities[:, i, :], eigenvectors[k, i, :].conj()
-    #         )
+def get_coupling_matrix(
+    velocities_proj,
+    n_points,
+    time_step,
+    bootstrapping_blocks,
+    bootstrapping_overlap,
+    cutoff_at_last_maximum,
+    window_function,
+    num_threads=1,
+):
+    # Generate all index pairs
+    index_pairs = []
+    for index_0 in range(n_points):
+        for index_1 in range(n_points):
+            # Skip lower triangle
+            if index_0 < index_1:
+                continue
+
+            index_pairs.append((index_0, index_1))
+
+    if num_threads is None:
+        num_threads = os.cpu_count()
+
+    print(
+        f"Using {num_threads} threads to determine coupling matrix.",
+        flush=True,
+    )
+
+    # Parallel processing using ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        results = list(
+            executor.map(
+                get_coupling,
+                index_pairs,
+                [velocities_proj] * len(index_pairs),
+                [time_step] * len(index_pairs),
+                [bootstrapping_blocks] * len(index_pairs),
+                [bootstrapping_overlap] * len(index_pairs),
+                [cutoff_at_last_maximum] * len(index_pairs),
+                [window_function] * len(index_pairs),
+            )
+        )
+
+    coupling_matrix = np.zeros((n_points, n_points))
+
+    # Populate the coupling matrix
+    for index_0, index_1, coupling_value in results:
+        if index_0 is not None and index_1 is not None:
+            coupling_matrix[index_0, index_1] = coupling_value
+
+    return coupling_matrix
+
+
+def get_coupling(
+    index_pair,
+    velocities_proj,
+    time_step,
+    bootstrapping_blocks,
+    bootstrapping_overlap,
+    cutoff_at_last_maximum,
+    window_function,
+):
+    index_0, index_1 = index_pair
+
+    frequencies, power_spectrum = get_cross_spectrum(
+        velocities_proj[:, index_1],
+        velocities_proj[:, index_1],
+        time_step,
+        bootstrapping_blocks=bootstrapping_blocks,
+        bootstrapping_overlap=bootstrapping_overlap,
+        cutoff_at_last_maximum=cutoff_at_last_maximum,
+        window_function=window_function,
+    )
+
+    frequencies, cross_spectrum = get_cross_spectrum(
+        velocities_proj[:, index_0],
+        velocities_proj[:, index_1],
+        time_step,
+        bootstrapping_blocks=bootstrapping_blocks,
+        bootstrapping_overlap=bootstrapping_overlap,
+        cutoff_at_last_maximum=cutoff_at_last_maximum,
+        window_function=window_function,
+    )
+
+    power_spectrum_1 = np.real(power_spectrum)
+    max_index_1 = np.argmax(power_spectrum_1)
+    f_1 = frequencies[max_index_1]
+
+    cross_spectrum_1 = np.real(cross_spectrum)
+
+    max_f = argrelextrema(cross_spectrum_1, np.greater_equal)[0]
+
+    coupling_index_0 = np.argmin(np.abs(frequencies[max_f] - f_1))
+    coupling_index = max_f[coupling_index_0]
+
+    a_0 = frequencies[coupling_index]
+    b_0 = np.abs(frequencies[1] - frequencies[0])
+    c_0 = cross_spectrum_1[coupling_index]
+
+    p_0 = [a_0, b_0, c_0]
+
+    res = lorentzian_fit(frequencies, cross_spectrum_1, p_0=p_0)
+
+    print(index_0, index_1, res[2], flush=True)
+
+    return index_0, index_1, res[2]
