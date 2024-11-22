@@ -18,7 +18,7 @@ jobs:
       - uses: chartboost/ruff-action@v1
         with:
           src: "./dfttoolkit"
-          args: "check --fix --config ./pyproject.toml --output-format=github"
+          args: "check --fix --show-fixes --config ./pyproject.toml"
 
   ruff-format:
     runs-on: ubuntu-latest
