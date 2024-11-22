@@ -1,43 +1,21 @@
 import os
-import subprocess
 
 import numpy as np
 import pytest
-import yaml
 from dfttoolkit.output import AimsOutput
-from dfttoolkit.utils.file_utils import aims_bin_path_prompt
 
 
 class TestAimsOutput:
-
-    @pytest.fixture(params=range(1, 11), autouse=True)
-    def aims_out(self, request, run_aims):
-
-        cwd = os.path.dirname(os.path.realpath(__file__))
-
-        # Run the FHI-aims calculations if the run-aims option is specified but not if
-        # they already exist.
-        # Force it to run if the run-aims option is "change_bin"
-        # run_aims fixture is defined in conftest.py
-        if request.param == 1 and run_aims is not False:
-            binary = aims_bin_path_prompt(run_aims, cwd)
-            subprocess.run(["bash", f"{cwd}/run_aims.sh", binary, str(run_aims)])
-            aims_out_dir = "custom_bin_aims_calcs"
-        elif run_aims is not False:
-            aims_out_dir = "custom_bin_aims_calcs"
-        else:
-            aims_out_dir = "default_aims_calcs"
-
-        self.ao = AimsOutput(
-            aims_out=f"{cwd}/fixtures/{aims_out_dir}/{str(request.param)}/aims.out"
-        )
-
-        with open(f"{cwd}/test_references.yaml", "r") as references:
-            self.ref_data = yaml.safe_load(references)
-
     @property
     def _aims_fixture_no(self) -> int:
         return int(self.ao.path.split("/")[-2])
+
+    @pytest.fixture(params=range(1, 11), autouse=True)
+    def aims_out(self, cwd, request, aims_calc_dir):
+
+        self.ao = AimsOutput(
+            aims_out=f"{cwd}/fixtures/{aims_calc_dir}/{str(request.param)}/aims.out"
+        )
 
     def test_get_number_of_atoms(self):
         if self._aims_fixture_no in [4, 6, 8, 10]:
@@ -64,12 +42,12 @@ class TestAimsOutput:
         else:
             assert self.ao.check_exit_normal() is True
 
-    def test_get_time_per_scf(self):
+    def test_get_time_per_scf(self, ref_data):
         # Fail if the absolute tolerance between any values in test vs. reference array is
         # greater than 2e-3
         assert np.allclose(
             self.ao.get_time_per_scf(),
-            self.ref_data["timings"][self._aims_fixture_no - 1],
+            ref_data["timings"][self._aims_fixture_no - 1],
             atol=2e-3,
         )
 
@@ -99,14 +77,14 @@ class TestAimsOutput:
             < 1e-8
         )
 
-    def test_get_change_of_total_energy_2(self):
+    def test_get_change_of_total_energy_2(self, ref_data):
         """Get every energy change"""
 
         # Fail if the absolute tolerance between any values in test vs. reference array is
         # greater than 1e-10
         assert np.allclose(
             self.ao.get_change_of_total_energy(n_occurrence=None),
-            self.ref_data["energy_diffs"][self._aims_fixture_no - 1],
+            ref_data["energy_diffs"][self._aims_fixture_no - 1],
             atol=1e-8,
         )
 
@@ -142,7 +120,7 @@ class TestAimsOutput:
 
     #     assert np.allclose(
     #         self.ao.get_change_of_total_energy(n_occurrence=1),
-    #         self.ref_data['all_energies'][self.aims_fixture_no(self.ao) - 1],
+    #         ref_data['all_energies'][self.aims_fixture_no(self.ao) - 1],
     #         atol=1e-10,
     #     )
 
@@ -172,15 +150,11 @@ class TestAimsOutput:
         else:
             assert self.ao.check_spin_polarised() is False
 
-    def test_get_convergence_parameters(self):
+    def test_get_convergence_parameters(self, ref_data):
         if self._aims_fixture_no in [7, 8]:
-            assert (
-                self.ao.get_convergence_parameters() == self.ref_data["conv_params"][1]
-            )
+            assert self.ao.get_convergence_parameters() == ref_data["conv_params"][1]
         else:
-            assert (
-                self.ao.get_convergence_parameters() == self.ref_data["conv_params"][0]
-            )
+            assert self.ao.get_convergence_parameters() == ref_data["conv_params"][0]
 
     def test_get_final_energy(self):
         final_energies = [
@@ -236,25 +210,25 @@ class TestAimsOutput:
     # TODO
     # def test_get_all_ks_eigenvalues(self):
     #     if self._aims_fixture_no == 1:
-    #         for key in self.ref_data["eigenvalues"].keys():
+    #         for key in ref_data["eigenvalues"].keys():
     #             # Check the values are within tolerance and that keys match
     #             assert np.allclose(
     #                 self.ao.get_all_ks_eigenvalues()[key],
-    #                 self.ref_data["eigenvalues"][key],
+    #                 ref_data["eigenvalues"][key],
     #                 atol=1e-8,
     #             )
 
     #     elif self._aims_fixture_no in [2, 3]:
     #         spin_up, spin_down = self.ao.get_all_ks_eigenvalues()
 
-    #         for key in self.ref_data["su_eigenvalues"].keys():
+    #         for key in ref_data["su_eigenvalues"].keys():
     #             # Check the values are within tolerance and that keys match
     #             assert np.allclose(
-    #                 spin_up[key], self.ref_data["su_eigenvalues"][key], atol=1e-8
+    #                 spin_up[key], ref_data["su_eigenvalues"][key], atol=1e-8
     #             )
     #             # Repeat for spin_down
     #             assert np.allclose(
-    #                 spin_down[key], self.ref_data["sd_eigenvalues"][key], atol=1e-8
+    #                 spin_down[key], ref_data["sd_eigenvalues"][key], atol=1e-8
     #             )
 
     #     else:
@@ -264,13 +238,13 @@ class TestAimsOutput:
     # TODO
     # def get_final_ks_eigenvalues_test(self):
 
-    def test_get_pert_soc_ks_eigenvalues(self):
+    def test_get_pert_soc_ks_eigenvalues(self, ref_data):
         if self._aims_fixture_no == 3:
-            for key in self.ref_data["pert_soc_eigenvalues"].keys():
+            for key in ref_data["pert_soc_eigenvalues"].keys():
                 # Check the values are within tolerance and that keys match
                 assert np.allclose(
                     self.ao.get_pert_soc_ks_eigenvalues()[key],
-                    self.ref_data["pert_soc_eigenvalues"][key],
+                    ref_data["pert_soc_eigenvalues"][key],
                     atol=1e-8,
                 )
 

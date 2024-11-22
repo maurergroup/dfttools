@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Literal, Union
 
 import dfttoolkit.utils.file_utils as fu
 from dfttoolkit.base_parser import BaseParser
@@ -75,7 +75,9 @@ class AimsControl(Parameters):
         # TODO finish this
         raise NotImplementedError
 
-    def remove_keywords(self, *args: str) -> None:
+    def remove_keywords(
+        self, *args: str, output: Literal["overwrite", "print", "return"] = "return"
+    ) -> Union[None, List[str]]:
         """
         Remove keywords from the control.in file.
 
@@ -83,6 +85,15 @@ class AimsControl(Parameters):
         ----------
         *args : str
             Keywords to be removed from the control.in file.
+        output : Literal["overwrite", "print", "return"], default="overwrite"
+            Overwrite the original file, print the modified file to STDOUT, or return
+            the modified file as a list of '\\n' separated strings.
+
+        Returns
+        -------
+        Union[None, List[str]]
+            If output is "return", the modified file is returned as a list of '\\n'
+            separated strings.
         """
 
         for keyword in args:
@@ -90,8 +101,16 @@ class AimsControl(Parameters):
                 if keyword in line:
                     self.lines.pop(i)
 
-        with open(self.path, "w") as f:
-            f.writelines(self.lines)
+        match output:
+            case "overwrite":
+                with open(self.path, "w") as f:
+                    f.writelines(self.lines)
+
+            case "print":
+                print(*self.lines, sep="")
+
+            case "return":
+                return self.lines
 
     def get_keywords(self) -> dict:
         """
