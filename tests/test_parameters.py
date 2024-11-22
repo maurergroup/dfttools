@@ -1,8 +1,6 @@
-import os
 import shutil
 
 import pytest
-import yaml
 from dfttoolkit.parameters import AimsControl
 
 
