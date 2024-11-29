@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dfttoolkit"
-version = "0.2.0"
+version = "0.2.1"
 description = "A collection of python modules and libraries for several DFT codes to handle input and output."
 authors = [
     "Lukas Hoermann <lukas.hoermann@warwick.ac.uk>",
