@@ -62,7 +62,9 @@ class Geometry:
         self.energy = None
         self.forces = None
         self.hessian = None
-        self.geometry_parts = []  # list of lists: indices of each geometry part
+        self.geometry_parts = (
+            []
+        )  # list of lists: indices of each geometry part
         self.geometry_part_descriptions = (
             []
         )  # list of strings:  name of each geometry part
@@ -91,7 +93,9 @@ class Geometry:
             equal = False
         else:
             equal = np.allclose(self.coords, other.coords)
-            equal = equal and np.allclose(self.lattice_vectors, other.lattice_vectors)
+            equal = equal and np.allclose(
+                self.lattice_vectors, other.lattice_vectors
+            )
             equal = equal and self.species == other.species
         return equal
 
@@ -211,7 +215,8 @@ class Geometry:
         if isinstance(atoms, (list, tuple)):
             if len(atoms) > 1:
                 raise RuntimeError(
-                    "Don't know how to save more than " "one image to FHI-aims input"
+                    "Don't know how to save more than "
+                    "one image to FHI-aims input"
                 )
             else:
                 atoms = atoms[0]  # pyright:ignore
@@ -324,7 +329,9 @@ class Geometry:
             assert isinstance(cartesian_coords, np.ndarray)
             self.coords = cartesian_coords
         else:
-            self.coords = np.concatenate((self.coords, cartesian_coords), axis=0)
+            self.coords = np.concatenate(
+                (self.coords, cartesian_coords), axis=0
+            )
         self.species += species
         self.n_atoms = self.coords.shape[0]
 
@@ -355,12 +362,16 @@ class Geometry:
 
         """
         # check parts: (needs to be done before adding atoms to self)
-        if hasattr(self, "geometry_parts") and hasattr(geometry, "geometry_parts"):
+        if hasattr(self, "geometry_parts") and hasattr(
+            geometry, "geometry_parts"
+        ):
             for part, name in zip(
                 geometry.geometry_parts, geometry.geometry_part_descriptions
             ):
                 if len(part) > 0:
-                    self.geometry_parts.append([i + self.n_atoms for i in part])
+                    self.geometry_parts.append(
+                        [i + self.n_atoms for i in part]
+                    )
                     self.geometry_part_descriptions.append(name)
 
         # some lines of code in order to preserve backwards compatibility
@@ -378,7 +389,9 @@ class Geometry:
 
         # check lattice vectors:
         # g has lattice and self not:
-        if not np.any(self.lattice_vectors) and np.any(geometry.lattice_vectors):
+        if not np.any(self.lattice_vectors) and np.any(
+            geometry.lattice_vectors
+        ):
             self.lattice_vectors = np.copy(geometry.lattice_vectors)
 
         # both have lattice vectors:
@@ -397,9 +410,13 @@ class Geometry:
                 self.center = geometry.center.copy()
             # both have a center:
             elif self.center is not None and geometry.center is not None:
-                warnings.warn("Caution: The center of the first file will be used!")
+                warnings.warn(
+                    "Caution: The center of the first file will be used!"
+                )
 
-    def add_multipoles(self, multipoles: Union[List[float], List[list]]) -> None:
+    def add_multipoles(
+        self, multipoles: Union[List[float], List[list]]
+    ) -> None:
         """
         Adds multipoles to the the geometry.
 
@@ -555,7 +572,9 @@ class Geometry:
         None.
 
         """
-        indices_to_remove = self.get_cropping_indices(xlim, ylim, zlim, auto_margin)
+        indices_to_remove = self.get_cropping_indices(
+            xlim, ylim, zlim, auto_margin
+        )
         self.remove_atoms(indices_to_remove)
 
     def crop_inverse(
@@ -586,7 +605,9 @@ class Geometry:
         None.
 
         """
-        indices_to_keep = self.get_cropping_indices(xlim, ylim, zlim, auto_margin)
+        indices_to_keep = self.get_cropping_indices(
+            xlim, ylim, zlim, auto_margin
+        )
         indices_to_remove = np.array(
             [i for i in range(self.n_atoms) if i not in indices_to_keep]
         )
@@ -617,12 +638,24 @@ class Geometry:
         frac_coords = utils.get_fractional_coords(self.coords, lattice)
 
         remove_inds = []
-        remove_inds += list(np.where(frac_coords[:, 0] >= frac_coord_factors[1])[0])
-        remove_inds += list(np.where(frac_coords[:, 1] >= frac_coord_factors[1])[0])
-        remove_inds += list(np.where(frac_coords[:, 0] < frac_coord_factors[0])[0])
-        remove_inds += list(np.where(frac_coords[:, 1] < frac_coord_factors[0])[0])
-        remove_inds += list(np.where(frac_coords[:, 2] > frac_coord_factors[1])[0])
-        remove_inds += list(np.where(frac_coords[:, 2] < frac_coord_factors[0])[0])
+        remove_inds += list(
+            np.where(frac_coords[:, 0] >= frac_coord_factors[1])[0]
+        )
+        remove_inds += list(
+            np.where(frac_coords[:, 1] >= frac_coord_factors[1])[0]
+        )
+        remove_inds += list(
+            np.where(frac_coords[:, 0] < frac_coord_factors[0])[0]
+        )
+        remove_inds += list(
+            np.where(frac_coords[:, 1] < frac_coord_factors[0])[0]
+        )
+        remove_inds += list(
+            np.where(frac_coords[:, 2] > frac_coord_factors[1])[0]
+        )
+        remove_inds += list(
+            np.where(frac_coords[:, 2] < frac_coord_factors[0])[0]
+        )
 
         remove_inds = np.array(set(remove_inds))
 
@@ -732,6 +765,9 @@ class Geometry:
 
         """
         metal_atoms = self.get_indices_of_metal()
+
+        print(type(metal_atoms))
+
         self.remove_atoms(metal_atoms)
 
     def remove_non_metallic_atoms(self) -> None:
@@ -781,7 +817,9 @@ class Geometry:
         )
         self.remove_atoms(adsorbate_indices)
 
-    def remove_collisions(self, keep_latest: Union[bool, slice] = True) -> None:
+    def remove_collisions(
+        self, keep_latest: Union[bool, slice] = True
+    ) -> None:
         """
         Removes all atoms that are in a collision group as given by
         GeometryFile.getCollidingGroups.
@@ -895,7 +933,9 @@ class Geometry:
         """
         self.coords += shift
 
-    def move_all_atoms_by_fractional_coords(self, frac_shift, lattice_vectors=None):
+    def move_all_atoms_by_fractional_coords(
+        self, frac_shift, lattice_vectors=None
+    ):
         if lattice_vectors is None:
             lattice_vectors = self.lattice_vectors
 
@@ -905,7 +945,9 @@ class Geometry:
         """
         shifts the adsorbates in Cartesian coordinates
         """
-        adsorbates = self.get_adsorbates(primitive_substrate=primitive_substrate)
+        adsorbates = self.get_adsorbates(
+            primitive_substrate=primitive_substrate
+        )
         adsorbates.coords += shift
 
         self.remove_adsorbates(primitive_substrate=primitive_substrate)
@@ -932,7 +974,9 @@ class Geometry:
         None.
 
         """
-        R = utils.get_rotation_matrix_around_axis(axis, angle_in_degree * np.pi / 180)
+        R = utils.get_rotation_matrix_around_axis(
+            axis, angle_in_degree * np.pi / 180
+        )
         self.lattice_vectors = np.dot(self.lattice_vectors, R)
 
     def rotate_coords_around_axis(
@@ -968,14 +1012,18 @@ class Geometry:
         if center is None:
             center = self.get_geometric_center(indices=indices)
 
-        R = utils.get_rotation_matrix_around_axis(axis, angle_in_degree * np.pi / 180)
+        R = utils.get_rotation_matrix_around_axis(
+            axis, angle_in_degree * np.pi / 180
+        )
         temp_coords = copy.deepcopy(self.coords[indices])
         temp_coords -= center
         temp_coords = np.dot(temp_coords, R)
         temp_coords += center
         self.coords[indices] = temp_coords
 
-    def mirror_through_plane(self, normal_vector: npt.NDArray[np.float64]) -> None:
+    def mirror_through_plane(
+        self, normal_vector: npt.NDArray[np.float64]
+    ) -> None:
         """
         Mirrors the geometry through the plane defined by the normal vector.
 
@@ -1093,7 +1141,9 @@ class Geometry:
         None
 
         """
-        vector_to_align_normed = vector_to_align / np.linalg.norm(vector_to_align)
+        vector_to_align_normed = vector_to_align / np.linalg.norm(
+            vector_to_align
+        )
 
         vector_normed = vector / np.linalg.norm(vector)
 
@@ -1261,7 +1311,9 @@ class Geometry:
         """Transforms the lattice vectors by rotation and translation.
         The transformation is applied as x_new[3x1] = x_old[3x1] x R[3x3] + t[3x1]
         """
-        coords_frac = utils.get_fractional_coords(self.lattice_vectors, lattice)
+        coords_frac = utils.get_fractional_coords(
+            self.lattice_vectors, lattice
+        )
         coords_frac = np.dot(coords_frac, R.T) + t.reshape([1, 3])
         self.lattice_vectors = utils.get_cartesian_coords(coords_frac, lattice)
 
@@ -1334,7 +1386,9 @@ class Geometry:
                 # order to sum them
                 geom.reorder_atoms(self.get_transformation_indices(geom))
                 self.coords += geom.coords
-            self.coords /= len(other_geometries) + 1  # +1 for this geometry itself
+            self.coords /= (
+                len(other_geometries) + 1
+            )  # +1 for this geometry itself
             self.coords += offset
 
     def reorder_atoms(self, inds: npt.NDArray[np.int64]) -> None:
@@ -1421,7 +1475,9 @@ class Geometry:
     ###########################################################################
     #                      Set Properties of the Geometry                     #
     ###########################################################################
-    def set_vacuum_height(self, vac_height, bool_shift_to_bottom=False) -> None:
+    def set_vacuum_height(
+        self, vac_height, bool_shift_to_bottom=False
+    ) -> None:
         if bool_shift_to_bottom:
             self.shift_to_bottom()
         min_z = np.min(self.coords[:, -1])
@@ -1506,7 +1562,9 @@ class Geometry:
         if constrain_dim_flags is None:
             constrain_dim_flags = [True, True, True]
 
-        self.constrain_relax[indices_of_atoms_to_constrain, :] = constrain_dim_flags
+        self.constrain_relax[indices_of_atoms_to_constrain, :] = (
+            constrain_dim_flags
+        )
 
     def set_constraints_based_on_space(
         self,
@@ -1549,7 +1607,9 @@ class Geometry:
         # --- Filter all that are outside ---
         # The indices of the atoms of relevance to us are all that are NOT
         # outside of the cuboid
-        indices_inside = [i for i in range(len(self)) if i not in indices_outside]
+        indices_inside = [
+            i for i in range(len(self)) if i not in indices_outside
+        ]
         # ---
 
         self.set_constraints(indices_inside, constrain_dim_flags)
@@ -1644,9 +1704,9 @@ class Geometry:
 
     def set_homogeneous_field(self, E):
         """Field should be a numpy array (Ex, Ey, Ez) with the Field in V/A"""
-        assert len(E) == 3, "Expected E-field components [Ex, Ey, Ez], but got " + str(
-            E
-        )
+        assert (
+            len(E) == 3
+        ), "Expected E-field components [Ex, Ey, Ez], but got " + str(E)
         self.homogeneous_field = np.asarray(E)
 
     def free_homogeneous_field(self):
@@ -1791,7 +1851,9 @@ class Geometry:
             displacement_indices = np.array(range(len(self)))
 
         new_geometry = deepcopy(self)
-        new_geometry.displace_atoms(displacement_strength, displacement_indices)
+        new_geometry.displace_atoms(
+            displacement_strength, displacement_indices
+        )
 
         return new_geometry
 
@@ -1813,7 +1875,9 @@ class Geometry:
         Useful to calculate epitaxy matrices
 
         """
-        fractional_coords = np.linalg.solve(lattice_vectors.T, self.lattice_vectors.T)
+        fractional_coords = np.linalg.solve(
+            lattice_vectors.T, self.lattice_vectors.T
+        )
         return fractional_coords.T
 
     def get_reciprocal_lattice_vectors(self) -> npt.NDArray[np.float64]:
@@ -1943,7 +2007,9 @@ class Geometry:
 
             closest_atoms_list.append(closest_atoms.tolist())
 
-        if return_single_list:  # can only be true if only a single index was specified
+        if (
+            return_single_list
+        ):  # can only be true if only a single index was specified
             return closest_atoms_list[0]
         else:
             return closest_atoms_list
@@ -2084,7 +2150,9 @@ class Geometry:
 
     def get_atomic_numbers_of_atoms(self) -> npt.NDArray[np.float64]:
         """Get the atomic numbers of all atoms in the geometry file"""
-        species = [self.periodic_table.get_atomic_number(s) for s in self.species]
+        species = [
+            self.periodic_table.get_atomic_number(s) for s in self.species
+        ]
         return np.array(species)
 
     def get_number_of_electrons(self) -> float:
@@ -2104,7 +2172,9 @@ class Geometry:
                     curr_species = s.split("_")[0]
                 else:
                     curr_species = s
-                electrons.append(self.periodic_table.get_atomic_number(curr_species))
+                electrons.append(
+                    self.periodic_table.get_atomic_number(curr_species)
+                )
 
             except KeyError:
                 KeyError("Species {} is not known".format(s))
@@ -2231,7 +2301,9 @@ class Geometry:
         )
         return topmost_sub_layer.n_atoms
 
-    def get_bond_lengths(self, bond_factor: float = 1.5) -> npt.NDArray[np.float64]:
+    def get_bond_lengths(
+        self, bond_factor: float = 1.5
+    ) -> npt.NDArray[np.float64]:
         """
         Parameters
         ----------
@@ -2248,7 +2320,9 @@ class Geometry:
         raise NotImplementedError
 
         # TODO write the below function
-        neighbouring_atoms = self.get_all_neighbouring_atoms(bond_factor=bond_factor)
+        neighbouring_atoms = self.get_all_neighbouring_atoms(
+            bond_factor=bond_factor
+        )
 
         bond_lengths = []
         for v in neighbouring_atoms.values():
@@ -2257,7 +2331,9 @@ class Geometry:
         bond_lengths = np.array(bond_lengths)
         return bond_lengths
 
-    def get_number_of_atom_layers(self, threshold: float = 1e-2) -> Tuple[dict, float]:
+    def get_number_of_atom_layers(
+        self, threshold: float = 1e-2
+    ) -> Tuple[dict, float]:
         """
         Return the number of atom layers.
 
@@ -2326,11 +2402,15 @@ class Geometry:
         return : tuple
             (lattice vectors, frac coordinates of atoms, atomic numbers)
         """
-        coordinates = utils.get_fractional_coords(self.coords, self.lattice_vectors)
+        coordinates = utils.get_fractional_coords(
+            self.coords, self.lattice_vectors
+        )
 
         atom_number = []
         for atom_name in self.species:
-            atom_number.append(self.periodic_table.get_atomic_number(atom_name))
+            atom_number.append(
+                self.periodic_table.get_atomic_number(atom_name)
+            )
 
         return (self.lattice_vectors, coordinates, atom_number)
 
@@ -2403,7 +2483,10 @@ class Geometry:
         assert len(zlim) == 2, "zlim must have a lower and an upper bound"
         if auto_margin:
             margin = max(
-                [self.periodic_table.get_covalent_radius(s) for s in self.species]
+                [
+                    self.periodic_table.get_covalent_radius(s)
+                    for s in self.species
+                ]
             )
             xlim = xlim[0] - margin, xlim[1] + margin
             ylim = ylim[0] - margin, ylim[1] + margin
@@ -2462,10 +2545,12 @@ class Geometry:
                 )
             return None
 
-        index_of_geometry_parts_substrate = self.geometry_part_descriptions.index(
-            substrate_key
+        index_of_geometry_parts_substrate = (
+            self.geometry_part_descriptions.index(substrate_key)
         )
-        substrate_indices = self.geometry_parts[index_of_geometry_parts_substrate]
+        substrate_indices = self.geometry_parts[
+            index_of_geometry_parts_substrate
+        ]
         substrate_indices = np.array(substrate_indices)
         return substrate_indices
 
@@ -2480,16 +2565,20 @@ class Geometry:
             Inidices of metallic atoms.
 
         """
-        atom_inds = [self.periodic_table.get_atomic_number(s) for s in self.species]
+        atom_inds = [
+            self.periodic_table.get_atomic_number(s) for s in self.species
+        ]
         metal_atoms = []
         for i, ind in enumerate(atom_inds):
             if (ind > 18) or (ind in [3, 4, 11, 12, 13, 14]):
                 metal_atoms.append(i)
 
-        metal_atoms = np.array(metal_atoms)
+        metal_atoms = np.array(metal_atoms, dtype=np.int64)
         return metal_atoms
 
-    def get_indices_of_molecules(self, substrate_species=None) -> npt.NDArray[np.int64]:
+    def get_indices_of_molecules(
+        self, substrate_species=None
+    ) -> npt.NDArray[np.int64]:
         """
         Fetches the indices of the substrate atoms, but it defaults to
         just returning all non-metal atom's indices!
@@ -2503,7 +2592,9 @@ class Geometry:
         else:
             substrate_indices = self.get_indices_of_metal()
 
-        molecules = [i for i in range(self.n_atoms) if i not in substrate_indices]
+        molecules = [
+            i for i in range(self.n_atoms) if i not in substrate_indices
+        ]
         molecules = np.array(molecules)
         return molecules
 
@@ -2517,7 +2608,9 @@ class Geometry:
         if isinstance(species, str):
             species = [species]
 
-        species_indices = [i for i in range(self.n_atoms) if self.species[i] in species]
+        species_indices = [
+            i for i in range(self.n_atoms) if self.species[i] in species
+        ]
         species_indices = np.array(species_indices)
         return species_indices
 
@@ -2576,7 +2669,9 @@ class Geometry:
 
         return np.array(substrate_indices)
 
-    def get_adsorbate_indices(self, primitive_substrate=None) -> npt.NDArray[np.int64]:
+    def get_adsorbate_indices(
+        self, primitive_substrate=None
+    ) -> npt.NDArray[np.int64]:
         """
         This method returns the indices of all atoms that are NOT part of the substrate.
         In a classical organic monolayer on a metal substrate these are simply all molecules.
@@ -2594,14 +2689,20 @@ class Geometry:
         )
         # invert:
         return np.array(
-            [i for i in self.get_indices_of_all_atoms() if i not in substrate_indices]
+            [
+                i
+                for i in self.get_indices_of_all_atoms()
+                if i not in substrate_indices
+            ]
         )
 
     def get_indices_of_all_atoms(self, species=None):
         if species is None:
             return [i for i in range(self.n_atoms)]
         else:
-            return [i for i in range(self.n_atoms) if self.species[i] == species]
+            return [
+                i for i in range(self.n_atoms) if self.species[i] == species
+            ]
 
     def get_atom_layers_indices(self, threshold: float = 1e-2) -> dict:
         """
@@ -2637,7 +2738,9 @@ class Geometry:
 
         return layers
 
-    def get_atom_layers_indices_by_height(self, threshold: float = 1e-2) -> dict:
+    def get_atom_layers_indices_by_height(
+        self, threshold: float = 1e-2
+    ) -> dict:
         """
         Similarly to get_atom_layers_indices this function returns a dict
         continaing info about height and the indices of atoms at that height.
@@ -2739,7 +2842,9 @@ class Geometry:
         ]
 
         center_of_mass = self.get_center_of_mass()
-        r_to_center_in_m = units.ANGSTROM_IN_METER * (self.coords - center_of_mass)
+        r_to_center_in_m = units.ANGSTROM_IN_METER * (
+            self.coords - center_of_mass
+        )
 
         ###########
         # begin: code based on ase/atoms.py: get_moments_of_inertia
@@ -2781,7 +2886,9 @@ class Geometry:
         to coincide with the atoms of self.
 
         """
-        _, dist = self.get_transformation_indices(other_geometry, get_distances=True)
+        _, dist = self.get_transformation_indices(
+            other_geometry, get_distances=True
+        )
         return np.max(dist)
 
     def get_transformation_indices(
@@ -2824,7 +2931,9 @@ class Geometry:
         # Replicate other geometry to also search in neighbouring cells
         if periodic_2D:
             other_geometry = other_geometry.get_periodic_replica((3, 3, 1))
-            other_geometry.move_all_atoms_by_fractional_coords([-1 / 3.0, -1 / 3.0, 0])
+            other_geometry.move_all_atoms_by_fractional_coords(
+                [-1 / 3.0, -1 / 3.0, 0]
+            )
 
         # Get the atomic numbers of each geometry file: Later only compare matching atom types
         Z_values_1 = np.array(
@@ -2832,7 +2941,10 @@ class Geometry:
             np.int64,
         )
         Z_values_2 = np.array(
-            [self.periodic_table.get_atomic_number(s) for s in other_geometry.species],
+            [
+                self.periodic_table.get_atomic_number(s)
+                for s in other_geometry.species
+            ],
             np.int64,
         )
         unique_Z = set(Z_values_1)
@@ -2890,7 +3002,9 @@ class Geometry:
                     (3, 3), explicit_replications=[[-1, 0, 1], [-1, 0, 1]]
                 )
             else:
-                print("Non periodic structure. Ignoring check_neighbouring_cells")
+                print(
+                    "Non periodic structure. Ignoring check_neighbouring_cells"
+                )
 
         n_atoms = self.n_atoms
         n_atoms_geom = geom.n_atoms
@@ -2966,7 +3080,9 @@ class Geometry:
     ###########################################################################
     #                          Get Part of a Geometry                         #
     ###########################################################################
-    def get_atoms_by_indices(self, atom_indices: npt.NDArray[np.int64]) -> "Geometry":
+    def get_atoms_by_indices(
+        self, atom_indices: npt.NDArray[np.int64]
+    ) -> "Geometry":
         """
         Return a geometry instance with the atoms listed in atom_indices
 
@@ -3085,14 +3201,20 @@ class Geometry:
                 for k in range(-shell, shell + 1):
                     for l in range(-shell, shell + 1):
 
-                        if (abs(h) < shell) and (abs(k) < shell) and (abs(l) < shell):
+                        if (
+                            (abs(h) < shell)
+                            and (abs(k) < shell)
+                            and (abs(l) < shell)
+                        ):
                             continue
 
-                        for new_species, coord in zip(atomic_numbers, scaled_positions):
+                        for new_species, coord in zip(
+                            atomic_numbers, scaled_positions
+                        ):
 
-                            new_coord = coord.dot(lattice) + np.array([h, k, l]).dot(
-                                lattice
-                            )
+                            new_coord = coord.dot(lattice) + np.array(
+                                [h, k, l]
+                            ).dot(lattice)
                             frac_new_coord = utils.get_fractional_coords(
                                 new_coord, surface_lattice
                             )
@@ -3125,8 +3247,12 @@ class Geometry:
         scaled_slab_lattice = np.array(slab.lattice_vectors)
         # break symmetry in z-direction
         scaled_slab_lattice[2, :] *= 2
-        frac_coords = utils.get_fractional_coords(slab.coords, scaled_slab_lattice)
-        species = [self.periodic_table.get_atomic_number(s) for s in slab.species]
+        frac_coords = utils.get_fractional_coords(
+            slab.coords, scaled_slab_lattice
+        )
+        species = [
+            self.periodic_table.get_atomic_number(s) for s in slab.species
+        ]
 
         (
             primitive_slab_lattice,
@@ -3152,7 +3278,9 @@ class Geometry:
         primitive_slab.map_to_first_unit_cell()
 
         # Sanity check: primitive_slab must be reducable to the standard unit cell
-        check_lattice, _, _ = spglib.standardize_cell(primitive_slab.get_spglib_cell())
+        check_lattice, _, _ = spglib.standardize_cell(
+            primitive_slab.get_spglib_cell()
+        )
 
         assert np.allclose(
             check_lattice, lattice
@@ -3196,13 +3324,17 @@ class Geometry:
 
         """
         if surface is not None:
-            primitive_slab = self.get_primitive_slab(surface, threshold=threshold)
+            primitive_slab = self.get_primitive_slab(
+                surface, threshold=threshold
+            )
         else:
             primitive_slab = self
 
         slab_layers = primitive_slab.get_number_of_atom_layers()[1]
 
-        replica = np.array([1, 1, int(np.ceil(layers / slab_layers))], dtype=np.int32)
+        replica = np.array(
+            [1, 1, int(np.ceil(layers / slab_layers))], dtype=np.int32
+        )
         replica[:2] = surface_replica
         slab_new = primitive_slab.get_periodic_replica(tuple(replica))
 
@@ -3216,9 +3348,13 @@ class Geometry:
 
             atom_indices_to_remove = []
             for ind in range(n_layers_to_remove):
-                atom_indices_to_remove += slab_new_layers[atom_species][z_coords[ind]]
+                atom_indices_to_remove += slab_new_layers[atom_species][
+                    z_coords[ind]
+                ]
 
-            slab_new.remove_atoms(np.array(atom_indices_to_remove, dtype=np.int32))
+            slab_new.remove_atoms(
+                np.array(atom_indices_to_remove, dtype=np.int32)
+            )
 
             if vacuum_height is not None:
                 slab_new.set_vacuum_height(
@@ -3272,7 +3408,9 @@ class Geometry:
                     itertools.pairwise(e) for e in index_tuples
                 )
             )
-            G.add_nodes_from(set.union(*map(set, index_tuples)))  # adding single items
+            G.add_nodes_from(
+                set.union(*map(set, index_tuples))
+            )  # adding single items
             atoms_to_remove = list(nx.connected_components(G))
             return [sorted(list(s)) for s in atoms_to_remove]
         else:
@@ -3340,7 +3478,9 @@ class Geometry:
 
         if explicit_replications:
             rep = explicit_replications
-            lattice_multipliers = [np.max(t) - np.min(t) for t in explicit_replications]
+            lattice_multipliers = [
+                np.max(t) - np.min(t) for t in explicit_replications
+            ]
         else:
             rep = [list(range(r)) for r in replications]
             lattice_multipliers = replications
@@ -3358,7 +3498,9 @@ class Geometry:
             frac_shift = np.zeros([1, 3])
             frac_shift[0, : len(frac_offset)] = frac_offset
             offset = utils.get_cartesian_coords(frac_shift, lattice)
-            new_coords[insert_pos : insert_pos + self.n_atoms, :] = self.coords + offset
+            new_coords[insert_pos : insert_pos + self.n_atoms, :] = (
+                self.coords + offset
+            )
             insert_pos += self.n_atoms
 
         new_geom = self.__class__()
@@ -3372,7 +3514,9 @@ class Geometry:
                 self.original_lattice_vectors
             )
         else:
-            new_geom.original_lattice_vectors = copy.deepcopy(self.lattice_vectors)
+            new_geom.original_lattice_vectors = copy.deepcopy(
+                self.lattice_vectors
+            )
 
         for i, r in enumerate(lattice_multipliers):
             new_geom.lattice_vectors[i, :] *= r
@@ -3395,7 +3539,9 @@ class Geometry:
             already_scanned_lines_indices.append(line_index)
             line = matrix[line_index]
             links = np.nonzero(line)[0]
-            links = [l for l in links if l not in already_scanned_lines_indices]
+            links = [
+                l for l in links if l not in already_scanned_lines_indices
+            ]
             return links, already_scanned_lines_indices
 
         molecules_indices_sets = []
@@ -3430,7 +3576,9 @@ class Geometry:
         molecules = []
         for molecule_indices in molecules_indices_sets:
             complementary_indices = [
-                x for x in self.get_indices_of_all_atoms() if x not in molecule_indices
+                x
+                for x in self.get_indices_of_all_atoms()
+                if x not in molecule_indices
             ]
             g = deepcopy(self)
             g.remove_atoms(np.array(complementary_indices))
@@ -3571,7 +3719,9 @@ class Geometry:
 
         # apply transformation
         symm_geometry = copy.deepcopy(self)
-        symm_geometry.transform_fractional(R, np.array([0, 0, 0]), self.lattice_vectors)
+        symm_geometry.transform_fractional(
+            R, np.array([0, 0, 0]), self.lattice_vectors
+        )
         symm_geometry.move_all_atoms_by_fractional_coords(t)
 
         # prevent problems if the center is very close to the edge
@@ -3816,12 +3966,15 @@ class Geometry:
         species = [orig_species[i] for i in inds]
         n_atoms = len(species)
         circlesize = [
-            self.periodic_table.get_covalent_radius(s) * atom_scale for s in species
+            self.periodic_table.get_covalent_radius(s) * atom_scale
+            for s in species
         ]
 
         # Specify atom colors by value list or default atom colors
         if value_list is None and color_list is None:
-            colors = [self.periodic_table.get_species_colors(s) for s in species]
+            colors = [
+                self.periodic_table.get_species_colors(s) for s in species
+            ]
             colors = np.array(colors)
         elif color_list is not None:
             if len(color_list) == 1:
@@ -3903,7 +4056,9 @@ class Geometry:
                     "scalar (float or int) or a list with length equal "
                     "to the number of atoms"
                 )
-                brightness_modifier = [brightness_modifier[i] for i in orig_inds]
+                brightness_modifier = [
+                    brightness_modifier[i] for i in orig_inds
+                ]
 
             assert (
                 len(brightness_modifier) == n_atoms
@@ -3915,7 +4070,9 @@ class Geometry:
                 )
                 hls_color[1] += brightness_modifier[i] * (1 - hls_color[1])
                 hls_color = np.clip(hls_color, 0, 1)
-                colors[i, :] = colorsys.hls_to_rgb(*hls_color)  # pyright:ignore
+                colors[i, :] = colorsys.hls_to_rgb(
+                    *hls_color
+                )  # pyright:ignore
         else:
             brightness_modifier = np.zeros(n_atoms)
 
@@ -3966,7 +4123,9 @@ class Geometry:
                     zorder += 2
 
         elif plot_method == "wireframe":
-            raise NotImplementedError("self.visualize_wireframe is not implemented")
+            raise NotImplementedError(
+                "self.visualize_wireframe is not implemented"
+            )
             # self.visualizeWireframe(coords=coords, species=species,
             #                         linewidth=linewidth, min_zorder=min_zorder,
             #                         axes=axes, alpha=alpha, **kwargs)
@@ -4005,10 +4164,18 @@ class Geometry:
 
         if auto_limits:
             if print_lattice_vectors:
-                xmin_lattice = np.min(cropped_geom.lattice_vectors[:, axes[0]]) - 1
-                xmax_lattice = np.max(cropped_geom.lattice_vectors[:, axes[0]]) + 1
-                ymin_lattice = np.min(cropped_geom.lattice_vectors[:, axes[1]]) - 1
-                ymax_lattice = np.max(cropped_geom.lattice_vectors[:, axes[1]]) + 1
+                xmin_lattice = (
+                    np.min(cropped_geom.lattice_vectors[:, axes[0]]) - 1
+                )
+                xmax_lattice = (
+                    np.max(cropped_geom.lattice_vectors[:, axes[0]]) + 1
+                )
+                ymin_lattice = (
+                    np.min(cropped_geom.lattice_vectors[:, axes[1]]) - 1
+                )
+                ymax_lattice = (
+                    np.max(cropped_geom.lattice_vectors[:, axes[1]]) + 1
+                )
 
                 ax_xmin = min(xmin, xmin_lattice)
                 ax_xmax = max(xmax, xmax_lattice)
@@ -4109,7 +4276,9 @@ class Geometry:
                         colliding_atoms_list.append(j)
 
         return [
-            (k, ind) for k, value in colliding_atoms_dict.items() for ind in list(value)
+            (k, ind)
+            for k, value in colliding_atoms_dict.items()
+            for ind in list(value)
         ]
 
 
@@ -4164,7 +4333,9 @@ class AimsGeometry(Geometry):
                 # PARTS defines parts of the geometry that can later on be treated separately.
                 # intended for distinction between different molecules and substrate
                 elif "PARTS" in line:
-                    part_definition = ast.literal_eval(" ".join(line.split()[2:]))
+                    part_definition = ast.literal_eval(
+                        " ".join(line.split()[2:])
+                    )
                     if isinstance(part_definition, dict):
                         for k, v in part_definition.items():
                             self.geometry_part_descriptions.append(k)
@@ -4206,7 +4377,9 @@ class AimsGeometry(Geometry):
                     self.multipoles.append(multipole)
                 # extract lines concerning symmetry params
                 if "symmetry_n_params" in line:
-                    self.n_symmetry_params = [int(x) for x in list(line.split())[1:]]
+                    self.n_symmetry_params = [
+                        int(x) for x in list(line.split())[1:]
+                    ]
                 if "symmetry_params" in line:
                     self.symmetry_params = list(line.split())[1:]
                 if "symmetry_lv" in line:
@@ -4237,7 +4410,9 @@ class AimsGeometry(Geometry):
                     elif "initial_charge" in line:
                         charge = float(line.split()[1])
                     elif "constrain_relaxation" in line:
-                        directions = line.split("constrain_relaxation")[1].lower()
+                        directions = line.split("constrain_relaxation")[
+                            1
+                        ].lower()
                         if ".true." in directions:
                             constraints = [True, True, True]
                         if "x" in directions:
@@ -4314,7 +4489,9 @@ class AimsGeometry(Geometry):
 
         # convert to cartesian coordinates
         if is_fractional:
-            self.coords = utils.get_cartesian_coords(self.coords, self.lattice_vectors)
+            self.coords = utils.get_cartesian_coords(
+                self.coords, self.lattice_vectors
+            )
             self.read_as_fractional_coords = True
 
         self.constrain_relax = np.array(self.constrain_relax)
@@ -4323,7 +4500,9 @@ class AimsGeometry(Geometry):
 
         # update Part list and add all atoms that are not yet in the list
         if len(self.geometry_parts) > 0:
-            already_indexed = list(itertools.chain.from_iterable(self.geometry_parts))
+            already_indexed = list(
+                itertools.chain.from_iterable(self.geometry_parts)
+            )
             if len(already_indexed) < self.n_atoms:
                 additional_indices = [
                     i for i in range(self.n_atoms) if i not in already_indexed
@@ -4338,12 +4517,18 @@ class AimsGeometry(Geometry):
         """
         if is_fractional is None:
 
-            if hasattr(self, "symmetry_params") and self.symmetry_params is not None:
+            if (
+                hasattr(self, "symmetry_params")
+                and self.symmetry_params is not None
+            ):
                 is_fractional = True
             else:
                 is_fractional = False
         elif is_fractional is False:
-            if hasattr(self, "symmetry_params") and self.symmetry_params is not None:
+            if (
+                hasattr(self, "symmetry_params")
+                and self.symmetry_params is not None
+            ):
                 warnings.warn(
                     "The symmetry parameters of your geometry will be lost. "
                     "To keep them set is_fractional to True"
@@ -4366,7 +4551,9 @@ class AimsGeometry(Geometry):
         if hasattr(self, "geometry_parts") and (len(self.geometry_parts) > 0):
             part_string = "# PARTS "
             part_dict = {}
-            for part, name in zip(self.geometry_parts, self.geometry_part_descriptions):
+            for part, name in zip(
+                self.geometry_parts, self.geometry_part_descriptions
+            ):
                 if not name == "rest":
                     if name not in part_dict:
                         part_dict[name] = part
@@ -4379,7 +4566,9 @@ class AimsGeometry(Geometry):
             text += part_string
 
         if hasattr(self, "vacuum_level") and (self.vacuum_level is not None):
-            text += "set_vacuum_level {: 15.10f}".format(self.vacuum_level) + "\n"
+            text += (
+                "set_vacuum_level {: 15.10f}".format(self.vacuum_level) + "\n"
+            )
 
         # Lattice vector relaxation constraints
         constrain_vectors = np.zeros([3, 3], dtype=bool)
@@ -4408,10 +4597,14 @@ class AimsGeometry(Geometry):
 
         # write down the homogeneous field if any is present
         if self.homogeneous_field is not None:
-            text += "homogeneous_field {} {} {}\n".format(*self.homogeneous_field)
+            text += "homogeneous_field {} {} {}\n".format(
+                *self.homogeneous_field
+            )
 
         if is_fractional:
-            coords = utils.get_fractional_coords(self.coords, self.lattice_vectors)
+            coords = utils.get_fractional_coords(
+                self.coords, self.lattice_vectors
+            )
             line_start = "atom_frac"
         else:
             coords = self.coords
@@ -4440,10 +4633,20 @@ class AimsGeometry(Geometry):
                         text += "constrain_relaxation y\n"
                     if self.constrain_relax[n][2]:
                         text += "constrain_relaxation z\n"
-            if not len(self.initial_charge) == 0 and self.initial_charge[n] != 0.0:
-                text += "initial_charge {: .6f}\n".format(self.initial_charge[n])
-            if not len(self.initial_moment) == 0 and self.initial_moment[n] != 0.0:
-                text += "initial_moment {: .6f}\n".format(self.initial_moment[n])
+            if (
+                not len(self.initial_charge) == 0
+                and self.initial_charge[n] != 0.0
+            ):
+                text += "initial_charge {: .6f}\n".format(
+                    self.initial_charge[n]
+                )
+            if (
+                not len(self.initial_moment) == 0
+                and self.initial_moment[n] != 0.0
+            ):
+                text += "initial_moment {: .6f}\n".format(
+                    self.initial_moment[n]
+                )
             if (
                 hasattr(self, "external_force")
                 and np.linalg.norm(self.external_force[n]) != 0.0
@@ -4453,7 +4656,10 @@ class AimsGeometry(Geometry):
                     self.external_force[n][1],
                     self.external_force[n][2],
                 )
-            if hasattr(self, "calculate_friction") and self.calculate_friction[n]:
+            if (
+                hasattr(self, "calculate_friction")
+                and self.calculate_friction[n]
+            ):
                 text += "calculate_friction .true.\n"
 
         if hasattr(self, "hessian") and self.hessian is not None:
@@ -4461,7 +4667,9 @@ class AimsGeometry(Geometry):
             for i in range(self.n_atoms):
                 for j in range(self.n_atoms):
                     s = "hessian_block  {} {}".format(i + 1, j + 1)
-                    H_block = self.hessian[3 * i : 3 * (i + 1), 3 * j : 3 * (j + 1)]
+                    H_block = self.hessian[
+                        3 * i : 3 * (i + 1), 3 * j : 3 * (j + 1)
+                    ]
                     # max_diff = np.max(np.abs(H_block-H_block.T))
                     # print("Max diff in H: {:.3f}".format(max_diff))
                     for h in H_block.flatten():
@@ -4640,7 +4848,9 @@ class VaspGeometry(Geometry):
             Q = P
         if len(typenames) > 0:
             for k in range(Q.shape[0]):
-                self.species.append(typenames[np.min(np.where(elementid > k)[0])])
+                self.species.append(
+                    typenames[np.min(np.where(elementid > k)[0])]
+                )
 
         self.lattice_vectors = vecs
         self.coords = Q
@@ -4680,7 +4890,9 @@ class VaspGeometry(Geometry):
             n_of_species[species] = curr_species_coords.shape[0]
 
             # R.B. relax constraints
-            curr_species_constrain_relax = self.constrain_relax[is_right_species, :]
+            curr_species_constrain_relax = self.constrain_relax[
+                is_right_species, :
+            ]
             relax_constraints[species] = curr_species_constrain_relax
             ## R.B. relax constraints end
 
@@ -4755,8 +4967,12 @@ class XYZGeometry(Geometry):
                 lattice_parameters = re.findall(r"\d+\.\d+", split_line)
 
                 if len(lattice_parameters) == 9:
-                    lattice_parameters = np.array(lattice_parameters, dtype=np.float64)
-                    self.lattice_vectors = np.reshape(lattice_parameters, (3, 3))
+                    lattice_parameters = np.array(
+                        lattice_parameters, dtype=np.float64
+                    )
+                    self.lattice_vectors = np.reshape(
+                        lattice_parameters, (3, 3)
+                    )
 
             if "energy" in line:
                 split_line = line.split("energy")[1]
@@ -4834,7 +5050,10 @@ class XYZGeometry(Geometry):
             element = self.species[index]
             x, y, z = self.coords[index]
             text += (
-                "{}    {:-4.8f}    {:-4.8f}    {:-4.8f}".format(element, x, y, z) + "\n"
+                "{}    {:-4.8f}    {:-4.8f}    {:-4.8f}".format(
+                    element, x, y, z
+                )
+                + "\n"
             )
         return text
 

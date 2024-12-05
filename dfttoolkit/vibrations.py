@@ -17,6 +17,8 @@ class Vibrations:
     def __init__(self):
         # TODO This is currently a placeholder and should be developed further
         self.wave_vector = np.array([0.0, 0.0, 0.0])
+        self._vibration_coords = None
+        self._vibration_forces = None
 
     def get_instance_of_other_type(self, vibrations_type):
         if vibrations_type == "aims":
@@ -341,6 +343,15 @@ class Vibrations:
         f_inv_cm = omega_SI * units.INVERSE_CM_IN_HZ / (2 * np.pi)
 
         return f_inv_cm
+
+    def get_eigenvalues_in_eV(
+        self, omega2: Union[None, npt.NDArray[np.float64]] = None
+    ) -> npt.NDArray[np.float64]:
+
+        omega_SI = self.get_eigenvalues_in_Hz(omega2=omega2)
+        eV = omega_SI * units.PLANCK_CONSTANT / (2 * np.pi) / units.JOULE_IN_EV
+
+        return eV
 
     def get_atom_type_index(self):
 

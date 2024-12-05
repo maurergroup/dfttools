@@ -531,4 +531,4 @@ def get_coupling(
 
     print(index_0, index_1, res[2], flush=True)
 
-    return index_0, index_1, res[2]
+    return index_0, index_1, res[0], res[1], res[2]
