@@ -975,6 +975,11 @@ class AimsOutput(Output):
         -------
         int
             The number of kohn-sham states
+
+        Raises
+        ------
+        ValueError
+            No KS states found in aims.out file
         """
 
         target_line = "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
@@ -989,11 +994,12 @@ class AimsOutput(Output):
                 break
 
         # Then count the number of lines until the next empty line
-        for init_ev_end, line in enumerate(self.lines[init_ev_start:]):
-            if len(line) > 1:
-                n_ks_states += 1
-            else:
+        for n_ks_states, line in enumerate(self.lines[init_ev_start:]):
+            if len(line) <= 1:
                 break
+
+        if n_ks_states == 0:
+            raise ValueError("No KS states found in aims.out file.")
 
         # Count the spin-down eigenvalues if the calculation is spin polarised
         if include_spin_polarised:
@@ -1224,6 +1230,9 @@ class AimsOutput(Output):
 
         # Get the number of KS states
         n_ks_states = self.get_n_initial_ks_states()
+
+        if self.check_spin_polarised():
+            n_ks_states *= 2
 
         target_line = (
             "State    Occupation    Unperturbed Eigenvalue [eV]"
