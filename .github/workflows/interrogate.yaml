@@ -1,2 +1,39 @@
 name: Interrogate
-# TODO
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: abatilo/actions-poetry@v2
+      - name: Install the project dependencies
+        run: poetry install --with=dev
+
+      - name: Python Interrogate Check
+        uses: JackMcKew/python-interrogate-check@main
+        with:
+          path: "dfttoolkit"
+          badge-location: "badges/interrogate_badge.svg"
+
+      - name: Commit files
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add badges/interrogate_badge.svg
+          git diff --exit-code || git commit -m "Update interrogate_badge.svg" -a
+
+      - name: Push changes
+        if: success()
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.ACCESS_TOKEN }}

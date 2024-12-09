@@ -86,3 +86,23 @@ testpaths = ["tests"]
 addopts = [
     "--import-mode=importlib",
 ]
+
+[tool.interrogate]
+ignore-init-method = true
+ignore-init-module = true
+ignore-magic = true
+ignore-semiprivate = true
+ignore-private = true
+ignore-property-decorators = true
+ignore-module = true
+ignore-nested-functions = true
+ignore-nested-classes = true
+ignore-setters = true
+ignore-overloaded-functions = true
+fail-under = 75
+# example values
+exclude = ["tests/", "docs/", "build/", 'tutorials/']
+# possible values: 0 (minimal output), 1 (-v), 2 (-vv)
+verbose = 1
+# generate-badge = "."
+# badge-format = "svg"

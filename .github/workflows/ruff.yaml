@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: chartboost/ruff-action@v1
+      - uses: astral-sh/ruff-action@v1
         with:
           src: "./dfttoolkit"
           args: "check --fix --show-fixes --config ./pyproject.toml"
@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: chartboost/ruff-action@v1
+      - uses: astral-sh/ruff-action@v1
         with:
           src: "./dfttoolkit"
           args: "format --config ./pyproject.toml"

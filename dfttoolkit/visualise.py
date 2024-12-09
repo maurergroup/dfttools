@@ -26,7 +26,7 @@ class VisualiseAims(AimsOutput):
     @staticmethod
     def _plot_charge_convergence(
         ax,
-        tot_scf_iters,
+        total_scf_iters,
         delta_charge,
         delta_charge_sd=None,
         conv_params=None,
@@ -39,7 +39,7 @@ class VisualiseAims(AimsOutput):
         ----------
         ax : axes.Axes
             matplotlib subplot index
-        tot_scf_iters : Union[numpy.ndarray, list]
+        total_scf_iters : Union[numpy.ndarray, list]
             cumulative SCF iterations
         delta_charge : Union[numpy.ndarray, list]
             change of spin-up or total spin (if the calculation was spin none)
@@ -57,12 +57,12 @@ class VisualiseAims(AimsOutput):
             matplotlib subplot object
         """
 
-        ax.plot(tot_scf_iters, delta_charge, label=r"$\Delta$ charge")
+        ax.plot(total_scf_iters, delta_charge, label=r"$\Delta$ charge")
 
         # Only plot delta_charge_sd if the calculation is spin polarised
         if delta_charge_sd is not None:
             ax.plot(
-                tot_scf_iters, delta_charge_sd, label=r"$\Delta$ charge/spin density"
+                total_scf_iters, delta_charge_sd, label=r"$\Delta$ charge/spin density"
             )
 
         # Add the convergence parameters
@@ -87,7 +87,7 @@ class VisualiseAims(AimsOutput):
     @staticmethod
     def _plot_energy_convergence(
         ax,
-        tot_scf_iters,
+        total_scf_iters,
         delta_sum_eigenvalues,
         delta_total_energies,
         conv_params=None,
@@ -121,13 +121,13 @@ class VisualiseAims(AimsOutput):
             delta_total_energies = abs(delta_total_energies)
 
         ax.plot(
-            tot_scf_iters,
+            total_scf_iters,
             delta_sum_eigenvalues,
             label=r"$\Delta \; \Sigma$ eigenvalues",
             c="C1",
         )
         ax.plot(
-            tot_scf_iters,
+            total_scf_iters,
             delta_total_energies,
             label=r"$\Delta$ total energies",
             c="C0",
@@ -288,7 +288,7 @@ class VisualiseAims(AimsOutput):
             self.scf_conv_acc_params = scf_conv_acc_params
 
         scf_iters = self.scf_conv_acc_params["scf_iter"]
-        tot_scf_iters = np.arange(1, len(scf_iters) + 1)
+        total_scf_iters = np.arange(1, len(scf_iters) + 1)
         delta_charge = self.scf_conv_acc_params["change_of_charge"]
         delta_charge_sd = self.scf_conv_acc_params["change_of_charge_spin_density"]
         delta_sum_eigenvalues = self.scf_conv_acc_params["change_of_sum_eigenvalues"]
@@ -303,13 +303,13 @@ class VisualiseAims(AimsOutput):
 
         # Plot the change of charge
         self._plot_charge_convergence(
-            ax[0], tot_scf_iters, delta_charge, delta_charge_sd, conv_params, title
+            ax[0], total_scf_iters, delta_charge, delta_charge_sd, conv_params, title
         )
 
         # Plot the change of total energies and sum of eigenvalues
         self._plot_energy_convergence(
             ax[1],
-            tot_scf_iters,
+            total_scf_iters,
             delta_sum_eigenvalues,
             delta_total_energies,
             conv_params,
