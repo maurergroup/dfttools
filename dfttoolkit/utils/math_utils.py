@@ -197,6 +197,28 @@ def get_cartesian_coords(
     return np.dot(frac_coords, lattice_vectors)
 
 
+def smooth_function(y: npt.NDArray, box_pts: int):
+    """
+    Smooths a function using convolution.
+
+    Parameters
+    ----------
+    y : TYPE
+        DESCRIPTION.
+    box_pts : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    y_smooth : TYPE
+        DESCRIPTION.
+
+    """
+    box = np.ones(box_pts) / box_pts
+    y_smooth = np.convolve(y, box, mode="same")
+    return y_smooth
+
+
 def get_cross_correlation_function(
     signal_0: npt.NDArray,
     signal_1: npt.NDArray,
@@ -325,6 +347,20 @@ def lorentzian(
     # f = c / (np.pi * b * (1.0 + ((x - a) / b) ** 2))  # +d
     f = c / (1.0 + ((x - a) / (b / 2.0)) ** 2)  # +d
 
+    return f
+
+
+def gaussian(
+    x: Union[float, npt.NDArray], a: float, b: float
+) -> Union[float, npt.NDArray]:
+    f = a * np.exp(x * b)
+    return f
+
+
+def double_gaussian(
+    x: Union[float, npt.NDArray], a: float, b: float, c: float, d: float
+) -> Union[float, npt.NDArray]:
+    f = a * np.exp(x * b) + c * np.exp(x * d)
     return f
 
 
