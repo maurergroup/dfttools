@@ -2263,8 +2263,8 @@ class Geometry:
             Area of the unit cell.
 
         """
-        a = deepcopy(self.lattice_vectors[0, :-1])
-        b = deepcopy(self.lattice_vectors[1, :-1])
+        a = deepcopy(self.lattice_vectors[0, :])
+        b = deepcopy(self.lattice_vectors[1, :])
         area = np.abs(np.cross(a, b)[-1])
 
         return area
