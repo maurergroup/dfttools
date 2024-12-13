@@ -296,7 +296,7 @@ class Vibrations:
         self, omega2: Union[None, npt.NDArray[np.float64]] = None
     ) -> npt.NDArray[np.float64]:
         """
-        Determine vibration frequencies in cm^-1.
+        Determine angular vibration frequencies in Hz.
 
         Parameters
         ----------
@@ -310,7 +310,8 @@ class Vibrations:
 
         """
         if omega2 is None:
-            omega2 = self.eigenvalues
+            omega2 = self.get_eigenvalues_and_eigenvectors()[0]
+            # omega2 = self.eigenvalues
 
         omega = np.sign(omega2) * np.sqrt(np.abs(omega2))  # pyright:ignore
 
