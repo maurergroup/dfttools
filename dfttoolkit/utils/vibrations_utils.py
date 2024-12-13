@@ -381,17 +381,6 @@ def _get_normal_mode_decomposition_numba(
     velocities_projected, velocities, eigenvectors
 ) -> None:
 
-    # number_of_cell_atoms = velocities.shape[1]
-    # number_of_frequencies = eigenvectors.shape[0]
-
-    # for k in range(number_of_frequencies):
-    #     for n in range(velocities.shape[0]):
-    #         for i in prange(number_of_cell_atoms):
-    #             for m in prange(velocities.shape[2]):
-    #                 velocities_projected[n, k] += (
-    #                     velocities[n, i, m] * eigenvectors[k, i, m]
-    #                 )
-
     number_of_timesteps, number_of_cell_atoms, velocity_components = (
         velocities.shape
     )
