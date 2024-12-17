@@ -77,3 +77,7 @@ class TestAimsGeometry:
         symmetries = self.ap_geom.get_symmetries(symmetry_precision=1e-03)
         assert len(symmetries[0]) == 6
         assert len(symmetries[1]) == 6
+
+    def test_get_number_of_electrons(self):
+        n_electrons = self.ap_geom.get_number_of_electrons()
+        assert n_electrons == 145
