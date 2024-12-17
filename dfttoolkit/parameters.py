@@ -50,7 +50,9 @@ class AimsControl(Parameters):
         The path to the control.in file.
     """
 
-    def __init__(self, control_in: str = "control.in", parse_file: bool = True):
+    def __init__(
+        self, control_in: str = "control.in", parse_file: bool = True
+    ):
         if parse_file:
             super().__init__(control_in=control_in)
             self.lines = self.file_contents["control_in"]
