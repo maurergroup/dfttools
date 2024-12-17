@@ -57,6 +57,7 @@ def get_cross_correlation_function(
     return cross_correlation
 
 
+# TODO Fix docstrings and types
 def get_cross_spectrum(
     signal_0: npt.NDArray,
     signal_1: npt.NDArray,
@@ -84,16 +85,16 @@ def get_cross_spectrum(
         Second siganl for which the correlation function should be calculated.
     time_step : float
         DESCRIPTION.
-    bootstrapping_blocks : int, optional
-        DESCRIPTION. The default is 1.
-    bootstrapping_overlap : int, optional
-        DESCRIPTION. The default is 0.
-    zero_padding : int, optional
+    bootstrapping_blocks : int, default=1
+        DESCRIPTION
+    bootstrapping_overlap : int, default=0
+        DESCRIPTION
+    zero_padding : int, default=0
         Pad the cross correlation function with zeros to increase the frequency
         resolution of the FFT. This also avoids the effect of varying spectral
         leakage. However, it artificially broadens the resulting cross spectrum
         and introduces wiggles.
-    cutoff_at_last_maximum : bool, optional
+    cutoff_at_last_maximum : bool, default=False
         Cut off the cross correlation function at the last maximum to hide
         spectral leakage.
 

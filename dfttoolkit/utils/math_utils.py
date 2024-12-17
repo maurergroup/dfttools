@@ -1,5 +1,6 @@
-from typing import Union
 from copy import deepcopy
+from typing import Union
+
 import numpy as np
 import numpy.typing as npt
 import scipy
@@ -268,10 +269,10 @@ def get_autocorrelation_function_manual_lag(
     ----------
     signal : 1D npt.NDArray
         Siganl for which the autocorrelation function should be calculated.
-    max_lag : Union[None, int], optional
+    max_lag : Union[None, int]
         Autocorrelation will be calculated for a range of 0 to max_lag,
         where max_lag is the largest lag for the calculation of the
-        autocorrelation function. The default is None.
+        autocorrelation function
 
     Returns
     -------
@@ -447,7 +448,7 @@ def apply_hann_window(data):
     return windowed_data
 
 
-def norm_matrix_by_dagonal(matrix: np.array) -> np.array:
+def norm_matrix_by_dagonal(matrix: npt.NDArray) -> npt.NDArray:
     """
     Norms a matrix such that the diagonal becomes 1.
 
@@ -479,7 +480,7 @@ def norm_matrix_by_dagonal(matrix: np.array) -> np.array:
     return new_matrix
 
 
-def mae(delta: np.ndarray) -> float:
+def mae(delta: np.ndarray) -> np.floating:
     """
     Calculated the mean absolute error from a list of value differnces.
 
@@ -497,7 +498,7 @@ def mae(delta: np.ndarray) -> float:
     return np.mean(np.abs(delta))
 
 
-def rel_mae(delta: np.ndarray, target_val: np.ndarray) -> float:
+def rel_mae(delta: np.ndarray, target_val: np.ndarray) -> np.floating:
     """
     Calculated the relative mean absolute error from a list of value differnces,
     given the target values.

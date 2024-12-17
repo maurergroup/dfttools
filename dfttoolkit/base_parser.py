@@ -27,7 +27,7 @@ class BaseParser:
 
             # Check if the file path exists
             if not os.path.isfile(kwargs[kwarg]):
-                raise ValueError(f"{kwargs[kwarg]} does not exist.")
+                raise FileNotFoundError(f"{kwargs[kwarg]} does not exist.")
 
             # Store the file paths
             self.file_paths[kwarg] = kwargs[kwarg]

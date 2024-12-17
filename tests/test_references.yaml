@@ -122,6 +122,48 @@ energy_diffs:
   0.01499, -0.002865, 0.0002206, 7.186e-05, 6.018e-06]
 - [-2.158, -0.07087, 0.04834, 0.1184, -0.003943, 0.0103, -0.001032, 0.004801, 0.002519,
   0.001141, 7.119e-06]
+keywords:
+- { "xc": "pbe", "output_level": "full" }
+- {
+      "xc": "pbe",
+      "spin": "collinear",
+      "default_initial_moment": "1",
+      "output_level": "full",
+  }
+- {
+      "xc": "pbe",
+      "spin": "collinear",
+      "default_initial_moment": "1",
+      "include_spin_orbit": "non_self_consistent",
+      "output_level": "full",
+  }
+- { "xc": "pbe", "k_grid": "1 1 1" }
+- { "xc": "pbe", "relax_geometry": "bfgs 5e-3" }
+- {
+      "xc": "pbe",
+      "k_grid": "8 8 8",
+      "relax_geometry": "bfgs 5e-3",
+      "relax_unit_cell": "full",
+  }
+- {
+      "xc": "pbe",
+      "relax_geometry": "bfgs 5e-3",
+      "sc_accuracy_rho": "1e-10",
+      "sc_accuracy_eev": "1e-6",
+      "sc_accuracy_etot": "1e-12",
+      "sc_accuracy_forces": "1e-8",
+  }
+- {
+      "xc": "pbe",
+      "k_grid": "1 1 1",
+      "sc_iter_limit": "10",
+      "sc_accuracy_rho": "1e-10",
+      "sc_accuracy_eev": "1e-6",
+      "sc_accuracy_etot": "1e-12",
+      "sc_accuracy_forces": "1e-8",
+  }
+- { "xc": "hse06 0.11", "hse_unit": "b" }
+- { "xc": "hse06 0.11", "hse_unit": "b", "k_grid": "8 8 8" }
 pert_soc_eigenvalues:
   eigenvalue_eV: [-511.262291, -511.262291, -25.174078, -25.174077, -13.017798, -13.017797,
     -9.204901, -9.2049, -7.069313, -7.069308, 0.067805, 0.067807, 2.733286, 2.733288,

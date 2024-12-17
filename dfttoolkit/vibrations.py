@@ -80,9 +80,9 @@ class Vibrations:
 
         Parameters
         ----------
-        displacement : float, optional
+        displacement : float, default=0.0025
             Displacement for finte difference calculation of vibrations in
-            Angstrom. The default is 0.0025 Angstrom.
+            Angstrom.
 
         Returns
         -------
@@ -139,9 +139,8 @@ class Vibrations:
 
         Parameters
         ----------
-        set_constrained_atoms_zero : bool, optional
+        set_constrained_atoms_zero : bool, default=False
             Set elements in Hessian that code for constrained atoms to zero.
-            The default is False.
 
         Returns
         -------
@@ -193,8 +192,8 @@ class Vibrations:
 
         Parameters
         ----------
-        hessian : TYPE, optional
-            DESCRIPTION. The default is None.
+        hessian : TYPE, default=None
+            DESCRIPTION
 
         Returns
         -------
@@ -237,13 +236,12 @@ class Vibrations:
         ----------
         hessian : npt.NDArray[np.float64], optional
             Hessian. The default is None.
-        only_real : bool, optional
+        only_real : bool, default=True
             Returns only real valued eigenfrequencies + eigenmodes
             (ATTENTION: if you want to also include instable modes, you have to
-            symmetrize the hessian as provided below). The default is True.
-        symmetrize_hessian : bool, optional
+            symmetrize the hessian as provided below).
+        symmetrize_hessian : bool, default=True
             Symmetrise the hessian only for this function (no global change).
-            The default is True.
 
         Returns
         -------

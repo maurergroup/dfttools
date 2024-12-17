@@ -967,9 +967,9 @@ class AimsOutput(Output):
 
         Parameters
         ----------
-        include_spin_polarised : bool, optional
+        include_spin_polarised : bool, default=True
             Whether to include the spin-down states in the count if the calculation is
-            spin polarised (the default is True).
+            spin polarised.
 
         Returns
         -------
@@ -1323,33 +1323,33 @@ class ELSIOutput(Output):
 
         # Get the column pointer
         end = 128 + self.n_basis * 8
-        col_ptr = np.frombuffer(self.lines[128:end], dtype=np.int64)
-        col_ptr = np.append(col_ptr, self.n_non_zero + 1)
-        col_ptr -= 1
+        col_i = np.frombuffer(self.lines[128:end], dtype=np.int64)
+        col_i = np.append(col_i, self.n_non_zero + 1)
+        col_i -= 1
 
         # Get the row index
         start = end + self.n_non_zero * 4
-        row_idx = np.array(np.frombuffer(self.lines[end:start], dtype=np.int32))
-        row_idx -= 1
+        row_i = np.array(np.frombuffer(self.lines[end:start], dtype=np.int32))
+        row_i -= 1
 
         if header[2] == 0:  # real
-            nnz_val = np.frombuffer(
+            nnz = np.frombuffer(
                 self.lines[start : start + self.n_non_zero * 8],
                 dtype=np.float64,
             )
 
         else:  # complex
-            nnz_val = np.frombuffer(
+            nnz = np.frombuffer(
                 self.lines[start : start + self.n_non_zero * 16],
                 dtype=np.complex128,
             )
 
         if csc_format:
             return sp.csc_matrix(
-                (nnz_val, row_idx, col_ptr), shape=(self.n_basis, self.n_basis)
+                (nnz, row_i, col_i), shape=(self.n_basis, self.n_basis)
             )
 
         else:
             return sp.csc_matrix(
-                (nnz_val, row_idx, col_ptr), shape=(self.n_basis, self.n_basis)
+                (nnz, row_i, col_i), shape=(self.n_basis, self.n_basis)
             ).toarray()

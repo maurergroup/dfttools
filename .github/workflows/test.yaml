@@ -1,9 +1,10 @@
-name: pytest
+name: test
 
 on:
   push:
     branches:
       - main
+
   pull_request:
     branches:
       - main
@@ -34,10 +35,8 @@ jobs:
         run: poetry install --with=dev
       - name: Run the tests
         run: poetry run -- pytest tests --cov=dfttoolkit --cov-report xml
-
-      # TODO when approved for the maurergroup organisation
-      # - name: Coveralls GitHub Action
-      #   uses: coverallsapp/github-action@v2.3.4
-      #   with:
-      #     github-token: ${{ secrets.GITHUB_TOKEN }}
-      #     parallel: true  # Enable parallel support for Coveralls if needed
+      - name: Coveralls
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          compare-ref: ${{ github.event.repository.default_branch }}
