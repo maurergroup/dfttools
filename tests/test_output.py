@@ -208,32 +208,35 @@ class TestAimsOutput:
                 )
 
     # TODO
-    # def test_get_all_ks_eigenvalues(self):
-    #     if self._aims_fixture_no == 1:
-    #         for key in ref_data["eigenvalues"].keys():
-    #             # Check the values are within tolerance and that keys match
-    #             assert np.allclose(
-    #                 self.ao.get_all_ks_eigenvalues()[key],
-    #                 ref_data["eigenvalues"][key],
-    #                 atol=1e-8,
-    #             )
+    def test_get_all_ks_eigenvalues(self, ref_data):
+        if self._aims_fixture_no == 1:
+            for key in ref_data["eigenvalues"].keys():
+                # Check the values are within tolerance and that keys match
+                assert np.allclose(
+                    self.ao.get_all_ks_eigenvalues()[key],
+                    ref_data["eigenvalues"][key],
+                    atol=1e-8,
+                )
 
-    #     elif self._aims_fixture_no in [2, 3]:
-    #         spin_up, spin_down = self.ao.get_all_ks_eigenvalues()
+        else:
+            pass
 
-    #         for key in ref_data["su_eigenvalues"].keys():
-    #             # Check the values are within tolerance and that keys match
-    #             assert np.allclose(
-    #                 spin_up[key], ref_data["su_eigenvalues"][key], atol=1e-8
-    #             )
-    #             # Repeat for spin_down
-    #             assert np.allclose(
-    #                 spin_down[key], ref_data["sd_eigenvalues"][key], atol=1e-8
-    #             )
+        # elif self._aims_fixture_no in [2, 3]:
+        #     spin_up, spin_down = self.ao.get_all_ks_eigenvalues()
 
-    #     else:
-    #         with pytest.raises(ValueError):
-    #             self.ao.get_all_ks_eigenvalues()
+        #     for key in ref_data["su_eigenvalues"].keys():
+        #         # Check the values are within tolerance and that keys match
+        #         assert np.allclose(
+        #             spin_up[key], ref_data["su_eigenvalues"][key], atol=1e-8
+        #         )
+        #         # Repeat for spin_down
+        #         assert np.allclose(
+        #             spin_down[key], ref_data["sd_eigenvalues"][key], atol=1e-8
+        #         )
+
+        # else:
+        #     with pytest.raises(ValueError):
+        #         self.ao.get_all_ks_eigenvalues()
 
     # TODO
     # def get_final_ks_eigenvalues_test(self):
