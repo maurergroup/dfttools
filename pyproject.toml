@@ -50,7 +50,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.sphinx-pyproject]
 project = "dfttoolkit"
 author = "Lukas Hoermann, Dylan Morgan"
-copyright = "2024, Lukas Hoermann, Dylan Morgan"
+copyright = "2024-2025, Lukas Hoermann, Dylan Morgan"
 html_theme = "furo"
 # html_theme = "sphinx_rtd_theme"
 # html_theme = "piccolo_theme"
