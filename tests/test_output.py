@@ -195,17 +195,17 @@ class TestAimsOutput:
     def test_get_n_initial_ks_states(self):
         n_initial_ks_states = [11, 22, 48, 20, 11, 20, 11, 20, 11, 20]
 
-        def compare_n_initial_ks_states():
+        if self._aims_fixture_no in [2, 3]:
             assert (
                 self.ao.get_n_initial_ks_states()
                 == n_initial_ks_states[self._aims_fixture_no - 1]
             )
-
-        if self._aims_fixture_no in [2, 3]:
-            compare_n_initial_ks_states()
         else:
             with pytest.warns(UserWarning):
-                compare_n_initial_ks_states()
+                assert (
+                    self.ao.get_n_initial_ks_states()
+                    == n_initial_ks_states[self._aims_fixture_no - 1]
+                )
 
     # TODO
     # def test_get_all_ks_eigenvalues(self):
