@@ -961,7 +961,7 @@ class AimsOutput(Output):
 
         return self.scf_conv_acc_params
 
-    def get_n_initial_ks_states(self, include_spin_polarised=True) -> int:
+    def get_n_initial_ks_states(self, include_spin_polarised: bool = True) -> int:
         """
         Get the number of Kohn-Sham states from the first SCF step.
 
@@ -975,6 +975,11 @@ class AimsOutput(Output):
         -------
         int
             The number of kohn-sham states
+
+        Raises
+        ------
+        ValueError
+            No KS states found in aims.out file
         """
 
         target_line = "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
@@ -989,11 +994,12 @@ class AimsOutput(Output):
                 break
 
         # Then count the number of lines until the next empty line
-        for init_ev_end, line in enumerate(self.lines[init_ev_start:]):
-            if len(line) > 1:
-                n_ks_states += 1
-            else:
+        for n_ks_states, line in enumerate(self.lines[init_ev_start:]):
+            if len(line) <= 1:
                 break
+
+        if n_ks_states == 0:
+            raise ValueError("No KS states found in aims.out file.")
 
         # Count the spin-down eigenvalues if the calculation is spin polarised
         if include_spin_polarised:
@@ -1013,7 +1019,9 @@ class AimsOutput(Output):
 
         return n_ks_states
 
-    def _get_ks_states(self, ev_start, eigenvalues, scf_iter, n_ks_states):
+    def _get_ks_states(
+        self, ev_start: int, eigenvalues: dict, scf_iter: int, n_ks_states: int
+    ) -> None:
         """
         Get any set of KS states, occupations, and eigenvalues.
 
@@ -1027,13 +1035,39 @@ class AimsOutput(Output):
             The current SCF iteration.
         n_ks_states : int
             The number of KS states to save.
+
+        Raises
+        ------
+        ValueError
+            Something went wrong with parsing the KS states.
         """
 
-        for i, line in enumerate(self.lines[ev_start : ev_start + n_ks_states]):
-            values = line.split()
-            eigenvalues["state"][scf_iter][i] = int(values[0])
-            eigenvalues["occupation"][scf_iter][i] = float(values[1])
-            eigenvalues["eigenvalue_eV"][scf_iter][i] = float(values[3])
+        if (
+            eigenvalues["state"].ndim == 1
+            or eigenvalues["occupation"].ndim == 1
+            or eigenvalues["eigenvalue_eV"].ndim == 1
+        ):
+            if (
+                eigenvalues["state"].ndim > 1
+                or eigenvalues["occupation"].ndim > 1
+                or eigenvalues["eigenvalue_eV"].ndim > 1
+            ):
+                raise ValueError("Something went wrong with parsing the KS states.")
+
+            # This is the case for finding the final KS eigenvalues
+            # Therefore only parse the KS states from the final SCF iteration
+            for i, line in enumerate(self.lines[ev_start : ev_start + n_ks_states]):
+                values = line.split()
+                eigenvalues["state"][i] = int(values[0])
+                eigenvalues["occupation"][i] = float(values[1])
+                eigenvalues["eigenvalue_eV"][i] = float(values[3])
+
+        else:
+            for i, line in enumerate(self.lines[ev_start : ev_start + n_ks_states]):
+                values = line.split()
+                eigenvalues["state"][scf_iter][i] = int(values[0])
+                eigenvalues["occupation"][scf_iter][i] = float(values[1])
+                eigenvalues["eigenvalue_eV"][scf_iter][i] = float(values[3])
 
     def get_all_ks_eigenvalues(self) -> Union[dict, Tuple[dict, dict]]:
         """
@@ -1174,9 +1208,9 @@ class AimsOutput(Output):
 
         if not spin_polarised:
             eigenvalues = {
-                "state": np.zeros((1, n_ks_states), dtype=int),
-                "occupation": np.zeros((1, n_ks_states), dtype=float),
-                "eigenvalue_eV": np.zeros((1, n_ks_states), dtype=float),
+                "state": np.zeros((n_ks_states), dtype=int),
+                "occupation": np.zeros((n_ks_states), dtype=float),
+                "eigenvalue_eV": np.zeros((n_ks_states), dtype=float),
             }
             # Get the KS states from this line until the next empty line
             self._get_ks_states(final_ev_start, eigenvalues, 0, n_ks_states)
@@ -1185,9 +1219,9 @@ class AimsOutput(Output):
 
         elif spin_polarised:
             su_eigenvalues = {
-                "state": np.zeros((1, n_ks_states), dtype=int),
-                "occupation": np.zeros((1, n_ks_states), dtype=float),
-                "eigenvalue_eV": np.zeros((1, n_ks_states), dtype=float),
+                "state": np.zeros((n_ks_states), dtype=int),
+                "occupation": np.zeros((n_ks_states), dtype=float),
+                "eigenvalue_eV": np.zeros((n_ks_states), dtype=float),
             }
             sd_eigenvalues = su_eigenvalues.copy()
 
@@ -1214,7 +1248,7 @@ class AimsOutput(Output):
         Returns
         -------
         dict
-            The perturbative SOC kohn-sham eigenvalues
+            The perturbative SOC Kohn-Sham eigenvalues
 
         Raises
         ------
@@ -1253,6 +1287,7 @@ class AimsOutput(Output):
             self.lines[final_ev_start : final_ev_start + n_ks_states]
         ):
             spl = line.split()
+
             eigenvalues["state"][i] = int(spl[0])
             eigenvalues["occupation"][i] = float(spl[1])
             eigenvalues["unperturbed_eigenvalue_eV"][i] = float(spl[2])

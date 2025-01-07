@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pytest
 from dfttoolkit.output import AimsOutput
+from dfttoolkit.utils.exceptions import ItemNotFoundError
 
 
 class TestAimsOutput:
@@ -195,48 +196,79 @@ class TestAimsOutput:
     def test_get_n_initial_ks_states(self):
         n_initial_ks_states = [11, 22, 48, 20, 11, 20, 11, 20, 11, 20]
 
-        def compare_n_initial_ks_states():
+        if self._aims_fixture_no in [2, 3]:
             assert (
                 self.ao.get_n_initial_ks_states()
                 == n_initial_ks_states[self._aims_fixture_no - 1]
             )
-
-        if self._aims_fixture_no in [2, 3]:
-            compare_n_initial_ks_states()
         else:
             with pytest.warns(UserWarning):
-                compare_n_initial_ks_states()
+                assert (
+                    self.ao.get_n_initial_ks_states()
+                    == n_initial_ks_states[self._aims_fixture_no - 1]
+                )
 
-    # TODO
-    # def test_get_all_ks_eigenvalues(self):
-    #     if self._aims_fixture_no == 1:
-    #         for key in ref_data["eigenvalues"].keys():
-    #             # Check the values are within tolerance and that keys match
-    #             assert np.allclose(
-    #                 self.ao.get_all_ks_eigenvalues()[key],
-    #                 ref_data["eigenvalues"][key],
-    #                 atol=1e-8,
-    #             )
+    def test_get_all_ks_eigenvalues(self, ref_data):
+        if self._aims_fixture_no == 1:
+            for key in ref_data["eigenvalues"].keys():
+                # Check the values are within tolerance and that keys match
+                assert np.allclose(
+                    self.ao.get_all_ks_eigenvalues()[key],
+                    ref_data["eigenvalues"][key],
+                    atol=1e-8,
+                )
 
-    #     elif self._aims_fixture_no in [2, 3]:
-    #         spin_up, spin_down = self.ao.get_all_ks_eigenvalues()
+        elif self._aims_fixture_no in [2, 3]:
+            spin_up, spin_down = self.ao.get_all_ks_eigenvalues()
 
-    #         for key in ref_data["su_eigenvalues"].keys():
-    #             # Check the values are within tolerance and that keys match
-    #             assert np.allclose(
-    #                 spin_up[key], ref_data["su_eigenvalues"][key], atol=1e-8
-    #             )
-    #             # Repeat for spin_down
-    #             assert np.allclose(
-    #                 spin_down[key], ref_data["sd_eigenvalues"][key], atol=1e-8
-    #             )
+            # Check for both spin states
+            for spin_eval, spin in zip(
+                ["su_eigenvalues", "sd_eigenvalues"], [spin_up, spin_down]
+            ):
+                for key in ref_data[spin_eval][self._aims_fixture_no - 2].keys():
+                    # Check the values are within tolerance and that keys match
+                    assert np.allclose(
+                        spin[key],
+                        ref_data[spin_eval][self._aims_fixture_no - 2][key],
+                        atol=1e-8,
+                    )
 
-    #     else:
-    #         with pytest.raises(ValueError):
-    #             self.ao.get_all_ks_eigenvalues()
+        else:
+            with pytest.raises(ItemNotFoundError):
+                self.ao.get_all_ks_eigenvalues()
 
-    # TODO
-    # def get_final_ks_eigenvalues_test(self):
+    def _compare_final_ks_evals(self, ref_data: dict, ref: int, spin_case: str) -> None:
+        for key in ref_data[f"{spin_case}_final_eigenvalues"][ref].keys():
+
+            if spin_case == "sn":
+                test = self.ao.get_final_ks_eigenvalues()[key]
+            elif spin_case == "su":
+                test_nk, _ = self.ao.get_final_ks_eigenvalues()
+                test = test_nk[key]
+            elif spin_case == "sd":
+                _, test_nk = self.ao.get_final_ks_eigenvalues()
+                test = test_nk[key]
+            else:
+                raise ValueError("Invalid test")
+
+            assert np.allclose(
+                test,
+                ref_data[f"{spin_case}_final_eigenvalues"][ref][key],
+                atol=1e-8,
+            )
+
+    def test_get_final_ks_eigenvalues(self, ref_data):
+        sn_refs = [1, 4, 5, 6, 7, 8, 9]
+        sc_refs = [2, 3]
+
+        if self._aims_fixture_no in sn_refs:
+            ref = sn_refs.index(self._aims_fixture_no)
+            self._compare_final_ks_evals(ref_data, ref, "sn")
+
+        if self._aims_fixture_no in sc_refs:
+            ref = sc_refs.index(self._aims_fixture_no)
+            self._compare_final_ks_evals(ref_data, ref, "su")
+            self._compare_final_ks_evals(ref_data, ref, "sd")
 
     def test_get_pert_soc_ks_eigenvalues(self, ref_data):
         if self._aims_fixture_no == 3:
