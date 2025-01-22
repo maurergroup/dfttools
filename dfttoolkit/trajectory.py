@@ -156,6 +156,37 @@ class MDTrajectory:
 
         return velocities_projected
 
+    def get_kinetic_energies(
+        self, steps: int = 1, cutoff_start: int = 0, cutoff_end: int = 0
+    ) -> npt.NDArray[np.float64]:
+        """
+        Weighs velocities by atomic masses.
+
+        Parameters
+        ----------
+        steps : int, optional
+            Read every nth step. The default is 1 -> all steps are read. If for
+            instance steps=5 every 5th step is read.
+        cutoff_start : int, optional
+            Cutoff n stept at the beginning of the trajectory. The default is 0.
+        cutoff_end : int, optional
+            Cutoff n stept at the end of the trajectory. The default is 0.
+
+        Returns
+        -------
+        velocities_mass_weighted : np.array
+            Velocities weighted by atomic masses.
+
+        """
+        velocities = self.get_velocities_mass_weighted(
+            steps=steps, cutoff_start=cutoff_start, cutoff_end=cutoff_end
+        )
+        velocities_norm = np.linalg.norm(velocities, axis=2)
+
+        energies = 0.5 * velocities_norm**2
+
+        return energies
+
     def get_temperature(
         self, steps: int = 1, cutoff_start: int = 0, cutoff_end: int = 0
     ) -> npt.NDArray[np.float64]:
