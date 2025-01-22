@@ -133,7 +133,10 @@ class TestAimsOutput:
 
         if self._aims_fixture_no in [5, 6, 7]:
             assert (
-                abs(self.ao.get_change_of_forces() - forces[self._aims_fixture_no - 5])
+                abs(
+                    self.ao.get_change_of_forces()
+                    - forces[self._aims_fixture_no - 5]
+                )
                 < 1e-8
             )
 
@@ -144,6 +147,24 @@ class TestAimsOutput:
     # TODO
     # def get_change_of_sum_of_eigenvalues(self):
 
+    def test_get_change_of_charge_density(self):
+        """Using default args (final charge density change)"""
+
+        charge_densities = np.array(
+            [
+                0.7136e-06,
+            ]
+        )
+
+        if self._aims_fixture_no in [0]:
+            assert (
+                abs(
+                    self.ao.get_change_of_charge_density()
+                    - charge_densities[self._aims_fixture_no - 1]
+                )
+                < 1e-8
+            )
+
     def test_check_spin_polarised(self):
         if self._aims_fixture_no in [2, 3]:
             assert self.ao.check_spin_polarised() is True
@@ -152,9 +173,15 @@ class TestAimsOutput:
 
     def test_get_convergence_parameters(self, ref_data):
         if self._aims_fixture_no in [7, 8]:
-            assert self.ao.get_convergence_parameters() == ref_data["conv_params"][1]
+            assert (
+                self.ao.get_convergence_parameters()
+                == ref_data["conv_params"][1]
+            )
         else:
-            assert self.ao.get_convergence_parameters() == ref_data["conv_params"][0]
+            assert (
+                self.ao.get_convergence_parameters()
+                == ref_data["conv_params"][0]
+            )
 
     def test_get_final_energy(self):
         final_energies = [
@@ -176,7 +203,10 @@ class TestAimsOutput:
             assert final_energy is None
 
         else:
-            assert abs(final_energy - final_energies[self._aims_fixture_no - 1]) < 1e-8
+            assert (
+                abs(final_energy - final_energies[self._aims_fixture_no - 1])
+                < 1e-8
+            )
 
     def get_n_relaxation_steps_test(self):
         n_relaxation_steps = [1, 1, 1, 1, 4, 2, 3, 0, 1, 1]
@@ -187,7 +217,9 @@ class TestAimsOutput:
 
     def test_get_n_scf_iters(self):
         n_scf_iters = [12, 13, 13, 10, 42, 27, 56, 8, 14, 11]
-        assert self.ao.get_n_scf_iters() == n_scf_iters[self._aims_fixture_no - 1]
+        assert (
+            self.ao.get_n_scf_iters() == n_scf_iters[self._aims_fixture_no - 1]
+        )
 
     # TODO
     # def get_i_scf_conv_acc_test(self):
