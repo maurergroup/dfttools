@@ -301,7 +301,9 @@ class AimsOutput(Output):
         skip_next_energy = (
             False  # only relevant if energy_invalid_indicator is not None
         )
-        use_next_energy = False  # only relevant if energy_valid_indicator is not None
+        use_next_energy = (
+            False  # only relevant if energy_valid_indicator is not None
+        )
 
         assert not (skip_next_energy and use_next_energy), (
             "AIMSOutput._get_energy: usage of skip_next_energy and "
@@ -347,7 +349,9 @@ class AimsOutput(Output):
                     pass
 
         if len(energies) == 0:
-            raise ValueError(f"Energy not found in aims.out file for {search_string}")
+            raise ValueError(
+                f"Energy not found in aims.out file for {search_string}"
+            )
 
         energies = np.array(energies)
 
@@ -385,6 +389,16 @@ class AimsOutput(Output):
             n_occurrence,
             "Change of sum of eigenvalues",
             token_nr=7,
+            energy_invalid_indicator=energy_invalid_indicator,
+        )
+
+    def get_change_of_charge_density(
+        self, n_occurrence=-1, energy_invalid_indicator=None
+    ) -> Union[float, npt.NDArray[np.float64]]:
+        return self._get_energy(
+            n_occurrence,
+            "Change of charge density",
+            token_nr=6,
             energy_invalid_indicator=energy_invalid_indicator,
         )
 
@@ -892,8 +906,8 @@ class AimsOutput(Output):
             if len(spl) > 1:
                 if "Begin self-consistency iteration #" in line:
                     # save the scf iteration number
-                    self.scf_conv_acc_params["scf_iter"][current_scf_iter] = int(
-                        spl[-1]
+                    self.scf_conv_acc_params["scf_iter"][current_scf_iter] = (
+                        int(spl[-1])
                     )
                     # use a counter rather than reading the SCF iteration number as it
                     # resets upon re-initialisation and for each geometry opt step
@@ -977,7 +991,9 @@ class AimsOutput(Output):
             The number of kohn-sham states
         """
 
-        target_line = "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
+        target_line = (
+            "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
+        )
 
         init_ev_start = 0
         n_ks_states = 0
@@ -1029,7 +1045,9 @@ class AimsOutput(Output):
             The number of KS states to save.
         """
 
-        for i, line in enumerate(self.lines[ev_start : ev_start + n_ks_states]):
+        for i, line in enumerate(
+            self.lines[ev_start : ev_start + n_ks_states]
+        ):
             values = line.split()
             eigenvalues["state"][scf_iter][i] = int(values[0])
             eigenvalues["occupation"][scf_iter][i] = float(values[1])
@@ -1070,16 +1088,24 @@ class AimsOutput(Output):
         # Add 2 to SCF iters as if output_level full is specified, FHI-aims prints the
         # KS states once before the SCF starts and once after it finishes
         n_scf_iters = self.get_n_scf_iters() + 2
-        n_ks_states = self.get_n_initial_ks_states(include_spin_polarised=False)
+        n_ks_states = self.get_n_initial_ks_states(
+            include_spin_polarised=False
+        )
 
         # Parse line to find the start of the KS eigenvalues
-        target_line = "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
+        target_line = (
+            "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
+        )
 
         if not spin_polarised:
             eigenvalues = {
                 "state": np.zeros((n_scf_iters, n_ks_states), dtype=int),
-                "occupation": np.zeros((n_scf_iters, n_ks_states), dtype=float),
-                "eigenvalue_eV": np.zeros((n_scf_iters, n_ks_states), dtype=float),
+                "occupation": np.zeros(
+                    (n_scf_iters, n_ks_states), dtype=float
+                ),
+                "eigenvalue_eV": np.zeros(
+                    (n_scf_iters, n_ks_states), dtype=float
+                ),
             }
 
             n = 0  # Count the current SCF iteration
@@ -1094,13 +1120,21 @@ class AimsOutput(Output):
         elif spin_polarised:
             su_eigenvalues = {
                 "state": np.zeros((n_scf_iters, n_ks_states), dtype=int),
-                "occupation": np.zeros((n_scf_iters, n_ks_states), dtype=float),
-                "eigenvalue_eV": np.zeros((n_scf_iters, n_ks_states), dtype=float),
+                "occupation": np.zeros(
+                    (n_scf_iters, n_ks_states), dtype=float
+                ),
+                "eigenvalue_eV": np.zeros(
+                    (n_scf_iters, n_ks_states), dtype=float
+                ),
             }
             sd_eigenvalues = {
                 "state": np.zeros((n_scf_iters, n_ks_states), dtype=int),
-                "occupation": np.zeros((n_scf_iters, n_ks_states), dtype=float),
-                "eigenvalue_eV": np.zeros((n_scf_iters, n_ks_states), dtype=float),
+                "occupation": np.zeros(
+                    (n_scf_iters, n_ks_states), dtype=float
+                ),
+                "eigenvalue_eV": np.zeros(
+                    (n_scf_iters, n_ks_states), dtype=float
+                ),
             }
 
             # Count the number of SCF iterations for each spin channel
@@ -1117,19 +1151,25 @@ class AimsOutput(Output):
                     # The spin-up line is two lines above the target line
                     if self.lines[i - 2].strip() == "Spin-up eigenvalues:":
                         # Get the KS states from this line until the next empty line
-                        self._get_ks_states(i + 1, su_eigenvalues, up_n, n_ks_states)
+                        self._get_ks_states(
+                            i + 1, su_eigenvalues, up_n, n_ks_states
+                        )
                         up_n += 1
 
                     # The spin-down line is two lines above the target line
                     if self.lines[i - 2].strip() == "Spin-down eigenvalues:":
                         # Get the KS states from this line until the next empty line
-                        self._get_ks_states(i + 1, sd_eigenvalues, down_n, n_ks_states)
+                        self._get_ks_states(
+                            i + 1, sd_eigenvalues, down_n, n_ks_states
+                        )
                         down_n += 1
 
             return su_eigenvalues, sd_eigenvalues
 
         else:
-            raise ValueError("Could not determine if calculation was spin polarised.")
+            raise ValueError(
+                "Could not determine if calculation was spin polarised."
+            )
 
     def get_final_ks_eigenvalues(self) -> Union[dict, Tuple[dict, dict]]:
         """Get the final Kohn-Sham eigenvalues from a calculation.
@@ -1157,10 +1197,14 @@ class AimsOutput(Output):
         spin_polarised = self.check_spin_polarised()
 
         # Get the number of KS states
-        n_ks_states = self.get_n_initial_ks_states(include_spin_polarised=False)
+        n_ks_states = self.get_n_initial_ks_states(
+            include_spin_polarised=False
+        )
 
         # Parse line to find the start of the KS eigenvalues
-        target_line = "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
+        target_line = (
+            "State    Occupation    Eigenvalue [Ha]    Eigenvalue [eV]"
+        )
 
         # Iterate backwards from end of aims.out to find the final KS eigenvalues
         final_ev_start = None
@@ -1195,7 +1239,9 @@ class AimsOutput(Output):
             self._get_ks_states(final_ev_start, sd_eigenvalues, 0, n_ks_states)
 
             # Go back one more target line to get the spin-up states
-            for i, line in enumerate(reversed(self.lines[: final_ev_start - 1])):
+            for i, line in enumerate(
+                reversed(self.lines[: final_ev_start - 1])
+            ):
                 if target_line == line.strip():
                     final_ev_start += -i - 1
                     break
@@ -1205,7 +1251,9 @@ class AimsOutput(Output):
             return su_eigenvalues, sd_eigenvalues
 
         else:
-            raise ValueError("Could not determine if calculation was spin polarised.")
+            raise ValueError(
+                "Could not determine if calculation was spin polarised."
+            )
 
     def get_pert_soc_ks_eigenvalues(self) -> dict:
         """
