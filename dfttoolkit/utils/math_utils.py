@@ -198,6 +198,19 @@ def get_cartesian_coords(
     return np.dot(frac_coords, lattice_vectors)
 
 
+def get_triple_product(
+    a: npt.NDArray, b: npt.NDArray, c: npt.NDArray
+) -> npt.NDArray:
+    """
+    Returns the triple product (DE: Spatprodukt): a*(bxc)
+
+    """
+    assert len(a) == 3
+    assert len(b) == 3
+    assert len(c) == 3
+    return np.dot(np.cross(a, b), c)
+
+
 def smooth_function(y: npt.NDArray, box_pts: int):
     """
     Smooths a function using convolution.
@@ -351,17 +364,17 @@ def lorentzian(
     return f
 
 
-def gaussian(
+def exponential(
     x: Union[float, npt.NDArray], a: float, b: float
 ) -> Union[float, npt.NDArray]:
     f = a * np.exp(x * b)
     return f
 
 
-def double_gaussian(
-    x: Union[float, npt.NDArray], a: float, b: float, c: float, d: float
+def double_exponential(
+    x: Union[float, npt.NDArray], a: float, b: float, c: float
 ) -> Union[float, npt.NDArray]:
-    f = a * np.exp(x * b) + c * np.exp(x * d)
+    f = a * (np.exp(x * b) + np.exp(x * c))
     return f
 
 
@@ -592,6 +605,54 @@ def get_moving_average(signal: npt.NDArray[np.float64], window_size: int):
     return moving_avg, variance
 
 
+def get_maxima_in_moving_interval(
+    function_values, interval_size, step_size, filter_value
+):
+    """
+    Moves an interval along the function and filters out all points smaller
+    than filter_value time the maximal value in the interval.
+
+    Parameters
+    ----------
+    function_values : array-like
+        1D array of function values.
+    interval_size : int
+        Size of the interval (number of points).
+    step_size : int
+        Step size for moving the interval.
+
+    Returns
+    -------
+        np.ndarray: Filtered array where points outside the threshold are set
+        to NaN.
+
+    """
+    # Convert input to a NumPy array
+    function_values = np.asarray(function_values)
+
+    # Initialize an array to store the result
+    filtered_indices = []
+
+    # Slide the interval along the function
+    for start in range(0, len(function_values) - interval_size + 1, step_size):
+        # Define the end of the interval
+        end = start + interval_size
+
+        # Extract the interval
+        interval = function_values[start:end]
+
+        # Find the maximum value in the interval
+        max_value = np.max(interval)
+
+        # Apply the filter
+        threshold = filter_value * max_value
+
+        indices = np.where(interval >= threshold)
+        filtered_indices += list(start + indices[0])
+
+    return np.array(list(set(filtered_indices)))
+
+
 def get_pearson_correlation_coefficient(x, y):
     mean_x = np.mean(x)
     mean_y = np.mean(y)
@@ -635,3 +696,62 @@ def get_significance(x, t):
     Df = scipy.integrate.quad(probability_density, -np.inf, t, args=(n))[0]
 
     return Df
+
+
+def squared_exponenital_kernel(x1_vec_0, x2_vec_0, tau):
+    x1_vec = np.atleast_3d(x1_vec_0)
+    x2_vec = np.atleast_3d(x2_vec_0)
+
+    x1 = np.tile(x1_vec, len(x2_vec))
+    x2 = np.tile(x2_vec, len(x1_vec))
+
+    x1 = np.moveaxis(x1, 2, 1)
+    x2 = x2.T
+    x2 = np.moveaxis(x2, 2, 1)
+
+    x_diff = x1 - x2
+
+    a = np.sum(x_diff**2, axis=2)
+
+    M = np.exp(-0.5 / tau**2 * a)
+
+    return M
+
+
+class GPR:
+    def __init__(self, x, y, tau, sigma):
+        """
+
+
+        Parameters
+        ----------
+        x : np.array
+            Descriptor of shape [data points, descriptor dimensions].
+        y : TYPE
+            DESCRIPTION.
+        tau : TYPE
+            DESCRIPTION.
+        sigma : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        K1 = squared_exponenital_kernel(x, x, tau)
+
+        self.K1_inv = np.linalg.inv(K1 + np.eye(len(x)) * sigma)
+        self.x = x
+        self.y = y
+        self.tau = tau
+        self.sigma = sigma
+
+    def __call__(self, x):
+        return self.predict(x)
+
+    def predict(self, x):
+        K2 = squared_exponenital_kernel(x, self.x, self.tau)
+        y_test0 = K2.dot(self.K1_inv)
+
+        return y_test0.dot(self.y)
