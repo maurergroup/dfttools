@@ -259,6 +259,18 @@ class AimsOutput(Output):
 
         return scf_iter_times
 
+    def check_geometry_optimisation_has_completed(self) -> bool:
+        """
+        Checks whether present geometry is converged
+
+        """
+        geometry_optimisation_has_completed = False
+        for l in reversed(self.lines):
+            if "Present geometry is converged." in l:
+                geometry_optimisation_has_completed = True
+
+        return geometry_optimisation_has_completed
+
     ###############################################################################
     #                                   Energies                                  #
     ###############################################################################
