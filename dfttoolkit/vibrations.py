@@ -227,10 +227,11 @@ class Vibrations:
         hessian: Union[npt.NDArray[np.float64], None] = None,
         only_real: bool = True,
         symmetrize_hessian: bool = True,
+        eigenvectors_to_cartesian: bool = False,
     ) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """
         This function is supposed to return all eigenvalues and eigenvectors of
-        the matrix self.hessian
+        the matrix self.hessian. Note that the eigenvectors are mass weighted.
 
         Parameters
         ----------
@@ -249,12 +250,11 @@ class Vibrations:
             Direct eigenvalues as squared angular frequencies instead of
             inverse wavelengths.
         eigenvectors : np.array
-            List of numpy arrays, where each array is a normalized
-            displacement for the corresponding eigenfrequency, such that
-            new_coords = coords + displacement * amplitude..
+            Mass weighted eigenvectors of the Hessian given as a list of numpy
+            arrays, where each array is a normalized displacement for the
+            corresponding eigenfrequency.
 
         """
-
         if symmetrize_hessian:
             hessian = self.get_symmetrized_hessian(hessian=hessian)
         elif hessian is None:
@@ -287,6 +287,13 @@ class Vibrations:
 
         self.eigenvalues = omega2
         self.eigenvectors = eigenvectors
+
+        # Convert eigenvector to Cartesian coordinates
+        if eigenvectors_to_cartesian:
+            m = np.tile(np.sqrt(self.get_atomic_masses()), (3, 1)).T
+
+            for index in range(len(eigenvectors)):
+                eigenvectors[index] /= m
 
         return omega2, eigenvectors
 
